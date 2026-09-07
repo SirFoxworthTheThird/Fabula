@@ -267,8 +267,13 @@ The suite is the regression net *and* the clearest description of the product:
 
 ## Known rough edges
 
-* `LiteLLMClient` defaults to `gpt-4o-mini`. Any model id litellm understands works, but
-  there is no CLI flag for it yet — construct the client directly to change it.
+* `LiteLLMClient` defaults to `gpt-4o-mini`. Any model id litellm understands works, and
+  `fabula-playtest --model` selects one, but the interactive CLI and the service still
+  have no flag — construct the client directly to change it there.
+* Prompt adherence is the soft spot. Structural rules hold regardless of model (the
+  narrator cannot narrate the player, because it does not bid), but the ones that live in
+  prompts — invent no props, never speak for a character — are only as good as the model
+  reading them. A small local model ignores them freely.
 * Relationship affinity does not move during play. Interaction counts accumulate and
   authored affinity/trust persist, but nothing shifts affinity from the *content* of what
   is said; that needs judgment that could not be made deterministically without risking

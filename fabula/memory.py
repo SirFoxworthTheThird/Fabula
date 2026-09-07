@@ -71,6 +71,26 @@ def location_at_seq(
     return location
 
 
+def co_present(
+    character: Character, characters: dict[str, Character], events: list[Event]
+) -> list[Character]:
+    """Who this character can see is here with them.
+
+    Derived by comparing rooms, so it can only ever name someone standing
+    in theirs. Being in the same room is the plainest perception there
+    is — a character who cannot be told this asks where their sister is
+    while looking straight at her.
+    """
+    last_seq = events[-1].seq if events else 0
+    here = location_at_seq(character.id, character.location_id, events, last_seq + 1)
+    return [
+        other
+        for other in characters.values()
+        if other.id != character.id
+        and location_at_seq(other.id, other.location_id, events, last_seq + 1) == here
+    ]
+
+
 def project(
     character: Character,
     events: list[Event],
@@ -334,12 +354,14 @@ class ContextBuilder:
     def __init__(
         self,
         world: World,
+        characters: dict[str, Character],
         scene_id: str,
         store: EventStore,
         llm: LLMClient,
         budget: int = DEFAULT_TOKEN_BUDGET,
     ):
         self.world = world
+        self.characters = characters
         self.scene_id = scene_id
         self.store = store
         self.llm = llm
@@ -348,8 +370,24 @@ class ContextBuilder:
     def project(self, character: Character, events: list[Event]) -> list[ProjectedEvent]:
         return project(character, events, self.world, initial_location=character.location_id)
 
+    def situation(self, character: Character, events: list[Event]) -> str:
+        """Where they are and who is with them.
+
+        Only same-room company is ever named, so this states nothing the
+        character could not see by looking up.
+        """
+        last_seq = events[-1].seq if events else 0
+        here = location_at_seq(character.id, character.location_id, events, last_seq + 1)
+        others = co_present(character, self.characters, events)
+        company = (
+            "With you: " + ", ".join(sorted(other.name for other in others)) + "."
+            if others
+            else "You are alone."
+        )
+        return f"(You are in {self.world.room_name(here)}. {company})"
+
     def for_character(self, character: Character, events: list[Event]) -> str:
-        return assemble_context(
+        body = assemble_context(
             character,
             self.project(character, events),
             self.scene_id,
@@ -357,6 +395,7 @@ class ContextBuilder:
             self.llm,
             self.budget,
         )
+        return f"{self.situation(character, events)}\n{body}"
 
 
 def form_belief(character: Character, projected: ProjectedEvent) -> Belief | None:

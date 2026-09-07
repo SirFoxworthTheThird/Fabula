@@ -16,6 +16,7 @@ from fabula.chronology import derive_skip_minutes
 from fabula.db import EventStore
 from fabula.director import Director
 from fabula.llm import LLMClient, get_default_llm
+from fabula.memory import co_present
 from fabula.loader import Scene, load_pressures, load_scenario
 from fabula.models import Character, Event, ProjectedEvent
 from fabula.narrator import Narrator
@@ -52,11 +53,6 @@ class Session:
         pressures = load_pressures(world_dir)
         store = EventStore(db_path)
         llm = llm or get_default_llm()
-        director = Director(store, world, characters, scene, Narrator(llm), llm, pressures)
-
-        # Characters are durable: with a real db path they arrive carrying
-        # what they already believe, aged by the time between scenes.
-        begin_scene(store, characters)
 
         user_character = next(
             (
@@ -68,6 +64,16 @@ class Session:
         )
         if user_character is None:
             raise ValueError("scene has no user-controlled character (is_user: true) in its cast")
+
+        # The narrator is told whose character it must never play.
+        narrator = Narrator(
+            llm, protagonist=user_character.name, protagonist_id=user_character.id
+        )
+        director = Director(store, world, characters, scene, narrator, llm, pressures)
+
+        # Characters are durable: with a real db path they arrive carrying
+        # what they already believe, aged by the time between scenes.
+        begin_scene(store, characters)
 
         return cls(world, characters, scene, store, director, user_character)
 
@@ -81,13 +87,9 @@ class Session:
         name someone standing in it. A client asking "who is here" must
         never be answered with where everyone in the scene is.
         """
-        here = self.here()
-        return [
-            character
-            for character in self.characters.values()
-            if character.id != self.user_character.id
-            and self.director.current_location(character) == here
-        ]
+        return co_present(
+            self.user_character, self.characters, self.store.get_events(self.scene.id)
+        )
 
     def pov(self, events: list[Event]) -> list[ProjectedEvent]:
         """What the user's character perceived of these events.

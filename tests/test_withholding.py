@@ -121,7 +121,7 @@ def test_withholding_does_not_repeat_immediately(scenario, store):
 
 def test_get_bid_returns_a_withhold_kind(scenario, store, fake_llm):
     world, characters, scene = scenario
-    contexts = ContextBuilder(world, scene.id, store, fake_llm)
+    contexts = ContextBuilder(world, characters, scene.id, store, fake_llm)
 
     bid = get_bid(characters["tomas"], asked(scene), "full", [], contexts, fake_llm)
 

@@ -23,15 +23,52 @@ def _manner(character: Character) -> str:
     return "reluctant, and not good at hiding it"
 
 
+RESTRAINT = (
+    "Introduce nothing that is not already established — no objects, food, weather, "
+    "smells, times of day, or people that have not appeared. Describe the space and "
+    "what is happening in it, not anyone's appearance or inner state."
+)
+
+
 class Narrator:
-    def __init__(self, llm: LLMClient):
+    def __init__(
+        self,
+        llm: LLMClient,
+        protagonist: str | None = None,
+        protagonist_id: str | None = None,
+    ):
         self.llm = llm
+        # The player's character. The narrator must never move, speak for,
+        # or describe them: doing so takes the one character the player
+        # controls and plays it for them.
+        self.protagonist = protagonist
+        self.protagonist_id = protagonist_id
+
+    def _hands_off(self) -> str:
+        if not self.protagonist:
+            return ""
+        return (
+            f" {self.protagonist} is played by someone else: never describe what "
+            f"{self.protagonist} does, says, feels, or looks like, and never give them "
+            "an object or an action they did not take."
+        )
 
     def bid(self, event: Event, events: list[Event], world: World) -> Bid | None:
         """Bids on a lull, an undescribed physical action, or a scene that
         needs establishing — never on ordinary dialogue exchange."""
         if not events:
             return Bid(character_id=NARRATOR_ID, desire=0.9, one_line_reason="establish the scene")
+        # Never gild prose that is already prose: a narration, or a
+        # pressure's effect, which the narrator itself just rendered.
+        if event.kind == "narration" or event.metadata.get("pressure_id"):
+            return None
+        # Never narrate the player's own action back at them. Asking a
+        # model not to is not enough — a weak one answers a move with
+        # "Elena's light blue dress caught the dim light", inventing a
+        # dress and playing the one character the player controls. The
+        # only reliable version of this rule is not bidding.
+        if self.protagonist_id and event.actor_id == self.protagonist_id:
+            return None
         if event.kind in ("arrival", "departure", "time_skip"):
             return Bid(
                 character_id=NARRATOR_ID,
@@ -51,7 +88,7 @@ class Narrator:
             "spare prose. You are given the beat that should happen now. Render it as "
             "perceivable action in the given location — what someone standing there would "
             "see or hear. Never explain the beat's purpose, never name it as a device, and "
-            "never state anything no one present could observe."
+            f"never state anything no one present could observe. {RESTRAINT}{self._hands_off()}"
         )
         prompt = (
             f"Location: {world.room_name(location_id)}\n"
@@ -101,7 +138,7 @@ class Narrator:
             "spare prose. You are told, in one coarse line, something that happened in "
             "this room while no one was watching. Describe only the traces of it that "
             "are visible now to someone standing here — what was left, moved, or "
-            "disturbed. Never narrate the act itself as if it were witnessed."
+            f"disturbed. Never narrate the act itself as if it were witnessed. {RESTRAINT}"
         )
         prompt = (
             f"Location: {world.room_name(summary_event.location_id)}\n"
@@ -116,9 +153,10 @@ class Narrator:
         location_name = world.room_name(event.location_id)
         system = (
             "You are the narrator of an interactive story: third-person, present-tense, "
-            "spare prose. Describe only perceivable action in the given location. Never "
-            "narrate a character's private thoughts, never state information no one "
-            "present could observe, never resolve dialogue for a character."
+            "spare prose, at most two sentences. Describe only perceivable action in the "
+            "given location. Never narrate a character's private thoughts, never state "
+            "information no one present could observe, never resolve dialogue for a "
+            f"character. {RESTRAINT}{self._hands_off()}"
         )
         prompt = (
             f"Location: {location_name}\n"

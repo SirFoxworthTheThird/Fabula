@@ -30,5 +30,5 @@ def fake_llm():
 
 @pytest.fixture
 def contexts(scenario, store, fake_llm):
-    world, _characters, scene = scenario
-    return ContextBuilder(world, scene.id, store, fake_llm)
+    world, characters, scene = scenario
+    return ContextBuilder(world, characters, scene.id, store, fake_llm)

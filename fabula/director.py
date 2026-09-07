@@ -124,7 +124,7 @@ class Director:
         self.narrator = narrator
         self.llm = llm
         self.pressures = pressures or []
-        self.contexts = ContextBuilder(world, scene.id, store, llm)
+        self.contexts = ContextBuilder(world, characters, scene.id, store, llm)
 
     def build_event(
         self,
