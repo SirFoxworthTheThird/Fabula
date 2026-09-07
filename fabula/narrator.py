@@ -49,6 +49,26 @@ class Narrator:
         )
         return self.llm.complete(system=system, prompt=prompt, key=f"pressure:{pressure.id}")
 
+    def materialize(self, summary_event: Event, world: World) -> str:
+        """Expand a coarsely-resolved off-screen action into what is
+        visible now, in the room, to someone who has just walked in — not
+        a replay of what happened while they were away."""
+        system = (
+            "You are the narrator of an interactive story: third-person, present-tense, "
+            "spare prose. You are told, in one coarse line, something that happened in "
+            "this room while no one was watching. Describe only the traces of it that "
+            "are visible now to someone standing here — what was left, moved, or "
+            "disturbed. Never narrate the act itself as if it were witnessed."
+        )
+        prompt = (
+            f"Location: {world.room_name(summary_event.location_id)}\n"
+            f"What happened here, unobserved: {summary_event.content}\n"
+            "Describe what is visible now, in one or two sentences."
+        )
+        return self.llm.complete(
+            system=system, prompt=prompt, key=f"materialize:{summary_event.id}"
+        )
+
     def generate(self, event: Event, events: list[Event], world: World) -> str:
         location_name = world.room_name(event.location_id)
         system = (

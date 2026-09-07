@@ -22,5 +22,14 @@ goals:
   - id: protect_secret
     description: Keep the broken music box a secret from Maria
     priority: 0.9
+intentions:
+  - id: check_the_glue
+    description: takes the music box down and checks the seam where he glued it
+    location_id: kitchen
+    ready_after_minutes: 20
+  - id: move_the_evidence
+    description: wraps something small in a cloth and puts it at the back of a drawer
+    location_id: kitchen
+    ready_after_minutes: 45
 location_id: kitchen
 is_user: false

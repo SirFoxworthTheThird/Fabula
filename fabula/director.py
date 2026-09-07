@@ -16,10 +16,17 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Literal
+from datetime import datetime, timedelta
+from typing import Callable, Literal
 
 from fabula.agents import generate_utterance
 from fabula.bidding import get_bid, prefilter_candidates
+from fabula.chronology import (
+    LARGE_SKIP_MINUTES,
+    derive_skip_minutes,
+    describe_duration,
+    due_intentions,
+)
 from fabula.db import EventStore
 from fabula.loader import Scene
 from fabula.memory import ContextBuilder, location_at_seq, record_rehearsals
@@ -124,9 +131,12 @@ class Director:
         content: str,
         audibility: str = "room",
         metadata: dict | None = None,
+        story_time: datetime | None = None,
+        detail_level: str = "full",
     ) -> Event:
         all_events = self.store.get_events(self.scene.id)
-        story_time = all_events[-1].story_time if all_events else self.scene.start_time
+        if story_time is None:
+            story_time = all_events[-1].story_time if all_events else self.scene.start_time
         addressed_to = (
             detect_addressed_to(content, self.characters, exclude_id=actor_id)
             if kind in ("utterance", "action")
@@ -143,6 +153,7 @@ class Director:
             audibility=audibility,
             addressed_to=addressed_to,
             metadata=metadata or {},
+            detail_level=detail_level,
         )
 
     def run_turn(self, user_event: Event) -> list[Event]:
@@ -205,6 +216,133 @@ class Director:
             consecutive_agent_turns += 1
 
         return events_this_turn
+
+    def advance_time(
+        self,
+        minutes: int | None = None,
+        consent: Callable[[int], bool] | None = None,
+    ) -> list[Event]:
+        """Skip forward to the next moment something is ready, log the
+        skip, and resolve what happened off screen while it elapsed.
+
+        Returns the events appended, empty if nothing was pending or the
+        user declined a large skip.
+        """
+        all_events = self.store.get_events(self.scene.id)
+        if minutes is None:
+            minutes = derive_skip_minutes(self.characters, all_events)
+        if minutes is None or minutes <= 0:
+            return []
+
+        # The user is a character with agency: time is not something they
+        # should ever lose without noticing (spec §8).
+        if minutes > LARGE_SKIP_MINUTES and not (consent and consent(minutes)):
+            return []
+
+        previous_time = all_events[-1].story_time if all_events else self.scene.start_time
+        user_location = next(
+            (c.location_id for c in self.characters.values() if c.is_user),
+            next(iter(self.world.rooms)),
+        )
+        skip = self.build_event(
+            "time_skip",
+            None,
+            user_location,
+            f"{describe_duration(minutes)} pass.",
+            audibility="building",
+            metadata={"minutes": minutes},
+            story_time=previous_time + timedelta(minutes=minutes),
+        )
+        appended = [self.store.append_event(skip)]
+        appended.extend(self._resolve_offscreen(minutes))
+        self._record_rehearsals()
+        return appended
+
+    def current_location(self, character: Character) -> str:
+        """Where a character is now, replayed from their arrivals in the
+        log rather than read off the scene's starting snapshot."""
+        all_events = self.store.get_events(self.scene.id)
+        last_seq = all_events[-1].seq if all_events else 0
+        return location_at_seq(character.id, character.location_id, all_events, last_seq + 1)
+
+    def _resolve_offscreen(self, elapsed_minutes: int) -> list[Event]:
+        """Off-screen action is resolved coarsely: elapsed time produces a
+        few `detail_level: "summary"` events per character. Specifics are
+        materialized lazily, when someone is actually there to see them.
+
+        Only genuinely off-screen characters are resolved this way. Someone
+        standing in the room with the user is not off screen, and flattening
+        what they did into a coarse stub would both under-describe it and
+        hand the user a summary-resolution line as if they had watched it
+        happen. Their intention simply stays pending.
+        """
+        appended = []
+        user = next((c for c in self.characters.values() if c.is_user), None)
+        user_location = self.current_location(user) if user else None
+
+        for character in self.characters.values():
+            if character.is_user:
+                continue
+            if user_location is not None and self.current_location(character) == user_location:
+                continue
+            events = self.store.get_events(self.scene.id)
+            for intention in due_intentions(character, events, elapsed_minutes):
+                summary = self.build_event(
+                    "action",
+                    character.id,
+                    intention.location_id,
+                    f"{character.name} {intention.description}",
+                    metadata={"intention_id": intention.id},
+                    detail_level="summary",
+                )
+                appended.append(self.store.append_event(summary))
+        return appended
+
+    def materialize(self, summary_event: Event, observer: Character) -> Event | None:
+        """Expand a coarsely-resolved off-screen event into specifics — the
+        moment the user finds the kitchen ransacked is when "Tomás searched
+        the house" becomes a description.
+
+        Only from inside the room: standing elsewhere, there is nothing to
+        see, so there is nothing to materialize. Appends rather than
+        rewrites, because the log is append-only; the specifics are a new
+        perceivable event, filtered like any other.
+        """
+        all_events = self.store.get_events(self.scene.id)
+        observer_location = location_at_seq(
+            observer.id, observer.location_id, all_events, all_events[-1].seq + 1
+        )
+        if summary_event.location_id != observer_location:
+            return None
+        if summary_event.detail_level != "summary":
+            return None
+        if any(e.metadata.get("materializes") == summary_event.id for e in all_events):
+            return None
+
+        content = self.narrator.materialize(summary_event, self.world)
+        event = self.build_event(
+            "narration",
+            None,
+            summary_event.location_id,
+            content,
+            metadata={"materializes": summary_event.id},
+        )
+        appended = self.store.append_event(event)
+        self._record_rehearsals()
+        return appended
+
+    def unmaterialized_here(self, observer: Character) -> list[Event]:
+        """Coarse off-screen events waiting in the observer's room."""
+        all_events = self.store.get_events(self.scene.id)
+        location = location_at_seq(
+            observer.id, observer.location_id, all_events, all_events[-1].seq + 1
+        )
+        done = {e.metadata.get("materializes") for e in all_events}
+        return [
+            e
+            for e in all_events
+            if e.detail_level == "summary" and e.location_id == location and e.id not in done
+        ]
 
     def _fire(self, pressure: Pressure) -> Event:
         """Turn an authored pressure into one ordinary event. The firing is

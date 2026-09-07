@@ -186,6 +186,38 @@ def test_secret_does_not_leak_after_50_turns_and_a_summarization_pass(
     assert all(SECRET not in row["summary_text"].lower() for row in rows)
 
 
+def test_the_cli_prints_only_the_user_characters_projection(scenario, store, capsys):
+    """A client that prints the raw log hands the player their own
+    character's blind spots. The terminal is a POV, not a transcript."""
+    from fabula.cli import _show
+    from fabula.db import EventStore  # noqa: F401  (fixture type)
+    from fabula.director import Director
+    from fabula.narrator import Narrator
+
+    world, characters, scene = scenario
+    director = Director(store, world, characters, scene, Narrator(FakeLLM()), FakeLLM())
+    elena = characters["elena"]
+
+    # Elena steps out to the study; Tomás says the secret in the kitchen.
+    store.append_event(
+        director.build_event("arrival", "elena", "study", "Elena steps through.")
+    )
+    said = store.append_event(
+        director.build_event(
+            "utterance",
+            "tomas",
+            "kitchen",
+            "I broke Grandma's music box, and I never told anyone.",
+        )
+    )
+
+    _show(director, elena, [said], characters)
+
+    printed = capsys.readouterr().out
+    assert SECRET not in printed.lower()
+    assert printed == ""  # a room away with room-scoped speech, she gets nothing
+
+
 def test_leak_survives_a_scene_boundary_with_persistence():
     import pytest
 

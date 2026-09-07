@@ -18,6 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from fabula.chronology import render_time_skip
 from fabula.db import EventStore
 from fabula.llm import LLMClient
 from fabula.models import Belief, Character, Event, ProjectedEvent
@@ -87,7 +88,15 @@ def project(
         level = resolve_perception(event, character.id, char_location, world)
         if level == "none":
             continue
-        content = event.content if level == "full" else degrade_content(event, world)
+        if event.kind == "time_skip":
+            # Everyone in the building lives through the same skip, but not
+            # the same way: spec §8 makes that explicitly a projection
+            # concern, so it is rendered per character here.
+            content = render_time_skip(event, character.id, events)
+        elif level == "full":
+            content = event.content
+        else:
+            content = degrade_content(event, world)
         projected.append(ProjectedEvent(event=event, perceived_content=content, perception=level))
     return projected
 

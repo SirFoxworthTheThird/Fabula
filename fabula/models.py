@@ -48,12 +48,24 @@ class Traits(BaseModel):
     reticence: float = 0.3
 
 
+class Intention(BaseModel):
+    """Something a character means to do when they are not on screen.
+    Time skips are derived from these: the director jumps to the next
+    moment one of them is ready, never an arbitrary span that lands on
+    nothing."""
+    id: str
+    description: str
+    location_id: str
+    ready_after_minutes: int
+
+
 class Character(BaseModel):
     id: str
     name: str
     persona: str
     traits: Traits = Field(default_factory=Traits)
     goals: list[Goal] = Field(default_factory=list)
+    intentions: list[Intention] = Field(default_factory=list)
     location_id: str
     is_user: bool = False
 

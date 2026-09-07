@@ -17,5 +17,10 @@ goals:
   - id: settle_the_estate
     description: Sort out grandmother's belongings fairly among the siblings
     priority: 0.6
+intentions:
+  - id: finish_the_letters
+    description: works through the last of the letters and stacks them in date order
+    location_id: study
+    ready_after_minutes: 30
 location_id: study
 is_user: false

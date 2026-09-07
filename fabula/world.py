@@ -10,14 +10,16 @@ from pydantic import BaseModel, Field
 
 from fabula.models import Audibility, Event, PerceptionLevel
 
+# Room names carry their own article ("the kitchen"), so these must not
+# supply a second one.
 DEGRADED_TEMPLATES: dict[str, str] = {
-    "utterance": "muffled voices from the {location}, words unclear",
-    "action": "sounds of movement from the {location}",
-    "narration": "something is happening in the {location}, out of view",
-    "arrival": "a door somewhere near the {location}",
-    "departure": "footsteps fading from the {location}",
-    "time_skip": "",
-    "state_change": "a faint change felt from the {location}",
+    "utterance": "muffled voices from {location}, words unclear",
+    "action": "sounds of movement from {location}",
+    "narration": "something happening in {location}, out of view",
+    "arrival": "a door somewhere near {location}",
+    "departure": "footsteps fading from {location}",
+    "time_skip": "time passes",
+    "state_change": "a faint change felt from {location}",
 }
 
 
