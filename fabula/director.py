@@ -36,7 +36,7 @@ from fabula.narrator import NARRATOR_ID, Narrator
 from fabula.pressures import scene_state, select_pressure
 from fabula.world import World, resolve_perception
 
-DecisionKind = Literal["speak", "narrate", "yield_to_user", "fire_pressure"]
+DecisionKind = Literal["speak", "narrate", "yield_to_user", "fire_pressure", "withhold"]
 
 YIELD_FLOOR = 0.12
 
@@ -101,6 +101,8 @@ def arbitrate(
         return Decision(kind="yield_to_user", bids=bids)
     if winner.character_id == NARRATOR_ID:
         return Decision(kind="narrate", character_id=NARRATOR_ID, bids=bids)
+    if winner.kind == "withhold":
+        return Decision(kind="withhold", character_id=winner.character_id, bids=bids)
     return Decision(kind="speak", character_id=winner.character_id, bids=bids)
 
 
@@ -200,6 +202,21 @@ class Director:
 
             if decision.kind == "fire_pressure":
                 new_event = self._fire(decision.pressure)
+            elif decision.kind == "withhold":
+                character = self.characters[decision.character_id]
+                location = location_at_seq(
+                    character.id, character.location_id, all_events, last_event.seq + 1
+                )
+                # Not answering is something the room can see, so it is an
+                # ordinary event with an actor — visible, attributable, and
+                # perception-filtered like anything else.
+                new_event = self.build_event(
+                    "action",
+                    character.id,
+                    location,
+                    self.narrator.render_withholding(character, self.world, location),
+                    metadata={"withheld": True},
+                )
             elif decision.kind == "narrate":
                 content = self.narrator.generate(last_event, all_events, self.world)
                 new_event = self.build_event("narration", None, last_event.location_id, content)
@@ -288,6 +305,12 @@ class Director:
                 continue
             events = self.store.get_events(self.scene.id)
             for intention in due_intentions(character, events, elapsed_minutes):
+                if intention.private and self._others_present(
+                    intention.location_id, character.id
+                ):
+                    # He is not going to check the glue seam with his
+                    # sister standing right there. It waits.
+                    continue
                 summary = self.build_event(
                     "action",
                     character.id,
@@ -298,6 +321,13 @@ class Director:
                 )
                 appended.append(self.store.append_event(summary))
         return appended
+
+    def _others_present(self, location_id: str, actor_id: str) -> bool:
+        """Is anyone but the actor standing in this room right now?"""
+        return any(
+            character.id != actor_id and self.current_location(character) == location_id
+            for character in self.characters.values()
+        )
 
     def materialize(self, summary_event: Event, observer: Character) -> Event | None:
         """Expand a coarsely-resolved off-screen event into specifics — the

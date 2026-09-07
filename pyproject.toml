@@ -17,6 +17,7 @@ dev = ["pytest>=8.0", "httpx>=0.27"]
 [project.scripts]
 fabula = "fabula.cli:main"
 fabula-serve = "fabula.api:main"
+fabula-playtest = "fabula.playtest:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

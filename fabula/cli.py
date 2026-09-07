@@ -11,6 +11,7 @@ import argparse
 from pathlib import Path
 
 from fabula.chronology import describe_duration
+from fabula.commands import run_command
 from fabula.models import Character, ProjectedEvent
 from fabula.session import Session
 
@@ -73,48 +74,14 @@ def run(world_dir: Path, scene_name: str, db_path: str = ":memory:") -> None:
         except EOFError:
             print()
             break
-        raw = raw.strip()
-        if not raw:
-            continue
-        if raw in ("/quit", "/exit"):
+        outcome = run_command(session, raw, consent=_ask_consent)
+        if outcome.quit:
             break
-
-        if raw == "/wait":
-            pending = session.pending_skip()
-            if pending is None:
-                print("  Nothing is pending; time stays where it is.\n")
-                continue
-            perceived = session.wait(consent=_ask_consent)
-            if not perceived:
-                print("  Time stays where it is.\n")
-                continue
-            _show(perceived, characters)
+        if outcome.message:
+            print(f"  {outcome.message}")
+        _show(_without_own_echo(outcome.perceived, you), characters)
+        if outcome.message or outcome.perceived:
             print()
-            continue
-
-        if raw == "/look":
-            perceived = session.look()
-            if not perceived:
-                print("  Nothing here has changed since you last looked.\n")
-                continue
-            _show(perceived, characters)
-            print()
-            continue
-
-        if raw.startswith("/go "):
-            destination = raw[len("/go ") :].strip()
-            try:
-                perceived = session.move(destination)
-            except ValueError:
-                print(f"  There is no {destination} to go to.\n")
-                continue
-            print(f"  You are in {world.room_name(session.here())}.")
-            _show(_without_own_echo(perceived, you), characters)
-            print()
-            continue
-
-        _show(_without_own_echo(session.say(raw), you), characters)
-        print()
 
 
 def main(argv: list[str] | None = None) -> None:

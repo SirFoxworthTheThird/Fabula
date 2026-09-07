@@ -15,12 +15,11 @@ from __future__ import annotations
 
 import operator
 import re
-import unicodedata
 from dataclasses import dataclass, field
 
 from fabula.memory import location_at_seq
 from fabula.models import Character, Event, Pressure
-from fabula.world import Fact
+from fabula.world import Fact, mentions_fact
 
 ARC_RAMP_TURNS = 30          # how quickly arc mode escalates toward its end
 SANDBOX_LULL_THRESHOLD = 0.4  # sandbox only pushes when the scene has gone quiet
@@ -55,15 +54,9 @@ def scene_state(events: list[Event], characters: dict[str, Character]) -> SceneS
     return SceneState(events=events, turn_count=turn_count, locations=locations, fires=fires)
 
 
-def _fold(text: str) -> str:
-    decomposed = unicodedata.normalize("NFKD", text)
-    return "".join(c for c in decomposed if not unicodedata.combining(c)).lower()
-
-
 def _first_spoken_seq(fact: Fact, events: list[Event]) -> int | None:
     for event in events:
-        content = _fold(event.content)
-        if any(_fold(keyword) in content for keyword in fact.keywords):
+        if mentions_fact(fact, event.content):
             return event.seq
     return None
 

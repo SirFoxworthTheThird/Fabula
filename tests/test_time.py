@@ -110,6 +110,75 @@ def test_off_screen_time_produces_coarse_summary_events(scenario, store):
     assert all(e.kind == "action" for e in resolved)
 
 
+def test_a_private_intention_waits_for_an_empty_room(scenario, store):
+    """"Off screen" cannot mean only "off the player's screen". Tomás is
+    not going to check the glue seam with his sister standing there —
+    found by playtesting, where Maria came away knowing the secret."""
+    _world, characters, scene = scenario
+    cast = dict(characters)
+    cast["tomas"] = characters["tomas"].model_copy(
+        update={
+            "intentions": [
+                Intention(
+                    id="check_the_glue",
+                    description="checks the seam where he glued it",
+                    location_id="kitchen",
+                    ready_after_minutes=20,
+                    private=True,
+                )
+            ]
+        }
+    )
+    cast["maria"] = characters["maria"].model_copy(update={"intentions": []})
+    director = a_director(scenario, store, cast)
+    director.run_turn(director.build_event("utterance", "elena", "kitchen", "Back in a bit."))
+
+    # Elena leaves, but Maria is drawn into the kitchen: still not private.
+    move(director, cast["elena"], "study")
+    move(director, cast["maria"], "kitchen")
+    director.advance_time(minutes=60)
+
+    events = store.get_events(scene.id)
+    assert not any(e.metadata.get("intention_id") == "check_the_glue" for e in events)
+
+    # Once the kitchen is his alone, it resolves.
+    move(director, cast["maria"], "study")
+    director.advance_time(minutes=60)
+
+    assert any(
+        e.metadata.get("intention_id") == "check_the_glue"
+        for e in store.get_events(scene.id)
+    )
+
+
+def test_a_public_intention_resolves_regardless_of_who_is_watching(scenario, store):
+    _world, characters, scene = scenario
+    cast = dict(characters)
+    cast["maria"] = characters["maria"].model_copy(
+        update={
+            "intentions": [
+                Intention(
+                    id="finish_the_letters",
+                    description="stacks the letters in date order",
+                    location_id="study",
+                    ready_after_minutes=30,
+                )
+            ]
+        }
+    )
+    cast["tomas"] = characters["tomas"].model_copy(update={"intentions": []})
+    director = a_director(scenario, store, cast)
+    director.run_turn(director.build_event("utterance", "elena", "kitchen", "Back in a bit."))
+    move(director, cast["tomas"], "study")  # someone is watching, and it does not matter
+
+    director.advance_time(minutes=30)
+
+    assert any(
+        e.metadata.get("intention_id") == "finish_the_letters"
+        for e in store.get_events(scene.id)
+    )
+
+
 def test_someone_in_the_room_with_the_user_is_not_resolved_off_screen(scenario, store):
     """Off-screen resolution is for what the user is not there to see.
     Tomás is standing in the kitchen with Elena, so his intention waits

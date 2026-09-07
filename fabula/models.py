@@ -57,6 +57,10 @@ class Intention(BaseModel):
     description: str
     location_id: str
     ready_after_minutes: int
+    # Something done only when unobserved. A private intention waits for
+    # the room to be empty rather than playing out in front of whoever
+    # happens to be standing there.
+    private: bool = False
 
 
 class Character(BaseModel):
@@ -67,6 +71,10 @@ class Character(BaseModel):
     goals: list[Goal] = Field(default_factory=list)
     intentions: list[Intention] = Field(default_factory=list)
     relationships: dict[str, Relationship] = Field(default_factory=dict)
+    # Fact ids this character will deflect rather than discuss. Authored,
+    # like pressures: the engine never decides on its own what someone
+    # would rather not talk about.
+    protects: list[str] = Field(default_factory=list)
     location_id: str
     is_user: bool = False
 
@@ -107,6 +115,10 @@ class Bid(BaseModel):
     character_id: str
     desire: float
     one_line_reason: str
+    # "withhold" is a bid to visibly not answer. Without it, a reticent
+    # character simply loses the argmax, which reads identically to their
+    # not being in the room.
+    kind: Literal["speak", "withhold"] = "speak"
 
 
 class ProjectedEvent(BaseModel):

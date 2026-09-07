@@ -9,10 +9,55 @@ from __future__ import annotations
 from fabula.llm import LLMClient
 from fabula.memory import ContextBuilder, location_at_seq
 from fabula.models import Bid, Character, Event
-from fabula.world import World, resolve_perception
+from fabula.world import World, mentions_fact, resolve_perception
 
 AMBIGUOUS_LOW = 0.35
 AMBIGUOUS_HIGH = 0.65
+
+WITHHOLD_RETICENCE = 0.6   # below this, a character just answers
+WITHHOLD_COOLDOWN = 6      # events; deflecting every turn stops being drama
+
+
+def recently_withheld(character_id: str, events: list[Event], window: int = WITHHOLD_COOLDOWN) -> bool:
+    if not events:
+        return False
+    cutoff = events[-1].seq - window
+    return any(
+        event.seq > cutoff
+        and event.actor_id == character_id
+        and event.metadata.get("withheld")
+        for event in events
+    )
+
+
+def withholding_bid(
+    character: Character, event: Event, level: str, events: list[Event], world: World
+) -> tuple[float, str] | None:
+    """Bid to visibly not answer, when pressed directly on something this
+    character protects.
+
+    Only on `full` perception, which is what makes reading `event.content`
+    here safe: at full fidelity the perceived content *is* the content, so
+    this asks nothing more than what the character actually heard. A
+    degraded listener did not catch the question clearly enough to dodge it.
+    """
+    # Named directly, or asked of the room at large (spec §5.1: an empty
+    # addressed_to is the whole room). A question about your secret that
+    # names someone else is not yours to dodge.
+    addressed = character.id in event.addressed_to or not event.addressed_to
+    if level != "full" or not addressed:
+        return None
+    if character.traits.reticence < WITHHOLD_RETICENCE:
+        return None
+    if recently_withheld(character.id, events):
+        return None
+
+    for fact_id in character.protects:
+        fact = world.facts.get(fact_id)
+        if fact is not None and mentions_fact(fact, event.content):
+            desire = min(1.0, 0.6 + character.traits.reticence * 0.35)
+            return desire, "pressed on something they will not discuss"
+    return None
 
 
 def prefilter_candidates(
@@ -83,6 +128,13 @@ def get_bid(
 
     The ambiguous path builds context through the same `ContextBuilder`
     the reply uses, so a bid reads exactly what a reply would read."""
+    withhold = withholding_bid(character, event, level, events, contexts.world)
+    if withhold is not None:
+        desire, reason = withhold
+        return Bid(
+            character_id=character.id, desire=desire, one_line_reason=reason, kind="withhold"
+        )
+
     score, reason = heuristic_bid(character, event, level)
 
     if llm is not None and AMBIGUOUS_LOW <= score <= AMBIGUOUS_HIGH:

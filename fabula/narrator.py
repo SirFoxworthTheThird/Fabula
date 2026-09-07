@@ -6,10 +6,21 @@ can never describe what an off-scene character couldn't perceive."""
 from __future__ import annotations
 
 from fabula.llm import LLMClient
-from fabula.models import Bid, Event, Pressure
+from fabula.models import Bid, Character, Event, Pressure
 from fabula.world import World
 
 NARRATOR_ID = "__narrator__"
+
+
+def _manner(character: Character) -> str:
+    """How this person deflects, derived from mechanical traits alone —
+    never from authored prose, which is where secrets live."""
+    traits = character.traits
+    if traits.reticence >= 0.7:
+        return "guarded; deflects rather than refuses outright"
+    if traits.talkativeness >= 0.6:
+        return "normally talkative, which makes the pause conspicuous"
+    return "reluctant, and not good at hiding it"
 
 
 class Narrator:
@@ -48,6 +59,38 @@ class Narrator:
             "Write one or two sentences."
         )
         return self.llm.complete(system=system, prompt=prompt, key=f"pressure:{pressure.id}")
+
+    def render_withholding(self, character: Character, world: World, location_id: str) -> str:
+        """Render a character visibly declining to answer.
+
+        It is never told *what* is being withheld, and must not be: the
+        beat is perceived by everyone in the room, so a narrator that knew
+        the secret could hand it to them in the act of describing it being
+        kept.
+
+        Note what is *not* passed: the persona. Authored persona prose is
+        where a character's secret usually lives — Tomás's says outright
+        what he broke — so handing it to a narrator whose output is public
+        leaks the thing this whole beat exists to protect. Manner is
+        derived from traits instead, which carry no world knowledge.
+        """
+        system = (
+            "You are the narrator of an interactive story: third-person, present-tense, "
+            "spare prose. A character has just been asked something they do not want to "
+            "answer. Describe only what someone in the room would see them do instead — "
+            "a deflection, a busied hand, a look away, a change of subject. Never state "
+            "or hint at what they are avoiding, never explain why, and never give them "
+            "dialogue that answers the question."
+        )
+        prompt = (
+            f"Character: {character.name}\n"
+            f"Manner: {_manner(character)}\n"
+            f"Location: {world.room_name(location_id)}\n"
+            "Write one sentence of them not answering."
+        )
+        return self.llm.complete(
+            system=system, prompt=prompt, key=f"withhold:{character.id}"
+        )
 
     def materialize(self, summary_event: Event, world: World) -> str:
         """Expand a coarsely-resolved off-screen action into what is

@@ -76,6 +76,21 @@ Elena> Tomás, you've been strange all evening.
 Pass `--db scene.sqlite` to keep a scene on disk. Characters are durable: run it again
 against the same file and they arrive remembering the last one.
 
+### Playtest a scene
+
+Whether a scene *reads well* is a judgment a person has to make, but it shouldn't need
+playing by hand after every change. This runs a fixed script and prints the transcript,
+then dumps what each character came away believing:
+
+```bash
+fabula-playtest worlds/ashgrove the_dinner --model gpt-4o-mini
+```
+
+The belief dump is deliberately omniscient — it is how you check the asymmetry landed,
+that Maria really doesn't know. It is an author's tool; no player-facing client may show
+it. Pass `--script mine.txt` for your own sequence, `--no-beliefs` for the transcript
+alone.
+
 ### Play in a browser
 
 ```bash
@@ -158,7 +173,20 @@ traits:
   reactivity: {secret_mentioned: 0.9, insulted: 0.6}
   salience_bias: {utterance: 1.0, action: 0.9}   # what this character finds memorable
   reticence: 0.75
+protects: [music_box]        # asked about this, he deflects instead of answering
+intentions:
+  - id: check_the_glue
+    description: checks the seam where he glued it
+    location_id: kitchen
+    ready_after_minutes: 20
+    private: true            # only when the room is empty
 ```
+
+A character with high `reticence` who is pressed on something in `protects` bids to
+**withhold** — the narrator renders them visibly not answering, which the room can see.
+That matters because a reticent character who merely loses the bid reads exactly like
+someone who isn't there. The narrator is never told *what* is being withheld, and is
+never given the persona (that is where the secret is written down).
 
 Pressures are a trigger plus an intent, never a script. The director chooses among
 *authored* pressures and the narrator renders the chosen one; it can never invent a

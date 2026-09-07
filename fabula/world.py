@@ -6,6 +6,8 @@ perceive") mechanically true rather than a matter of prompting.
 """
 from __future__ import annotations
 
+import unicodedata
+
 from pydantic import BaseModel, Field
 
 from fabula.models import Audibility, Event, PerceptionLevel
@@ -69,6 +71,19 @@ class World(BaseModel):
     def room_name(self, room_id: str) -> str:
         room = self.rooms.get(room_id)
         return room.name if room else room_id
+
+
+def _fold(text: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).lower()
+
+
+def mentions_fact(fact: Fact, text: str) -> bool:
+    """Does this text bring up the named fact? Keyword matching, so it is
+    deterministic and inspectable — a model is never asked whether a
+    subject came up."""
+    folded = _fold(text)
+    return any(_fold(keyword) in folded for keyword in fact.keywords)
 
 
 def resolve_perception(
