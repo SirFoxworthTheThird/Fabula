@@ -12,13 +12,16 @@ from pathlib import Path
 from fabula.db import EventStore
 from fabula.director import Director
 from fabula.llm import get_default_llm
-from fabula.loader import load_scenario
+from fabula.loader import load_pressures, load_scenario
 from fabula.models import Character, Event
 from fabula.narrator import Narrator
 
 
 def _format_event(event: Event, characters: dict[str, Character]) -> str:
-    if event.kind == "narration":
+    # Only an utterance is somebody speaking. Arrivals, departures and the
+    # rest carry narrator-rendered prose about a character, not words from
+    # their mouth, so they must not be printed behind a speaker's name.
+    if event.kind != "utterance":
         return f"  {event.content}"
     actor = characters.get(event.actor_id) if event.actor_id else None
     name = actor.name if actor else (event.actor_id or "???")
@@ -27,10 +30,11 @@ def _format_event(event: Event, characters: dict[str, Character]) -> str:
 
 def run(world_dir: Path, scene_name: str, db_path: str = ":memory:") -> None:
     world, characters, scene = load_scenario(world_dir, scene_name)
+    pressures = load_pressures(world_dir)
     store = EventStore(db_path)
     llm = get_default_llm()
     narrator = Narrator(llm)
-    director = Director(store, world, characters, scene, narrator, llm)
+    director = Director(store, world, characters, scene, narrator, llm, pressures)
 
     user_characters = [
         characters[cid] for cid in scene.cast if cid in characters and characters[cid].is_user

@@ -1,0 +1,47 @@
+# Authored complications. The director may only choose among these —
+# it never invents one. Each is a condition plus an intent, never a script.
+
+- id: maria_comes_through
+  intent: >
+    Maria runs out of patience with the letters and comes through to the
+    kitchen, looking for company and half-expecting to interrupt something.
+  weight: 0.55
+  trigger:
+    turns_elapsed: "> 4"
+    character_at:
+      maria: study
+  effect:
+    kind: arrival
+    actor: maria
+    location: kitchen
+    audibility: adjacent
+  cooldown_turns: 20
+  max_fires: 1
+
+- id: the_mantel_draws_the_eye
+  intent: >
+    Something about the mantel catches the light — a shelf too tidy, an
+    object sitting a half-inch off where it always sat.
+  weight: 0.4
+  trigger:
+    fact_unspoken: music_box
+    for_turns: "> 8"
+  effect:
+    kind: narration
+    location: kitchen
+  cooldown_turns: 12
+  max_fires: 2
+
+- id: mother_calls_from_upstairs
+  intent: >
+    Their mother calls down from upstairs asking whether anyone has seen
+    the good scissors, and the question hangs a beat too long.
+  weight: 0.35
+  trigger:
+    turns_elapsed: "> 12"
+  effect:
+    kind: narration
+    location: kitchen
+    audibility: building
+  cooldown_turns: 15
+  max_fires: 2

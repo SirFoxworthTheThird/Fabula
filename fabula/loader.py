@@ -14,8 +14,8 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field
 
-from fabula.models import Character
-from fabula.world import Room, World
+from fabula.models import Character, Pressure
+from fabula.world import Fact, Room, World
 
 
 class Scene(BaseModel):
@@ -36,7 +36,18 @@ def load_world(world_dir: Path) -> World:
         room_id: Room(id=room_id, name=room_data["name"], adjacent=room_data.get("adjacent", {}))
         for room_id, room_data in data["rooms"].items()
     }
-    return World(id=data["id"], rooms=rooms)
+    facts = {
+        fact_id: Fact(id=fact_id, keywords=fact_data.get("keywords", []))
+        for fact_id, fact_data in (data.get("facts") or {}).items()
+    }
+    return World(id=data["id"], rooms=rooms, facts=facts)
+
+
+def load_pressures(world_dir: Path) -> list[Pressure]:
+    path = world_dir / "pressures.yaml"
+    if not path.exists():
+        return []
+    return [Pressure(**entry) for entry in (yaml.safe_load(path.read_text()) or [])]
 
 
 def load_characters(world_dir: Path) -> dict[str, Character]:

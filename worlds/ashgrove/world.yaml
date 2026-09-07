@@ -8,3 +8,10 @@ rooms:
     name: the study
     adjacent:
       kitchen: adjacent
+
+# Named things the story can turn on. Only the director reads these; they
+# let a pressure trigger on what has and hasn't been said out loud.
+facts:
+  music_box:
+    keywords:
+      - music box

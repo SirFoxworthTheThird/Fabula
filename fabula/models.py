@@ -71,9 +71,10 @@ class Belief(BaseModel):
 
 class Pressure(BaseModel):
     id: str
-    intent: str
+    intent: str                   # director-only: authored, never enters a projection
     trigger: dict = Field(default_factory=dict)
     effect: dict = Field(default_factory=dict)
+    weight: float = 0.5           # how hard this competes against character bids
     cooldown_turns: int = 0
     max_fires: int = 1
 

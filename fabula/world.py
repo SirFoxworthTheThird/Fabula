@@ -28,9 +28,18 @@ class Room(BaseModel):
     adjacent: dict[str, Audibility] = Field(default_factory=dict)
 
 
+class Fact(BaseModel):
+    """A named thing the story can turn on, recognised in the log by
+    keyword. Facts exist so pressures can trigger on what has and hasn't
+    been said out loud; only the director reads them."""
+    id: str
+    keywords: list[str] = Field(default_factory=list)
+
+
 class World(BaseModel):
     id: str
     rooms: dict[str, Room]
+    facts: dict[str, Fact] = Field(default_factory=dict)
 
     def distance(self, from_room: str, to_room: str) -> int:
         """BFS distance in rooms. 0 = same room, 1 = adjacent, etc."""
