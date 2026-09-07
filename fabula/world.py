@@ -79,6 +79,12 @@ def resolve_perception(
     This is the single choke point invariant 1 depends on: it never
     consults a model, only event fields and room topology.
     """
+    # You always know what you yourself did, wherever the bookkeeping says
+    # you were standing at the time. Without this an actor perceives their
+    # own arrival from the room they just left, i.e. degraded.
+    if character_id is not None and character_id == event.actor_id:
+        return "full"
+
     same_room = character_location == event.location_id
 
     if event.audibility == "private":

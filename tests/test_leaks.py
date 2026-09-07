@@ -190,13 +190,13 @@ def test_the_cli_prints_only_the_user_characters_projection(scenario, store, cap
     """A client that prints the raw log hands the player their own
     character's blind spots. The terminal is a POV, not a transcript."""
     from fabula.cli import _show
-    from fabula.db import EventStore  # noqa: F401  (fixture type)
     from fabula.director import Director
     from fabula.narrator import Narrator
+    from fabula.session import Session
 
     world, characters, scene = scenario
     director = Director(store, world, characters, scene, Narrator(FakeLLM()), FakeLLM())
-    elena = characters["elena"]
+    session = Session(world, characters, scene, store, director, characters["elena"])
 
     # Elena steps out to the study; Tomás says the secret in the kitchen.
     store.append_event(
@@ -211,7 +211,7 @@ def test_the_cli_prints_only_the_user_characters_projection(scenario, store, cap
         )
     )
 
-    _show(director, elena, [said], characters)
+    _show(session.pov([said]), characters)
 
     printed = capsys.readouterr().out
     assert SECRET not in printed.lower()

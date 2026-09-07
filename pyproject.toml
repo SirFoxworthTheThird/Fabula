@@ -5,16 +5,18 @@ description = "A multi-agent story engine with genuine information asymmetry bet
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110",
+    "uvicorn>=0.27",
     "pydantic>=2.6",
     "litellm>=1.35",
     "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "httpx>=0.27"]
 
 [project.scripts]
 fabula = "fabula.cli:main"
+fabula-serve = "fabula.api:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
