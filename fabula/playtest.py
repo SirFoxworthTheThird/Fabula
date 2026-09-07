@@ -70,7 +70,15 @@ def playtest(
     characters = session.characters
 
     print(f"=== {session.scene.id} ({session.scene.mode}) ===")
-    print(f"{you.name}, in {session.world.room_name(session.here())}.\n")
+    print(f"{you.name}, in {session.world.room_name(session.here())}.")
+    # Say plainly that the player character is on rails here. Fixed input
+    # is what makes two runs comparable, but without a word about it the
+    # transcript reads as though the protagonist keeps making the same
+    # choices on her own.
+    print(
+        f"(scripted run: {you.name}'s lines are fixed, so runs can be compared. "
+        "--script for your own; play freely with `python -m fabula.cli`.)\n"
+    )
 
     for line in script:
         print(f"{you.name:>10}> {line}")
