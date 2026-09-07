@@ -23,7 +23,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from fabula.llm import LLMClient
+from fabula.llm import LiteLLMClient, LLMClient
 from fabula.models import ProjectedEvent
 from fabula.openai_shim import add_openai_shim
 from fabula.session import Session
@@ -319,12 +319,19 @@ def create_app(
     return app
 
 
-def serve(worlds_root: Path = Path("worlds"), host: str = "127.0.0.1", port: int = 8000) -> None:
+def serve(
+    worlds_root: Path = Path("worlds"),
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    model: str | None = None,
+    api_base: str | None = None,
+) -> None:
     try:
         import uvicorn
     except ImportError:  # pragma: no cover - depends on the install
         raise SystemExit("serving needs uvicorn: pip install uvicorn")
-    uvicorn.run(create_app(worlds_root), host=host, port=port)
+    llm = LiteLLMClient(model=model, api_base=api_base) if model else None
+    uvicorn.run(create_app(worlds_root, llm=llm), host=host, port=port)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -334,8 +341,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--worlds", type=Path, default=Path("worlds"))
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--model", default=None, help="Any model id litellm understands")
+    parser.add_argument("--api-base", default=None, help="An OpenAI-compatible endpoint")
     args = parser.parse_args(argv)
-    serve(args.worlds, args.host, args.port)
+    serve(args.worlds, args.host, args.port, args.model, args.api_base)
 
 
 if __name__ == "__main__":

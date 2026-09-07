@@ -12,6 +12,7 @@ from pathlib import Path
 
 from fabula.chronology import describe_duration
 from fabula.commands import run_command
+from fabula.llm import LiteLLMClient
 from fabula.models import Character, ProjectedEvent
 from fabula.session import Session
 
@@ -59,8 +60,15 @@ def _ask_consent(minutes: int) -> bool:
     return answer in ("y", "yes")
 
 
-def run(world_dir: Path, scene_name: str, db_path: str = ":memory:") -> None:
-    session = Session.open(world_dir, scene_name, db_path)
+def run(
+    world_dir: Path,
+    scene_name: str,
+    db_path: str = ":memory:",
+    model: str | None = None,
+    api_base: str | None = None,
+) -> None:
+    llm = LiteLLMClient(model=model, api_base=api_base) if model else None
+    session = Session.open(world_dir, scene_name, db_path, llm=llm)
     world, characters = session.world, session.characters
     you = session.user_character
 
@@ -89,8 +97,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("world_dir", type=Path, help="Path to worlds/<name>/")
     parser.add_argument("scene", help="Scene name (file stem under scenes/)")
     parser.add_argument("--db", default=":memory:", help="SQLite file path (default: in-memory)")
+    parser.add_argument("--model", default=None, help="Any model id litellm understands")
+    parser.add_argument("--api-base", default=None, help="An OpenAI-compatible endpoint")
     args = parser.parse_args(argv)
-    run(args.world_dir, args.scene, args.db)
+    run(args.world_dir, args.scene, args.db, args.model, args.api_base)
 
 
 if __name__ == "__main__":

@@ -61,9 +61,10 @@ def playtest(
     model: str | None = None,
     show_beliefs: bool = True,
     llm: LLMClient | None = None,
+    api_base: str | None = None,
 ) -> None:
     if llm is None:
-        llm = LiteLLMClient(model=model) if model else get_default_llm()
+        llm = LiteLLMClient(model=model, api_base=api_base) if model else get_default_llm()
     session = Session.open(world_dir, scene_name, llm=llm)
     you = session.user_character
     characters = session.characters
@@ -109,6 +110,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("scene", help="Scene name (file stem under scenes/)")
     parser.add_argument("--script", type=Path, default=None, help="One command per line")
     parser.add_argument("--model", default=None, help="Any model id litellm understands")
+    parser.add_argument("--api-base", default=None, help="An OpenAI-compatible endpoint")
     parser.add_argument("--no-beliefs", action="store_true", help="Transcript only")
     args = parser.parse_args(argv)
 
@@ -118,6 +120,7 @@ def main(argv: list[str] | None = None) -> None:
         read_script(args.script),
         model=args.model,
         show_beliefs=not args.no_beliefs,
+        api_base=args.api_base,
     )
 
 

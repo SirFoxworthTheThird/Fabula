@@ -19,20 +19,30 @@ class LLMClient(Protocol):
 
 
 class LiteLLMClient:
-    """Provider-agnostic model calls via litellm."""
+    """Provider-agnostic model calls via litellm.
 
-    def __init__(self, model: str = "gpt-4o-mini"):
+    `api_base` points at any OpenAI-compatible endpoint — a hosted proxy,
+    a local server, an aggregator — in which case the model id usually
+    needs an `openai/` prefix so litellm speaks that dialect to it.
+    Credentials come from the environment rather than an argument, so
+    they stay out of shell history and process listings.
+    """
+
+    def __init__(self, model: str = "gpt-4o-mini", api_base: str | None = None):
         self.model = model
+        self.api_base = api_base
 
     def complete(self, system: str, prompt: str, key: str | None = None) -> str:
         import litellm
 
+        extra = {"api_base": self.api_base} if self.api_base else {}
         response = litellm.completion(
             model=self.model,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": prompt},
             ],
+            **extra,
         )
         return response["choices"][0]["message"]["content"]
 

@@ -91,6 +91,39 @@ that Maria really doesn't know. It is an author's tool; no player-facing client 
 it. Pass `--script mine.txt` for your own sequence, `--no-beliefs` for the transcript
 alone.
 
+### Point it at your own model
+
+Every entry point takes `--model` (any id litellm understands) and `--api-base` (any
+OpenAI-compatible endpoint — a hosted proxy, an aggregator, a local server). Credentials
+come from the environment, never a flag, so they stay out of shell history.
+
+```bash
+export OPENAI_API_KEY=...
+fabula-playtest worlds/ashgrove the_dinner --model gpt-4.1-nano
+
+# against an OpenAI-compatible proxy: prefix the id so litellm speaks that dialect
+export OPENAI_API_KEY=...                       # whatever key the proxy expects
+fabula-playtest worlds/ashgrove the_dinner \
+    --model openai/<their-model-id> --api-base https://<host>/v1
+```
+
+The same two flags work on `fabula`, `fabula-serve` and `fabula-measure`.
+
+### Measure a prompt rule before believing it
+
+The mechanical guarantees hold whatever model is behind them. The rules that live in
+prompts are worth exactly what the model reading them makes of them, which differs by
+model. `fabula-measure` runs one scene opening N times under three variants and counts
+how often the character raises what they guard:
+
+```bash
+fabula-measure worlds/ashgrove the_dinner --model gpt-4.1-nano --samples 16
+```
+
+On a 1.5B local model the three variants landed at 3/16, 4/16 and 3/16 — the shipped
+guard line does nothing there. Whether it earns its place on a capable model is exactly
+what this command is for.
+
 ### Play in a browser
 
 ```bash
