@@ -10,7 +10,7 @@ import json
 import sqlite3
 from datetime import datetime
 
-from fabula.models import Belief, Event
+from fabula.models import Belief, Event, Relationship
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -41,7 +41,11 @@ BEGIN
     SELECT RAISE(ABORT, 'events table is append-only: deletes are forbidden');
 END;
 
+-- Durable across scenes, and keyed by character rather than scene. A
+-- belief store is allowed to hold things that are false; nothing here
+-- ever reconciles it against world state.
 CREATE TABLE IF NOT EXISTS beliefs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     character_id TEXT NOT NULL,
     subject_id TEXT NOT NULL,
     content TEXT NOT NULL,
@@ -50,6 +54,25 @@ CREATE TABLE IF NOT EXISTS beliefs (
     formed_at TEXT NOT NULL,
     last_rehearsed TEXT NOT NULL,
     salience REAL NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS beliefs_one_per_source
+ON beliefs (character_id, source_event_id);
+
+CREATE TABLE IF NOT EXISTS relationships (
+    character_id TEXT NOT NULL,
+    toward_id TEXT NOT NULL,
+    affinity REAL NOT NULL,
+    trust REAL NOT NULL,
+    note TEXT NOT NULL,
+    interactions INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (character_id, toward_id)
+);
+
+CREATE TABLE IF NOT EXISTS resolved_goals (
+    character_id TEXT NOT NULL,
+    goal_id TEXT NOT NULL,
+    PRIMARY KEY (character_id, goal_id)
 );
 
 -- Derived, per-character, and keyed by a hash of the exact perceived
@@ -121,8 +144,10 @@ class EventStore:
         return [_row_to_event(r) for r in rows]
 
     def add_belief(self, belief: Belief) -> None:
+        # One belief per character per source event: encoding the same
+        # moment twice would let a memory quietly gain weight on replay.
         self.conn.execute(
-            """INSERT INTO beliefs
+            """INSERT OR IGNORE INTO beliefs
                (character_id, subject_id, content, confidence, source_event_id,
                 formed_at, last_rehearsed, salience)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -145,6 +170,7 @@ class EventStore:
         ).fetchall()
         return [
             Belief(
+                id=r["id"],
                 character_id=r["character_id"],
                 subject_id=r["subject_id"],
                 content=r["content"],
@@ -157,6 +183,68 @@ class EventStore:
             for r in rows
         ]
 
+
+    def set_belief_salience(self, belief_id: int, salience: float) -> None:
+        self.conn.execute(
+            "UPDATE beliefs SET salience = ? WHERE id = ?", (salience, belief_id)
+        )
+        self.conn.commit()
+
+    def get_relationships(self, character_id: str) -> dict[str, Relationship]:
+        rows = self.conn.execute(
+            "SELECT * FROM relationships WHERE character_id = ?", (character_id,)
+        ).fetchall()
+        return {
+            r["toward_id"]: Relationship(
+                affinity=r["affinity"],
+                trust=r["trust"],
+                note=r["note"],
+                interactions=r["interactions"],
+            )
+            for r in rows
+        }
+
+    def seed_relationship(
+        self, character_id: str, toward_id: str, relationship: Relationship
+    ) -> None:
+        """Authored starting state. Idempotent: once a relationship has
+        been carried into the store it is the character's own, and
+        re-seeding must not reset what play has done to it."""
+        self.conn.execute(
+            """INSERT OR IGNORE INTO relationships
+               (character_id, toward_id, affinity, trust, note, interactions)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                character_id,
+                toward_id,
+                relationship.affinity,
+                relationship.trust,
+                relationship.note,
+                relationship.interactions,
+            ),
+        )
+        self.conn.commit()
+
+    def bump_interaction(self, character_id: str, toward_id: str) -> None:
+        self.conn.execute(
+            """UPDATE relationships SET interactions = interactions + 1
+               WHERE character_id = ? AND toward_id = ?""",
+            (character_id, toward_id),
+        )
+        self.conn.commit()
+
+    def resolve_goal(self, character_id: str, goal_id: str) -> None:
+        self.conn.execute(
+            "INSERT OR IGNORE INTO resolved_goals (character_id, goal_id) VALUES (?, ?)",
+            (character_id, goal_id),
+        )
+        self.conn.commit()
+
+    def get_resolved_goals(self, character_id: str) -> set[str]:
+        rows = self.conn.execute(
+            "SELECT goal_id FROM resolved_goals WHERE character_id = ?", (character_id,)
+        ).fetchall()
+        return {r["goal_id"] for r in rows}
 
     def get_summary(self, character_id: str, scene_id: str, span_key: str) -> str | None:
         row = self.conn.execute(

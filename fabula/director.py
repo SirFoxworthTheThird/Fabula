@@ -29,7 +29,8 @@ from fabula.chronology import (
 )
 from fabula.db import EventStore
 from fabula.loader import Scene
-from fabula.memory import ContextBuilder, location_at_seq, record_rehearsals
+from fabula.memory import ContextBuilder, form_belief, location_at_seq, record_rehearsals
+from fabula.persistence import encode_belief
 from fabula.models import Bid, Character, Event, Pressure
 from fabula.narrator import NARRATOR_ID, Narrator
 from fabula.pressures import scene_state, select_pressure
@@ -362,10 +363,24 @@ class Director:
         )
 
     def _record_rehearsals(self) -> None:
-        """After each append, note which of a character's own earlier
-        perceived events the newest one re-mentions. Done per character
-        against their own projection, so rehearsal never reveals that an
-        event they cannot perceive was referenced at all."""
+        """After each append: note which of a character's own earlier
+        perceived events the newest one re-mentions, and encode the newest
+        one as a belief if it was salient enough to keep.
+
+        Both are done per character against their own projection, so an
+        event they could not perceive is neither rehearsed nor
+        remembered — it does not exist for them.
+        """
         all_events = self.store.get_events(self.scene.id)
         for character in self.characters.values():
-            record_rehearsals(character, self.contexts.project(character, all_events), self.store)
+            projected = self.contexts.project(character, all_events)
+            record_rehearsals(character, projected, self.store)
+            if not projected:
+                continue
+
+            newest = projected[-1]
+            encode_belief(self.store, character, form_belief(character, newest))
+
+            actor_id = newest.event.actor_id
+            if actor_id and actor_id != character.id:
+                self.store.bump_interaction(character.id, actor_id)

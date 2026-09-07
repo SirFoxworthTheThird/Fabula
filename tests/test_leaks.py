@@ -218,7 +218,48 @@ def test_the_cli_prints_only_the_user_characters_projection(scenario, store, cap
     assert printed == ""  # a room away with room-scoped speech, she gets nothing
 
 
-def test_leak_survives_a_scene_boundary_with_persistence():
-    import pytest
+def test_secret_does_not_cross_a_scene_boundary_through_persistence(scenario, store):
+    """Spec §13: the same leak test, across a scene boundary with
+    persistence. Beliefs are encoded from a character's own projection,
+    so what Maria never perceived cannot be carried into the next scene
+    as something she remembers."""
+    from fabula.director import Director
+    from fabula.memory import form_belief
+    from fabula.narrator import Narrator
+    from fabula.persistence import age_beliefs, begin_scene, encode_belief
 
-    pytest.skip("cross-scene persistence lands in M5; revisit once implemented")
+    world, characters, scene = scenario
+    begin_scene(store, characters)
+    director = Director(store, world, characters, scene, Narrator(FakeLLM()), FakeLLM())
+
+    # Scene one: Tomás says it in the kitchen, Maria is in the study.
+    director.run_turn(
+        director.build_event(
+            "utterance",
+            "tomas",
+            "kitchen",
+            "I broke Grandma's music box, and I let them blame the cat.",
+        )
+    )
+
+    # Whatever anyone encoded, hers is free of it — and so is everything
+    # she carries forward.
+    assert all(SECRET not in b.content.lower() for b in store.get_beliefs("maria"))
+
+    # Scene two, same store: beliefs age across the boundary and come back.
+    begin_scene(store, characters)
+    later = scene.model_copy(update={"id": "the_morning_after"})
+    next_director = Director(store, world, characters, later, Narrator(FakeLLM()), FakeLLM())
+    next_director.run_turn(
+        next_director.build_event("utterance", "elena", "study", "Maria, did you sleep?")
+    )
+
+    assert all(SECRET not in b.content.lower() for b in store.get_beliefs("maria"))
+    context = next_director.contexts.for_character(
+        characters["maria"], store.get_events(later.id)
+    )
+    assert SECRET not in context.lower()
+
+    # And Tomás, who did say it, still remembers it a scene later.
+    age_beliefs(store, "tomas")
+    assert any(SECRET in b.content.lower() for b in store.get_beliefs("tomas"))

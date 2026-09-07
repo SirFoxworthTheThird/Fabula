@@ -16,6 +16,7 @@ from fabula.llm import get_default_llm
 from fabula.loader import load_pressures, load_scenario
 from fabula.models import Character, Event, ProjectedEvent
 from fabula.narrator import Narrator
+from fabula.persistence import begin_scene
 
 
 def _format(projected: ProjectedEvent, characters: dict[str, Character]) -> str:
@@ -65,6 +66,10 @@ def run(world_dir: Path, scene_name: str, db_path: str = ":memory:") -> None:
     llm = get_default_llm()
     narrator = Narrator(llm)
     director = Director(store, world, characters, scene, narrator, llm, pressures)
+
+    # Characters are durable: with a --db they arrive carrying what they
+    # already believe about each other, aged by the time between scenes.
+    begin_scene(store, characters)
 
     user_characters = [
         characters[cid] for cid in scene.cast if cid in characters and characters[cid].is_user

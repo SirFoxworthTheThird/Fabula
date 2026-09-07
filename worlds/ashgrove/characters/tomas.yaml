@@ -22,6 +22,15 @@ goals:
   - id: protect_secret
     description: Keep the broken music box a secret from Maria
     priority: 0.9
+relationships:
+  maria:
+    affinity: 0.35
+    trust: 0.25
+    note: His older sister. He loves her and cannot afford to be honest with her.
+  elena:
+    affinity: 0.7
+    trust: 0.8
+    note: The youngest. The one person he might actually tell.
 intentions:
   - id: check_the_glue
     description: takes the music box down and checks the seam where he glued it

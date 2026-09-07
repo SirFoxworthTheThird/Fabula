@@ -17,6 +17,15 @@ goals:
   - id: settle_the_estate
     description: Sort out grandmother's belongings fairly among the siblings
     priority: 0.6
+relationships:
+  tomas:
+    affinity: 0.4
+    trust: 0.5
+    note: Her younger brother. Charming, and never quite answers the question asked.
+  elena:
+    affinity: 0.6
+    trust: 0.7
+    note: The baby of the family, home too rarely.
 intentions:
   - id: finish_the_letters
     description: works through the last of the letters and stacks them in date order

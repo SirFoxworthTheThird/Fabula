@@ -66,11 +66,13 @@ class Character(BaseModel):
     traits: Traits = Field(default_factory=Traits)
     goals: list[Goal] = Field(default_factory=list)
     intentions: list[Intention] = Field(default_factory=list)
+    relationships: dict[str, Relationship] = Field(default_factory=dict)
     location_id: str
     is_user: bool = False
 
 
 class Belief(BaseModel):
+    id: int | None = None
     character_id: str
     subject_id: str
     content: str
@@ -79,6 +81,16 @@ class Belief(BaseModel):
     formed_at: datetime
     last_rehearsed: datetime
     salience: float
+
+
+class Relationship(BaseModel):
+    """How one character stands toward another — including toward the
+    user's character. Durable across scenes; authored as a starting
+    point, then carried."""
+    affinity: float = 0.0     # -1 (hostile) .. 1 (devoted)
+    trust: float = 0.5        # 0 .. 1
+    note: str = ""            # this character's own view, in their words
+    interactions: int = 0     # perceived events actored by the other
 
 
 class Pressure(BaseModel):
