@@ -130,10 +130,11 @@ def test_the_narrator_never_narrates_the_players_own_action(scenario, store, fak
     assert narrator.bid(theirs, [theirs], world) is not None
 
 
-def test_a_character_is_told_not_to_volunteer_what_they_guard(scenario, store, fake_llm):
-    """`protects` made Tomás deflect when asked, but nothing stopped him
-    raising it himself — in playtesting he opened by announcing he had
-    been repairing the music box."""
+def test_a_guarded_subject_is_a_reminder_not_a_rule(scenario, store, fake_llm):
+    """`protects` names what a character would rather not discuss and who
+    can currently hear them. It is deliberately not enforced: a character
+    who cannot slip is less believable, and a secret that cannot escape by
+    accident can only come out by authorial fiat."""
     from fabula.agents import generate_utterance
 
     world, characters, scene = scenario
@@ -142,13 +143,49 @@ def test_a_character_is_told_not_to_volunteer_what_they_guard(scenario, store, f
     generate_utterance(characters["tomas"], [], director.contexts, fake_llm)
     system, _prompt, _key = fake_llm.calls[-1]
 
-    assert "never raise it yourself" in system
     assert SECRET in system  # his own secret, in his own prompt: no leak
+    assert "do not raise it lightly" in system
+    assert "Weigh who can hear you" in system
+    # Tomás starts in the kitchen with Elena, a room away from Maria.
+    assert "In the room with you: Elena." in system
 
     # Someone who guards nothing gets no such line.
     fake_llm.calls.clear()
     generate_utterance(characters["maria"], [], director.contexts, fake_llm)
-    assert "never raise it yourself" not in fake_llm.calls[-1][0]
+    assert "do not raise it lightly" not in fake_llm.calls[-1][0]
+
+
+def test_the_guard_line_names_whoever_walked_in(scenario, store, fake_llm):
+    from fabula.agents import generate_utterance
+
+    world, characters, scene = scenario
+    director = Director(store, world, characters, scene, Narrator(fake_llm), fake_llm)
+    store.append_event(
+        director.build_event("arrival", "maria", "kitchen", "Maria comes through.")
+    )
+
+    events = store.get_events(scene.id)
+    generate_utterance(characters["tomas"], events, director.contexts, fake_llm)
+
+    assert "In the room with you: Elena, Maria." in fake_llm.calls[-1][0]
+
+
+def test_a_character_alone_is_told_the_room_is_empty(scenario, store, fake_llm):
+    from fabula.agents import generate_utterance
+
+    world, characters, scene = scenario
+    director = Director(store, world, characters, scene, Narrator(fake_llm), fake_llm)
+    store.append_event(
+        director.build_event("arrival", "tomas", "study", "Tomás steps through.")
+    )
+    store.append_event(
+        director.build_event("arrival", "maria", "kitchen", "Maria comes through.")
+    )
+
+    events = store.get_events(scene.id)
+    generate_utterance(characters["tomas"], events, director.contexts, fake_llm)
+
+    assert "There is no one else here." in fake_llm.calls[-1][0]
 
 
 def test_the_narrator_does_not_narrate_a_narration(scenario, store, fake_llm):

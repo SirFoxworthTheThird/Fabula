@@ -272,8 +272,11 @@ The suite is the regression net *and* the clearest description of the product:
   have no flag — construct the client directly to change it there.
 * Prompt adherence is the soft spot. Structural rules hold regardless of model (the
   narrator cannot narrate the player, because it does not bid), but the ones that live in
-  prompts — invent no props, never speak for a character — are only as good as the model
-  reading them. A small local model ignores them freely.
+  prompts — invent no props, never speak for a character, don't raise what you guard —
+  are only as good as the model reading them. Measured on a 1.5B local model, the
+  "what you guard" reminder made no difference at all: 4/16 openings blurted the secret
+  with it, 3/16 without. Treat every prompt-level rule here as unproven until measured
+  on the model you actually ship.
 * Relationship affinity does not move during play. Interaction counts accumulate and
   authored affinity/trust persist, but nothing shifts affinity from the *content* of what
   is said; that needs judgment that could not be made deterministically without risking
