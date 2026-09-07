@@ -64,13 +64,19 @@ def test_a_character_alone_is_told_so(scenario, store, fake_llm):
     assert "study" in situation
 
 
-def test_the_situation_line_reaches_the_character_prompt(scenario, store, fake_llm):
+def test_the_situation_line_sits_last_next_to_the_question(scenario, store, fake_llm):
+    """It is current state, not history. Buried above a grown scene it
+    gets contradicted — a character claimed the player was alone in a
+    room she was standing in with two other people."""
     world, characters, scene = scenario
     director = Director(store, world, characters, scene, Narrator(fake_llm), fake_llm)
+    for line in ("Tomas?", "Are you listening?", "Well?"):
+        director.run_turn(director.build_event("utterance", "elena", "kitchen", line))
 
     context = director.contexts.for_character(characters["elena"], store.get_events(scene.id))
 
-    assert context.startswith("(You are in the kitchen. With you: Tomás.)")
+    assert context.endswith("(Right now: you are in the kitchen. With you: Tomás.)")
+    assert len(context.splitlines()) > 3  # it really is after the history
 
 
 def test_presence_does_not_leak_what_happens_elsewhere(scenario, store, fake_llm):

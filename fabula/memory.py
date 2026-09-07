@@ -384,7 +384,7 @@ class ContextBuilder:
             if others
             else "You are alone."
         )
-        return f"(You are in {self.world.room_name(here)}. {company})"
+        return f"(Right now: you are in {self.world.room_name(here)}. {company})"
 
     def for_character(self, character: Character, events: list[Event]) -> str:
         body = assemble_context(
@@ -395,7 +395,12 @@ class ContextBuilder:
             self.llm,
             self.budget,
         )
-        return f"{self.situation(character, events)}\n{body}"
+        # Last, not first. The events above are history; this is the state
+        # the character is standing in, and it belongs next to the question
+        # being asked of them. Buried at the top of a grown scene it gets
+        # contradicted — a character insisted the player was alone in a
+        # room she was standing in with two other people.
+        return f"{body}\n{self.situation(character, events)}"
 
 
 def form_belief(character: Character, projected: ProjectedEvent) -> Belief | None:
