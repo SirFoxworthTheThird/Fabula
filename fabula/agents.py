@@ -3,16 +3,17 @@ utterances/actions from exactly their own projection."""
 from __future__ import annotations
 
 from fabula.llm import LLMClient
-from fabula.memory import assemble_context, project
+from fabula.memory import ContextBuilder
 from fabula.models import Character, Event
-from fabula.world import World
 
 
 def generate_utterance(
-    character: Character, events: list[Event], world: World, llm: LLMClient
+    character: Character,
+    events: list[Event],
+    contexts: ContextBuilder,
+    llm: LLMClient,
 ) -> str:
-    projected = project(character, events, world, initial_location=character.location_id)
-    context = assemble_context(character, projected)
+    context = contexts.for_character(character, events)
     system = (
         f"You are {character.name}, played as a character in an interactive story, "
         "not narrating and not breaking character.\n"

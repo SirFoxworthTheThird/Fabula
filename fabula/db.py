@@ -51,6 +51,24 @@ CREATE TABLE IF NOT EXISTS beliefs (
     last_rehearsed TEXT NOT NULL,
     salience REAL NOT NULL
 );
+
+-- Derived, per-character, and keyed by a hash of the exact perceived
+-- content it covers: the same span always resolves to the same stored
+-- row, so a summary is computed once and never recomputed on the fly.
+CREATE TABLE IF NOT EXISTS summaries (
+    character_id TEXT NOT NULL,
+    scene_id TEXT NOT NULL,
+    span_key TEXT NOT NULL,
+    summary_text TEXT NOT NULL,
+    PRIMARY KEY (character_id, scene_id, span_key)
+);
+
+CREATE TABLE IF NOT EXISTS rehearsals (
+    character_id TEXT NOT NULL,
+    event_id INTEGER NOT NULL,
+    last_rehearsed_seq INTEGER NOT NULL,
+    PRIMARY KEY (character_id, event_id)
+);
 """
 
 
@@ -138,6 +156,41 @@ class EventStore:
             )
             for r in rows
         ]
+
+
+    def get_summary(self, character_id: str, scene_id: str, span_key: str) -> str | None:
+        row = self.conn.execute(
+            """SELECT summary_text FROM summaries
+               WHERE character_id = ? AND scene_id = ? AND span_key = ?""",
+            (character_id, scene_id, span_key),
+        ).fetchone()
+        return row["summary_text"] if row else None
+
+    def put_summary(self, character_id: str, scene_id: str, span_key: str, text: str) -> None:
+        self.conn.execute(
+            """INSERT OR IGNORE INTO summaries
+               (character_id, scene_id, span_key, summary_text) VALUES (?, ?, ?, ?)""",
+            (character_id, scene_id, span_key, text),
+        )
+        self.conn.commit()
+
+    def get_rehearsals(self, character_id: str) -> dict[int, int]:
+        """event_id -> seq of the most recent event that re-mentioned it."""
+        rows = self.conn.execute(
+            "SELECT event_id, last_rehearsed_seq FROM rehearsals WHERE character_id = ?",
+            (character_id,),
+        ).fetchall()
+        return {r["event_id"]: r["last_rehearsed_seq"] for r in rows}
+
+    def record_rehearsal(self, character_id: str, event_id: int, seq: int) -> None:
+        self.conn.execute(
+            """INSERT INTO rehearsals (character_id, event_id, last_rehearsed_seq)
+               VALUES (?, ?, ?)
+               ON CONFLICT (character_id, event_id)
+               DO UPDATE SET last_rehearsed_seq = max(last_rehearsed_seq, excluded.last_rehearsed_seq)""",
+            (character_id, event_id, seq),
+        )
+        self.conn.commit()
 
 
 def _row_to_event(row: sqlite3.Row) -> Event:

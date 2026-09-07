@@ -29,10 +29,12 @@ def test_projection_is_deterministic_for_the_same_log(scenario):
     assert [p.perception for p in first] == [p.perception for p in second]
 
 
-def test_context_assembly_is_deterministic(scenario):
+def test_context_assembly_is_deterministic(scenario, store, fake_llm):
     world, characters, scene = scenario
     events = [_event(scene, seq=1, audibility="adjacent")]
     maria = characters["maria"]
     projected = project(maria, events, world)
 
-    assert assemble_context(maria, projected) == assemble_context(maria, projected)
+    first = assemble_context(maria, projected, scene.id, store, fake_llm)
+    second = assemble_context(maria, projected, scene.id, store, fake_llm)
+    assert first == second

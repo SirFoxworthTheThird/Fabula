@@ -24,7 +24,7 @@ def secret_event(scene, seq: int = 1) -> Event:
     )
 
 
-def test_maria_projection_contains_zero_tokens_of_the_secret(scenario):
+def test_maria_projection_contains_zero_tokens_of_the_secret(scenario, store, fake_llm):
     world, characters, scene = scenario
     event = secret_event(scene)
     maria = characters["maria"]
@@ -33,22 +33,21 @@ def test_maria_projection_contains_zero_tokens_of_the_secret(scenario):
 
     assert all(SECRET not in p.perceived_content.lower() for p in projected)
     assert all("cat" not in p.perceived_content.lower() for p in projected)
-    context = assemble_context(maria, projected)
+    context = assemble_context(maria, projected, scene.id, store, fake_llm)
     assert SECRET not in context.lower()
 
 
-def test_maria_reply_does_not_reference_the_secret(scenario):
-    world, characters, scene = scenario
+def test_maria_reply_does_not_reference_the_secret(scenario, contexts, fake_llm):
+    _world, characters, scene = scenario
     event = secret_event(scene)
     maria = characters["maria"]
-    llm = FakeLLM()
 
-    reply = generate_utterance(maria, [event], world, llm)
+    reply = generate_utterance(maria, [event], contexts, fake_llm)
 
     assert SECRET not in reply.lower()
     # FakeLLM's output is a pure function of its prompt and invents nothing,
     # so this also proves the prompt itself never carried the secret.
-    system, prompt, _ = llm.calls[-1]
+    system, prompt, _ = fake_llm.calls[-1]
     assert SECRET not in system.lower()
     assert SECRET not in prompt.lower()
 
@@ -124,8 +123,8 @@ def test_bid_rationale_never_leaks_into_another_characters_context(scenario, mon
     marker = "RATIONALE_MARKER_SHOULD_NEVER_LEAK"
     original_get_bid = director_module.get_bid
 
-    def spy_get_bid(character, event, level, events, world_, llm):
-        bid = original_get_bid(character, event, level, events, world_, llm)
+    def spy_get_bid(character, event, level, events, contexts, llm):
+        bid = original_get_bid(character, event, level, events, contexts, llm)
         return bid.model_copy(update={"one_line_reason": marker})
 
     monkeypatch.setattr(director_module, "get_bid", spy_get_bid)
@@ -139,15 +138,52 @@ def test_bid_rationale_never_leaks_into_another_characters_context(scenario, mon
         assert marker not in event.content
 
     for character in characters.values():
-        projected = project(character, store.get_events(scene.id), world)
-        context = assemble_context(character, projected)
-        assert marker not in context
+        assert marker not in director.contexts.for_character(character, store.get_events(scene.id))
 
 
-def test_leak_survives_50_turns_and_summarization():
-    import pytest
+def test_secret_does_not_leak_after_50_turns_and_a_summarization_pass(
+    scenario, store, fake_llm
+):
+    """Spec §13: summaries must not leak what the projection excluded.
+    Summaries are built from perceived_content only, so a span Maria
+    never perceived cannot be compacted into her memory."""
+    world, characters, scene = scenario
+    maria = characters["maria"]
 
-    pytest.skip("memory tiers/summarization land in M2; revisit once implemented")
+    events = [secret_event(scene, seq=1)]
+    for seq in range(2, 62):
+        # Maria's own room fills up, pushing anything old into the
+        # summarized and gist tiers.
+        events.append(
+            Event(
+                id=seq,
+                scene_id=scene.id,
+                seq=seq,
+                story_time=scene.start_time,
+                kind="utterance",
+                actor_id="maria",
+                location_id="study",
+                content=f"Maria sorts another letter, number {seq}.",
+                audibility="room",
+            )
+        )
+
+    projected = project(maria, events, world)
+    context = assemble_context(maria, projected, scene.id, store, fake_llm)
+
+    assert len(projected) == 60  # she perceived everything in the study, nothing from the kitchen
+    assert SECRET not in context.lower()
+    assert "[earlier," in context  # summarization really did run
+
+    # The summarizer's own prompts never carried the secret either.
+    for system, prompt, _key in fake_llm.calls:
+        assert SECRET not in system.lower()
+        assert SECRET not in prompt.lower()
+
+    # And nothing stored in the summaries table carries it.
+    rows = store.conn.execute("SELECT summary_text FROM summaries").fetchall()
+    assert rows
+    assert all(SECRET not in row["summary_text"].lower() for row in rows)
 
 
 def test_leak_survives_a_scene_boundary_with_persistence():

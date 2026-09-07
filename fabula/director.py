@@ -22,7 +22,7 @@ from fabula.agents import generate_utterance
 from fabula.bidding import get_bid, prefilter_candidates
 from fabula.db import EventStore
 from fabula.loader import Scene
-from fabula.memory import location_at_seq
+from fabula.memory import ContextBuilder, location_at_seq, record_rehearsals
 from fabula.models import Bid, Character, Event
 from fabula.narrator import NARRATOR_ID, Narrator
 from fabula.world import World, resolve_perception
@@ -102,6 +102,7 @@ class Director:
         self.scene = scene
         self.narrator = narrator
         self.llm = llm
+        self.contexts = ContextBuilder(world, scene.id, store, llm)
 
     def build_event(self, kind: str, actor_id: str | None, location_id: str, content: str) -> Event:
         all_events = self.store.get_events(self.scene.id)
@@ -128,6 +129,7 @@ class Director:
         already be constructed (kind/location/etc set by the caller); this
         appends it and then loops until yield or turn-budget exhaustion."""
         stored_user_event = self.store.append_event(user_event)
+        self._record_rehearsals()
         events_this_turn = [stored_user_event]
         last_event = stored_user_event
         consecutive_agent_turns = 0
@@ -142,7 +144,7 @@ class Director:
                     character.id, character.location_id, all_events, last_event.seq + 1
                 )
                 level = resolve_perception(last_event, character.id, location, self.world)
-                bids.append(get_bid(character, last_event, level, all_events, self.world, self.llm))
+                bids.append(get_bid(character, last_event, level, all_events, self.contexts, self.llm))
 
             narrator_bid = self.narrator.bid(last_event, all_events, self.world)
             decision = arbitrate(bids, narrator_bid, consecutive_agent_turns, self.scene.max_consecutive_agent_turns)
@@ -158,11 +160,21 @@ class Director:
                 location = location_at_seq(
                     character.id, character.location_id, all_events, last_event.seq + 1
                 )
-                content = generate_utterance(character, all_events, self.world, self.llm)
+                content = generate_utterance(character, all_events, self.contexts, self.llm)
                 new_event = self.build_event("utterance", character.id, location, content)
 
             last_event = self.store.append_event(new_event)
             events_this_turn.append(last_event)
+            self._record_rehearsals()
             consecutive_agent_turns += 1
 
         return events_this_turn
+
+    def _record_rehearsals(self) -> None:
+        """After each append, note which of a character's own earlier
+        perceived events the newest one re-mentions. Done per character
+        against their own projection, so rehearsal never reveals that an
+        event they cannot perceive was referenced at all."""
+        all_events = self.store.get_events(self.scene.id)
+        for character in self.characters.values():
+            record_rehearsals(character, self.contexts.project(character, all_events), self.store)

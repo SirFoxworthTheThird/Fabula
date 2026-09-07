@@ -7,7 +7,7 @@ triggering event is never even asked.
 from __future__ import annotations
 
 from fabula.llm import LLMClient
-from fabula.memory import assemble_context, location_at_seq, project
+from fabula.memory import ContextBuilder, location_at_seq
 from fabula.models import Bid, Character, Event
 from fabula.world import World, resolve_perception
 
@@ -74,17 +74,19 @@ def get_bid(
     event: Event,
     level: str,
     events: list[Event],
-    world: World,
+    contexts: ContextBuilder,
     llm: LLMClient | None = None,
 ) -> Bid:
     """Compute one character's bid to speak. Resolves obvious cases by
     heuristic alone; only spends a model call when the heuristic score
-    lands in the ambiguous band, per spec §7."""
+    lands in the ambiguous band, per spec §7.
+
+    The ambiguous path builds context through the same `ContextBuilder`
+    the reply uses, so a bid reads exactly what a reply would read."""
     score, reason = heuristic_bid(character, event, level)
 
     if llm is not None and AMBIGUOUS_LOW <= score <= AMBIGUOUS_HIGH:
-        projected = project(character, events, world, initial_location=character.location_id)
-        context = assemble_context(character, projected)
+        context = contexts.for_character(character, events)
         system = (
             f"You are {character.name}. {character.persona}\n"
             "You are deciding whether to speak or act right now, not writing a line yet."
