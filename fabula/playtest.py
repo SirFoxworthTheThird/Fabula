@@ -18,7 +18,7 @@ import argparse
 from pathlib import Path
 
 from fabula.commands import run_command
-from fabula.llm import LiteLLMClient, get_default_llm
+from fabula.llm import LiteLLMClient, LLMClient, get_default_llm
 from fabula.models import Character, ProjectedEvent
 from fabula.session import Session
 
@@ -60,8 +60,10 @@ def playtest(
     script: list[str],
     model: str | None = None,
     show_beliefs: bool = True,
+    llm: LLMClient | None = None,
 ) -> None:
-    llm = LiteLLMClient(model=model) if model else get_default_llm()
+    if llm is None:
+        llm = LiteLLMClient(model=model) if model else get_default_llm()
     session = Session.open(world_dir, scene_name, llm=llm)
     you = session.user_character
     characters = session.characters

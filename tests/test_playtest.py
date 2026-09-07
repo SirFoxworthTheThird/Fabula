@@ -28,7 +28,10 @@ def test_the_default_script_presses_on_the_secret():
 
 
 def test_a_playtest_runs_end_to_end_and_prints_a_transcript(capsys, fake_llm):
-    playtest(ASHGROVE, "the_dinner", ["Tomás, hello.", "/look"], show_beliefs=True)
+    # The client is injected rather than left to the environment: a
+    # contributor with an API key set should not have the unit suite
+    # quietly start calling a provider.
+    playtest(ASHGROVE, "the_dinner", ["Tomás, hello.", "/look"], show_beliefs=True, llm=fake_llm)
 
     printed = capsys.readouterr().out
     assert "the_dinner" in printed
@@ -37,8 +40,8 @@ def test_a_playtest_runs_end_to_end_and_prints_a_transcript(capsys, fake_llm):
     assert "no client may ever show this" in printed
 
 
-def test_transcript_only_mode_omits_the_belief_dump(capsys):
-    playtest(ASHGROVE, "the_dinner", ["Tomás, hello."], show_beliefs=False)
+def test_transcript_only_mode_omits_the_belief_dump(capsys, fake_llm):
+    playtest(ASHGROVE, "the_dinner", ["Tomás, hello."], show_beliefs=False, llm=fake_llm)
 
     assert "came away believing" not in capsys.readouterr().out
 
