@@ -40,6 +40,13 @@ def run_command(
             return Outcome(message="Time stays where it is.")
         return Outcome(perceived=perceived)
 
+    if line == "/reveal":
+        # A spoiler, and only ever on request. Read-only, so the scene is
+        # untouched and play can continue after looking.
+        from fabula.reveal import reveal_text
+
+        return Outcome(message=reveal_text(session))
+
     if line == "/look":
         perceived = session.look()
         if not perceived:

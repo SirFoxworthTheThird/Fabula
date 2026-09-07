@@ -213,6 +213,48 @@ def test_the_client_is_served(client):
     assert "degraded" in body  # half-heard events are rendered as uncertain
 
 
+def test_the_reveal_is_asked_for_and_never_pushed(client, session_id):
+    """The one endpoint that steps outside the requesting character's POV.
+    It is a POST a client has to make deliberately, and it appears in no
+    scene state and no stream."""
+    client.post(f"/sessions/{session_id}/move", json={"room": "study"})
+    session = client.app.state.sessions[session_id].session
+    session.store.append_event(
+        session.director.build_event(
+            "utterance", "tomas", "kitchen", "I broke Grandma's music box."
+        )
+    )
+
+    # Nothing pushed at the player carries it.
+    state = client.get(f"/sessions/{session_id}").json()
+    assert SECRET not in json.dumps(state).lower()
+    history = client.get(f"/sessions/{session_id}/events").json()
+    assert all(SECRET not in event["content"].lower() for event in history)
+
+    revealed = client.post(f"/sessions/{session_id}/reveal").json()
+
+    assert revealed["character"] == "Elena"
+    assert any(SECRET in m["content"].lower() for m in revealed["missed"])
+    assert revealed["knowledge"]["music_box"]["Maria"] is False
+    assert SECRET in revealed["text"].lower()
+
+
+def test_revealing_does_not_disturb_the_scene(client, session_id):
+    client.post(f"/sessions/{session_id}/say", json={"text": "Tomas?"})
+    before = client.get(f"/sessions/{session_id}/events").json()
+
+    client.post(f"/sessions/{session_id}/reveal")
+
+    assert client.get(f"/sessions/{session_id}/events").json() == before
+
+
+def test_the_client_offers_the_reveal_behind_a_confirmation(client):
+    body = client.get("/").text
+
+    assert "/reveal" in body
+    assert "spoils the scene" in body  # asked for, never sprung on the player
+
+
 def test_unknown_session_is_404(client):
     assert client.get("/sessions/nope").status_code == 404
     assert client.post("/sessions/nope/say", json={"text": "hi"}).status_code == 404

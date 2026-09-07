@@ -113,6 +113,34 @@
   }
   .line.skip::before, .line.skip::after { content: "· · ·"; display: block; opacity: .5; }
 
+  /* The reveal steps outside the story, and has to look like it does. */
+  .reveal {
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 26px 0 14px;
+    background: rgba(201, 162, 39, .06);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .reveal h2 {
+    font-family: var(--serif);
+    font-size: 17px;
+    margin: 0 0 10px;
+    color: var(--accent);
+  }
+  .reveal h3 {
+    font-size: 11px;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 14px 0 4px;
+  }
+  .reveal p { margin: 0 0 4px; color: var(--ink); }
+  .reveal .truth { color: var(--ink-dim); }
+  .reveal .none { color: var(--ink-faint); font-style: italic; }
+
   footer {
     border-top: 1px solid var(--edge);
     background: var(--panel);
@@ -209,6 +237,7 @@
     <div class="actions">
       <button type="button" id="look">Look around</button>
       <button type="button" id="wait">Let time pass</button>
+      <button type="button" id="reveal">What I missed</button>
       <span class="label" id="rooms-label">Go to</span>
       <span id="rooms"></span>
     </div>
@@ -362,6 +391,56 @@ el("say-form").addEventListener("submit", event => {
   el("say").value = "";
   say(text);
 });
+function block(parent, tag, text, className) {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  if (className) node.className = className;
+  parent.appendChild(node);
+  return node;
+}
+
+// Deliberately outside the story: shown only when asked for, styled so it
+// cannot be mistaken for something a character said, and never fed back in.
+async function showReveal() {
+  const data = await fetch(`/sessions/${sessionId}/reveal`, {method: "POST"}).then(r => r.json());
+  const panel = document.createElement("div");
+  panel.className = "reveal";
+  block(panel, "h2", `What ${data.character} never knew`);
+
+  block(panel, "h3", "Happened without you");
+  if (data.missed.length) {
+    for (const m of data.missed) {
+      block(panel, "p", `in ${m.location} — ${m.speaker ? m.speaker + ": " : ""}${m.content}`);
+    }
+  } else {
+    block(panel, "p", "Nothing happened out of your sight.", "none");
+  }
+
+  if (data.half_heard.length) {
+    block(panel, "h3", "What you half-heard");
+    for (const h of data.half_heard) {
+      block(panel, "p", `you got — ${h.heard}`);
+      block(panel, "p", `it was — ${h.truth}`, "truth");
+    }
+  }
+
+  for (const [fact, holders] of Object.entries(data.knowledge)) {
+    const knew = Object.entries(holders).filter(([, y]) => y).map(([n]) => n);
+    const not = Object.entries(holders).filter(([, y]) => !y).map(([n]) => n);
+    block(panel, "h3", `Who knew about the ${fact.replace(/_/g, " ")}`);
+    block(panel, "p", `knew — ${knew.join(", ") || "no one"}`);
+    block(panel, "p", `never found out — ${not.join(", ") || "no one"}`, "truth");
+  }
+
+  el("scroll").appendChild(panel);
+  scroll();
+}
+
+el("reveal").onclick = () => {
+  if (confirm("This spoils the scene: it shows what you could not perceive. Continue?")) {
+    showReveal();
+  }
+};
 el("look").onclick = () => act("look");
 el("wait").onclick = async () => {
   const minutes = state.pending_skip_minutes;

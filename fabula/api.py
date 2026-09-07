@@ -26,6 +26,7 @@ from starlette.concurrency import run_in_threadpool
 from fabula.llm import LiteLLMClient, LLMClient
 from fabula.models import ProjectedEvent
 from fabula.openai_shim import add_openai_shim
+from fabula.reveal import build_reveal, render
 from fabula.session import Session
 
 
@@ -64,6 +65,27 @@ class SceneState(BaseModel):
     story_time: datetime
     cast: list[str]
     pending_skip_minutes: int | None
+
+
+class MissedOut(BaseModel):
+    location: str
+    speaker: str | None
+    content: str
+
+
+class HalfHeardOut(BaseModel):
+    heard: str
+    truth: str
+
+
+class RevealOut(BaseModel):
+    """Deliberately omniscient, and only produced on request."""
+
+    character: str
+    missed: list[MissedOut]
+    half_heard: list[HalfHeardOut]
+    knowledge: dict[str, dict[str, bool]]
+    text: str
 
 
 class NewSession(BaseModel):
@@ -284,6 +306,38 @@ def create_app(
     @app.post("/sessions/{session_id}/look", response_model=list[StreamEvent])
     async def look(session_id: str) -> list[StreamEvent]:
         return await act(session_id, lambda session: session.look())
+
+    @app.post("/sessions/{session_id}/reveal", response_model=RevealOut)
+    def reveal(session_id: str) -> RevealOut:
+        """What the player did not know, once they ask to be told.
+
+        A spoiler by design, and the one endpoint that steps outside the
+        requesting character's POV — which is why it is a POST the client
+        must deliberately make, not part of scene state. Read-only: it
+        appends nothing, so play can continue afterwards.
+        """
+        session = get_live(session_id).session
+        built = build_reveal(session)
+        return RevealOut(
+            character=built.character.name,
+            missed=[
+                MissedOut(
+                    location=session.world.room_name(event.location_id),
+                    speaker=(
+                        session.characters[event.actor_id].name
+                        if event.actor_id in session.characters
+                        else None
+                    ),
+                    content=event.content,
+                )
+                for event in built.missed
+            ],
+            half_heard=[
+                HalfHeardOut(heard=heard, truth=event.content) for heard, event in built.half_heard
+            ],
+            knowledge=built.knowledge,
+            text=render(built, session),
+        )
 
     @app.get("/sessions/{session_id}/stream")
     async def stream(session_id: str, follow: bool = True) -> StreamingResponse:

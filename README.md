@@ -87,6 +87,7 @@ Elena> Tomás, you've been strange all evening.
 /go study      move to another room
 /wait          let time pass, resolving what happens off-screen
 /look          take in the room — off-screen events here expand into detail
+/reveal        when you are done: what you could not perceive (a spoiler)
 /quit
 ```
 
@@ -107,6 +108,20 @@ The belief dump is deliberately omniscient — it is how you check the asymmetry
 that Maria really doesn't know. It is an author's tool; no player-facing client may show
 it. Pass `--script mine.txt` for your own sequence, `--no-beliefs` for the transcript
 alone.
+
+### The reveal
+
+Information asymmetry is invisible while you play. A character with nothing to say looks
+exactly like a character saying nothing, and a scene where the secret held reads — from
+the inside — like a scene with no secret in it. So the payoff comes afterwards: `/reveal`
+in the terminal, or **What I missed** in the browser, shows what happened out of your
+sight, what you half-heard set against what it actually was, and who ended the scene
+knowing the secret.
+
+It is the one part of the engine that deliberately steps outside a point of view, which
+is why it lives in its own module rather than on `Session` (where everything is POV with
+no exceptions), is only ever produced on request, and is read-only — looking behind the
+curtain appends nothing, so you can look and keep playing.
 
 ### Point it at your own model
 
