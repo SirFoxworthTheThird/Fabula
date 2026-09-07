@@ -25,6 +25,7 @@ from starlette.concurrency import run_in_threadpool
 
 from fabula.llm import LLMClient
 from fabula.models import ProjectedEvent
+from fabula.openai_shim import add_openai_shim
 from fabula.session import Session
 
 
@@ -142,12 +143,64 @@ def create_app(
 ) -> FastAPI:
     app = FastAPI(title="Fabula", description="A multi-agent story engine.")
     live: dict[str, _LiveSession] = {}
+    by_token: dict[str, str] = {}
     app.state.sessions = live
+    app.state.sessions_by_token = by_token
 
     def get_live(session_id: str) -> _LiveSession:
         if session_id not in live:
             raise HTTPException(status_code=404, detail="no such session")
         return live[session_id]
+
+    def open_session(world_name: str, scene_name: str) -> tuple[str, Session]:
+        world_dir = _world_dir(worlds_root, world_name)
+        try:
+            session = Session.open(world_dir, scene_name, db_path=db_path, llm=llm)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail=f"no scene named {scene_name!r}")
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error))
+        session_id = uuid.uuid4().hex
+        live[session_id] = _LiveSession(session)
+        return session_id, session
+
+    def scene_tokens() -> list[str]:
+        if not worlds_root.is_dir():
+            return []
+        return [
+            f"{world.name}/{scene.stem}"
+            for world in sorted(worlds_root.iterdir())
+            if (world / "world.yaml").is_file()
+            for scene in sorted((world / "scenes").glob("*.yaml"))
+        ]
+
+    def resolve_token(token: str | None) -> tuple[str, Session]:
+        """A scene token names a scene; the same token keeps returning the
+        same session, which is how a stateless client holds a continuing
+        story. A session id works too, so a client can attach to a scene
+        opened through the native API."""
+        if not token:
+            raise HTTPException(
+                status_code=401,
+                detail="set the API key to a scene token, e.g. 'ashgrove/the_dinner'",
+            )
+        if token in live:
+            return token, live[token].session
+        if token in by_token and by_token[token] in live:
+            session_id = by_token[token]
+            return session_id, live[session_id].session
+
+        world_name, separator, scene_name = token.replace(":", "/").partition("/")
+        if not separator or not scene_name:
+            raise HTTPException(
+                status_code=404,
+                detail=f"{token!r} is not a scene token; expected '<world>/<scene>'",
+            )
+        session_id, session = open_session(world_name, scene_name)
+        by_token[token] = session_id
+        return session_id, session
+
+    add_openai_shim(app, resolve_token, scene_tokens)
 
     def state_of(session_id: str, session: Session) -> SceneState:
         here = session.here()
@@ -197,16 +250,7 @@ def create_app(
 
     @app.post("/sessions", response_model=SceneState)
     def create_session(body: NewSession) -> SceneState:
-        world_dir = _world_dir(worlds_root, body.world)
-        try:
-            session = Session.open(world_dir, body.scene, db_path=db_path, llm=llm)
-        except FileNotFoundError:
-            raise HTTPException(status_code=404, detail=f"no scene named {body.scene!r}")
-        except ValueError as error:
-            raise HTTPException(status_code=400, detail=str(error))
-
-        session_id = uuid.uuid4().hex
-        live[session_id] = _LiveSession(session)
+        session_id, session = open_session(body.world, body.scene)
         return state_of(session_id, session)
 
     @app.get("/sessions/{session_id}", response_model=SceneState)
