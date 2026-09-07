@@ -109,6 +109,31 @@ fabula-playtest worlds/ashgrove the_dinner \
 
 The same two flags work on `fabula`, `fabula-serve` and `fabula-measure`.
 
+<details>
+<summary>Worked example: nano-gpt.com</summary>
+
+```bash
+export OPENAI_API_KEY=<your nano-gpt key>     # yes, that variable — see below
+fabula-playtest worlds/ashgrove the_dinner \
+    --model openai/z-ai/glm-5.3-flash \
+    --api-base https://nano-gpt.com/api/v1
+```
+
+Three things that are easy to get wrong:
+
+* **The `openai/` prefix is required** and is *not* part of the model name. It tells
+  litellm which dialect to speak; everything after it is sent to the provider verbatim.
+  Their ids contain slashes of their own, and those survive:
+  `openai/z-ai/glm-5.3-flash` arrives as `z-ai/glm-5.3-flash`.
+* **The key lives in `OPENAI_API_KEY`** even though it is not an OpenAI key. That is the
+  variable litellm's OpenAI-compatible path reads. It is sent as a bearer token, which is
+  what they expect.
+* `https://nano-gpt.com/api/v1` is the base — `/chat/completions` is appended for you.
+
+`curl https://nano-gpt.com/api/v1/models` lists what is available without needing a key.
+
+</details>
+
 ### Measure a prompt rule before believing it
 
 The mechanical guarantees hold whatever model is behind them. The rules that live in
