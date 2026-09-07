@@ -46,6 +46,20 @@ def test_transcript_only_mode_omits_the_belief_dump(capsys, fake_llm):
     assert "came away believing" not in capsys.readouterr().out
 
 
+def test_speaking_to_an_empty_room_says_so(fake_llm):
+    """Silence is a real answer — everyone may have left and the player
+    only heard a door — but a client printing nothing looks like a crash."""
+    session = Session.open(ASHGROVE, "the_dinner", llm=fake_llm)
+    run_command(session, "/go study")  # Maria starts there; Tomás does not follow
+    session.store.append_event(
+        session.director.build_event("arrival", "maria", "kitchen", "Maria steps out.")
+    )
+
+    outcome = run_command(session, "Maria? Are you still here?")
+
+    assert outcome.message == "No one answers."
+
+
 def test_commands_are_shared_with_the_cli(fake_llm):
     """Both terminal clients dispatch through one place, so /go cannot
     come to mean different things in each."""

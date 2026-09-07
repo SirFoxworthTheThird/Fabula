@@ -57,4 +57,11 @@ def run_command(
             message=f"You are in {session.world.room_name(session.here())}.",
         )
 
-    return Outcome(perceived=session.say(line))
+    perceived = session.say(line)
+    if not [p for p in perceived if p.event.actor_id != session.user_character.id]:
+        # Speaking to an empty room is a legitimate outcome — everyone may
+        # have left, and the player only heard a door. But a client that
+        # prints nothing is indistinguishable from one that crashed, so
+        # say plainly that the silence is the answer.
+        return Outcome(perceived=perceived, message="No one answers.")
+    return Outcome(perceived=perceived)

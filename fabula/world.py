@@ -28,6 +28,10 @@ DEGRADED_TEMPLATES: dict[str, str] = {
 class Room(BaseModel):
     id: str
     name: str
+    # Authored grounding for scene-setting. Without it the narrator has
+    # nothing to describe a room from and invents furniture; with it, the
+    # improvisation is in the wording rather than the invention.
+    description: str = ""
     # room_id -> audibility of that connection (how well sound crosses it)
     adjacent: dict[str, Audibility] = Field(default_factory=dict)
 

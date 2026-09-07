@@ -11,6 +11,9 @@ from fabula.world import World
 
 NARRATOR_ID = "__narrator__"
 
+LULL_WINDOW = 5    # consecutive utterances before the room wants describing
+LULL_DESIRE = 0.4  # enough to beat idle chatter, not a character with something to say
+
 
 def _manner(character: Character) -> str:
     """How this person deflects, derived from mechanical traits alone —
@@ -62,18 +65,38 @@ class Narrator:
         # pressure's effect, which the narrator itself just rendered.
         if event.kind == "narration" or event.metadata.get("pressure_id"):
             return None
-        # Never narrate the player's own action back at them. Asking a
-        # model not to is not enough — a weak one answers a move with
-        # "Elena's light blue dress caught the dim light", inventing a
-        # dress and playing the one character the player controls. The
-        # only reliable version of this rule is not bidding.
         if self.protagonist_id and event.actor_id == self.protagonist_id:
+            # Never narrate the player's own action back at them: a model
+            # told not to still answers a move with "Elena's light blue
+            # dress caught the dim light", inventing a dress and playing
+            # the one character the player controls. But a room they have
+            # just walked into is not them, and refusing outright left the
+            # most natural moment for scene-setting completely silent.
+            # Describe the place, never the person.
+            if event.kind == "arrival":
+                return Bid(
+                    character_id=NARRATOR_ID,
+                    desire=0.6,
+                    one_line_reason="describe the room they walked into",
+                )
             return None
+
         if event.kind in ("arrival", "departure", "time_skip"):
             return Bid(
                 character_id=NARRATOR_ID,
                 desire=0.7,
                 one_line_reason=f"describe the {event.kind}",
+            )
+
+        # A lull: nothing but talk for a while. Spec §7 lists this as one
+        # of the narrator's triggers, and without it a scene becomes a
+        # wall of dialogue with no room around it.
+        recent = events[-LULL_WINDOW:]
+        if len(recent) >= LULL_WINDOW and all(e.kind == "utterance" for e in recent):
+            return Bid(
+                character_id=NARRATOR_ID,
+                desire=LULL_DESIRE,
+                one_line_reason="the scene has been nothing but dialogue",
             )
         return None
 
@@ -149,7 +172,39 @@ class Narrator:
             system=system, prompt=prompt, key=f"materialize:{summary_event.id}"
         )
 
+    def describe_place(self, location_id: str, world: World) -> str:
+        """The room itself, for when the player has just walked into it.
+
+        Grounded in the room's authored description where there is one,
+        so the improvisation is in the wording rather than the invention.
+        The protagonist is not mentioned at all: their arrival has
+        already been shown, and describing them is playing them.
+        """
+        room = world.rooms.get(location_id)
+        grounding = f"\nWhat is here: {room.description}" if room and room.description else ""
+        system = (
+            "You are the narrator of an interactive story: third-person, present-tense, "
+            "spare prose, at most two sentences. Describe the room itself — what is in "
+            "it, the light, the sound, what it feels like to stand in. Introduce no "
+            "people, and no object a character could pick up or refer to later. Do not "
+            "describe anyone arriving; that has already been shown."
+            + (
+                f" Do not mention {self.protagonist} at all."
+                if self.protagonist
+                else ""
+            )
+        )
+        prompt = f"Room: {world.room_name(location_id)}{grounding}\nDescribe the room."
+        return self.llm.complete(system=system, prompt=prompt, key=f"place:{location_id}")
+
     def generate(self, event: Event, events: list[Event], world: World) -> str:
+        if (
+            self.protagonist_id
+            and event.actor_id == self.protagonist_id
+            and event.kind == "arrival"
+        ):
+            return self.describe_place(event.location_id, world)
+
         location_name = world.room_name(event.location_id)
         system = (
             "You are the narrator of an interactive story: third-person, present-tense, "

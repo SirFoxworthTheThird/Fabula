@@ -2,10 +2,18 @@ id: ashgrove
 rooms:
   kitchen:
     name: the kitchen
+    description: >
+      Warm, and the only room in the house anyone actually sits in. A long
+      scrubbed table, a kettle, the back door with its glass panel. Their
+      grandmother's things are still on the mantel above the stove.
     adjacent:
       study: adjacent
   study:
     name: the study
+    description: >
+      Colder, and used as storage since the funeral. Boxes of papers,
+      a desk under the window, the good chairs nobody sits in. Letters
+      in date order across the desk where Maria left them.
     adjacent:
       kitchen: adjacent
 

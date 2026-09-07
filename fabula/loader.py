@@ -31,9 +31,14 @@ class Scene(BaseModel):
 
 
 def load_world(world_dir: Path) -> World:
-    data = yaml.safe_load((world_dir / "world.yaml").read_text())
+    data = yaml.safe_load((world_dir / "world.yaml").read_text(encoding="utf-8"))
     rooms = {
-        room_id: Room(id=room_id, name=room_data["name"], adjacent=room_data.get("adjacent", {}))
+        room_id: Room(
+            id=room_id,
+            name=room_data["name"],
+            description=room_data.get("description", ""),
+            adjacent=room_data.get("adjacent", {}),
+        )
         for room_id, room_data in data["rooms"].items()
     }
     facts = {
@@ -47,14 +52,14 @@ def load_pressures(world_dir: Path) -> list[Pressure]:
     path = world_dir / "pressures.yaml"
     if not path.exists():
         return []
-    return [Pressure(**entry) for entry in (yaml.safe_load(path.read_text()) or [])]
+    return [Pressure(**entry) for entry in (yaml.safe_load(path.read_text(encoding="utf-8")) or [])]
 
 
 def load_characters(world_dir: Path) -> dict[str, Character]:
     characters: dict[str, Character] = {}
     char_dir = world_dir / "characters"
     for path in sorted(char_dir.glob("*.yaml")):
-        data = yaml.safe_load(path.read_text())
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
         character = Character(**data)
         characters[character.id] = character
     return characters
@@ -62,7 +67,7 @@ def load_characters(world_dir: Path) -> dict[str, Character]:
 
 def load_scene(world_dir: Path, scene_name: str) -> Scene:
     path = world_dir / "scenes" / f"{scene_name}.yaml"
-    data = yaml.safe_load(path.read_text())
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
     return Scene(**data)
 
 

@@ -233,7 +233,20 @@ class Director:
             self._record_rehearsals()
             consecutive_agent_turns += 1
 
+            if self._addresses_user(last_event):
+                # Someone spoke to the player. Carrying on past that lets
+                # another character answer a question the player was
+                # asked, which is the sharpest way to make them a
+                # spectator in their own scene — the turn budget alone
+                # does not prevent it, because the loop simply had turns
+                # left. The floor is theirs.
+                break
+
         return events_this_turn
+
+    def _addresses_user(self, event: Event) -> bool:
+        user = next((c for c in self.characters.values() if c.is_user), None)
+        return bool(user and event.actor_id != user.id and user.id in event.addressed_to)
 
     def advance_time(
         self,

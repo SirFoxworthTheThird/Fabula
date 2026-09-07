@@ -123,11 +123,59 @@ def test_the_narrator_never_narrates_the_players_own_action(scenario, store, fak
     world, characters, scene = scenario
     narrator = Narrator(fake_llm, protagonist="Elena", protagonist_id="elena")
     director = Director(store, world, characters, scene, narrator, fake_llm)
-    hers = director.build_event("arrival", "elena", "study", "Elena comes in.")
+    her_line = director.build_event("utterance", "elena", "study", "Anyone here?")
     theirs = director.build_event("arrival", "maria", "study", "Maria comes in.")
 
-    assert narrator.bid(hers, [hers], world) is None
+    assert narrator.bid(her_line, [her_line], world) is None
     assert narrator.bid(theirs, [theirs], world) is not None
+
+
+def test_the_player_walking_in_gets_the_room_described_not_herself(scenario, store, fake_llm):
+    """Refusing to narrate anything the player does left the most natural
+    moment for scene-setting silent. The room is not the person."""
+    world, characters, scene = scenario
+    narrator = Narrator(fake_llm, protagonist="Elena", protagonist_id="elena")
+    director = Director(store, world, characters, scene, narrator, fake_llm)
+    arrival = director.build_event("arrival", "elena", "study", "Elena comes in.")
+
+    bid = narrator.bid(arrival, [arrival], world)
+    assert bid is not None
+    assert "room" in bid.one_line_reason
+
+    narrator.generate(arrival, [arrival], world)
+    system, prompt, key = fake_llm.calls[-1]
+
+    assert key == "place:study"
+    assert "Elena" not in prompt          # she is not what is being described
+    assert "Do not mention Elena" in system
+    assert "Letters in date order" in prompt  # grounded in the authored room
+
+
+def test_a_room_with_no_authored_description_still_works(scenario, store, fake_llm):
+    world, characters, scene = scenario
+    bare = world.model_copy(deep=True)
+    bare.rooms["study"].description = ""
+    narrator = Narrator(fake_llm, protagonist="Elena", protagonist_id="elena")
+
+    narrator.describe_place("study", bare)
+
+    assert "What is here:" not in fake_llm.calls[-1][1]
+
+
+def test_the_narrator_speaks_up_when_a_scene_is_all_talk(scenario, store, fake_llm):
+    """Spec §7 lists a lull as one of its triggers; without it a scene is
+    a wall of dialogue with no room around it."""
+    from fabula.narrator import LULL_WINDOW
+
+    world, characters, scene = scenario
+    director = Director(store, world, characters, scene, Narrator(fake_llm), fake_llm)
+    talk = [
+        director.build_event("utterance", "tomas", "kitchen", f"Line {i}.")
+        for i in range(LULL_WINDOW)
+    ]
+
+    assert director.narrator.bid(talk[-1], talk, world) is not None
+    assert director.narrator.bid(talk[-1], talk[:-1], world) is None  # not yet a lull
 
 
 def test_a_guarded_subject_is_a_reminder_not_a_rule(scenario, store, fake_llm):
