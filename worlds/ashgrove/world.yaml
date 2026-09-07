@@ -1,0 +1,10 @@
+id: ashgrove
+rooms:
+  kitchen:
+    name: the kitchen
+    adjacent:
+      study: adjacent
+  study:
+    name: the study
+    adjacent:
+      kitchen: adjacent

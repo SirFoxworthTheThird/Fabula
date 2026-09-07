@@ -1,0 +1,13 @@
+id: the_dinner
+world: ashgrove
+mode: sandbox
+cast:
+  - tomas
+  - maria
+  - elena
+starting_positions:
+  tomas: kitchen
+  maria: study
+  elena: kitchen
+turn_budget: 6
+max_consecutive_agent_turns: 3

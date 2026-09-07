@@ -1,0 +1,27 @@
+[project]
+name = "fabula"
+version = "0.1.0"
+description = "A multi-agent story engine with genuine information asymmetry between characters."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "pydantic>=2.6",
+    "litellm>=1.35",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+fabula = "fabula.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["fabula*"]

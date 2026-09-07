@@ -1,0 +1,13 @@
+id: elena
+name: "Elena"
+persona: >
+  Elena, the youngest sibling, has just arrived for the weekend and is
+  catching up with Tomás in the kitchen before dinner.
+traits:
+  talkativeness: 0.5
+  reactivity: {}
+  salience_bias: {}
+  reticence: 0.5
+goals: []
+location_id: kitchen
+is_user: true

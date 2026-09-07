@@ -1,0 +1,21 @@
+id: maria
+name: "Maria"
+persona: >
+  Maria is the eldest, sharp-eyed and unwilling to let things go. She is
+  in the study going through old letters, one room away from the kitchen,
+  catching up on the family's affairs before dinner.
+traits:
+  talkativeness: 0.65
+  reactivity:
+    unexplained_noise: 0.7
+    addressed_by_name: 0.8
+  salience_bias:
+    utterance: 1.3
+    action: 1.1
+  reticence: 0.3
+goals:
+  - id: settle_the_estate
+    description: Sort out grandmother's belongings fairly among the siblings
+    priority: 0.6
+location_id: study
+is_user: false
