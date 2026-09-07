@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import Body, FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
@@ -43,6 +43,11 @@ class StreamEvent(BaseModel):
     detail_level: str
 
 
+class Named(BaseModel):
+    id: str
+    name: str
+
+
 class SceneState(BaseModel):
     session_id: str
     scene: str
@@ -51,6 +56,11 @@ class SceneState(BaseModel):
     character_name: str
     location: str
     location_name: str
+    # Only who this character can see is here with them — never where the
+    # rest of the cast is.
+    present: list[Named]
+    rooms: list[Named]
+    story_time: datetime
     cast: list[str]
     pending_skip_minutes: int | None
 
@@ -141,6 +151,7 @@ def create_app(
 
     def state_of(session_id: str, session: Session) -> SceneState:
         here = session.here()
+        events = session.store.get_events(session.scene.id)
         return SceneState(
             session_id=session_id,
             scene=session.scene.id,
@@ -149,6 +160,9 @@ def create_app(
             character_name=session.user_character.name,
             location=here,
             location_name=session.world.room_name(here),
+            present=[Named(id=c.id, name=c.name) for c in session.present()],
+            rooms=[Named(id=r.id, name=r.name) for r in session.world.rooms.values()],
+            story_time=events[-1].story_time if events else session.scene.start_time,
             cast=list(session.scene.cast),
             pending_skip_minutes=session.pending_skip(),
         )
@@ -161,6 +175,15 @@ def create_app(
         events = to_stream_events(entry.session, perceived)
         entry.publish(events)
         return events
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def client() -> str:
+        """The POV client (spec §12, M7). It renders what the character
+        perceived — it has no access to the world log to render instead."""
+        page = Path(__file__).parent / "web" / "index.html"
+        if not page.is_file():
+            raise HTTPException(status_code=404, detail="client not installed")
+        return page.read_text(encoding="utf-8")
 
     @app.get("/worlds")
     def list_worlds() -> dict[str, list[str]]:

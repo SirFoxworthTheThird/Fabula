@@ -164,6 +164,55 @@ def test_a_large_skip_is_refused_without_consent_in_the_request(client, session_
     assert client.get(f"/sessions/{session_id}").json()["pending_skip_minutes"] is None
 
 
+def test_presence_names_only_who_is_actually_here(client, session_id):
+    """A POV client needs to show who you are with. It must never be
+    answered with where the rest of the cast is."""
+    state = client.get(f"/sessions/{session_id}").json()
+
+    # Elena starts in the kitchen with Tomás; Maria is a room away.
+    assert [person["id"] for person in state["present"]] == ["tomas"]
+
+    client.post(f"/sessions/{session_id}/move", json={"room": "study"})
+    moved = client.get(f"/sessions/{session_id}").json()
+
+    assert "tomas" not in [person["id"] for person in moved["present"]]
+    assert all(person["id"] != "elena" for person in moved["present"])  # never yourself
+
+
+def test_presence_follows_a_character_who_leaves(client, session_id):
+    session = client.app.state.sessions[session_id].session
+    director = session.director
+
+    assert [p["id"] for p in client.get(f"/sessions/{session_id}").json()["present"]] == ["tomas"]
+
+    # Tomás steps out to the study; Elena is alone whether or not she saw him go.
+    session.store.append_event(
+        director.build_event("arrival", "tomas", "study", "Tomás steps through.")
+    )
+
+    assert client.get(f"/sessions/{session_id}").json()["present"] == []
+
+
+def test_scene_state_carries_the_map_and_the_clock(client, session_id):
+    state = client.get(f"/sessions/{session_id}").json()
+
+    assert {room["id"] for room in state["rooms"]} == {"kitchen", "study"}
+    assert state["story_time"].startswith("2024-01-01T19:00")
+
+
+def test_the_client_is_served(client):
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    body = response.text
+    assert "<title>Fabula</title>" in body
+    # It is a POV client: it reads the per-character stream, and there is
+    # no world-log endpoint for it to read instead.
+    assert "/stream" in body
+    assert "degraded" in body  # half-heard events are rendered as uncertain
+
+
 def test_unknown_session_is_404(client):
     assert client.get("/sessions/nope").status_code == 404
     assert client.post("/sessions/nope/say", json={"text": "hi"}).status_code == 404

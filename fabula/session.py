@@ -74,6 +74,21 @@ class Session:
     def here(self) -> str:
         return self.director.current_location(self.user_character)
 
+    def present(self) -> list[Character]:
+        """Who the user's character can see is here with them.
+
+        Derived by comparing against their own room, so it can only ever
+        name someone standing in it. A client asking "who is here" must
+        never be answered with where everyone in the scene is.
+        """
+        here = self.here()
+        return [
+            character
+            for character in self.characters.values()
+            if character.id != self.user_character.id
+            and self.director.current_location(character) == here
+        ]
+
     def pov(self, events: list[Event]) -> list[ProjectedEvent]:
         """What the user's character perceived of these events.
 
