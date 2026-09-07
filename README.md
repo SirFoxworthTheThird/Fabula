@@ -56,6 +56,23 @@ text and a warning on stderr:
 export OPENAI_API_KEY=...     # ANTHROPIC_API_KEY, GEMINI_API_KEY etc. are also detected
 ```
 
+**On Windows / PowerShell**, the environment variable is set differently, and the
+`fabula-*` console scripts only exist if `pip install` ran *after* they were added and
+your Python `Scripts\` directory is on `PATH`. Running them as modules sidesteps both
+problems and always works:
+
+```powershell
+$env:OPENAI_API_KEY = "..."
+python -m fabula.playtest worlds/ashgrove the_dinner
+python -m fabula.cli worlds/ashgrove the_dinner
+python -m fabula.api --port 8000          # the service
+python -m fabula.measure worlds/ashgrove the_dinner
+```
+
+If those report `No module named fabula`, the install itself did not take — check with
+`python -c "import fabula; print(fabula.__file__)"` and re-run `pip install -e .` from
+the repository root, using the same interpreter you are invoking.
+
 ### Play in a terminal
 
 ```bash
