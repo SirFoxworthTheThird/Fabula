@@ -61,6 +61,22 @@ def _first_spoken_seq(fact: Fact, events: list[Event]) -> int | None:
     return None
 
 
+def _named_facts(value, facts: dict[str, Fact]) -> list[Fact] | None:
+    """Resolve one fact id or a list of them.
+
+    A story with two people each holding something cannot say what it
+    needs to with a single id — "over once both are in the room" is the
+    whole shape of it. A bare string still means one fact, so nothing
+    authored against the old vocabulary changes meaning.
+
+    None means an id that does not exist, which is an authoring mistake
+    and must not quietly satisfy anything.
+    """
+    ids = [value] if isinstance(value, str) else list(value)
+    resolved = [facts.get(fact_id) for fact_id in ids]
+    return None if not resolved or any(f is None for f in resolved) else resolved
+
+
 def _compare(value: int, expr: str | int) -> bool:
     if isinstance(expr, int):
         return value == expr
@@ -81,20 +97,27 @@ def evaluate_trigger(trigger: dict, state: SceneState, facts: dict[str, Fact]) -
     for_turns = trigger.get("for_turns")
 
     if "fact_unspoken" in trigger:
-        fact = facts.get(trigger["fact_unspoken"])
-        if fact is None or _first_spoken_seq(fact, state.events) is not None:
+        # None of the named facts has been said. A list is "all still
+        # unsaid": one of them surfacing is enough to stop holding.
+        unspoken = _named_facts(trigger["fact_unspoken"], facts)
+        if unspoken is None:
+            return False
+        if any(_first_spoken_seq(fact, state.events) is not None for fact in unspoken):
             return False
         if for_turns is not None and not _compare(state.turn_count, for_turns):
             return False
 
     if "fact_spoken" in trigger:
-        fact = facts.get(trigger["fact_spoken"])
-        if fact is None:
+        # All of the named facts have been said. `for_turns` counts from
+        # the last of them to land, which is when the condition actually
+        # became true.
+        spoken = _named_facts(trigger["fact_spoken"], facts)
+        if spoken is None:
             return False
-        spoken_at = _first_spoken_seq(fact, state.events)
-        if spoken_at is None:
+        seqs = [_first_spoken_seq(fact, state.events) for fact in spoken]
+        if any(seq is None for seq in seqs):
             return False
-        if for_turns is not None and not _compare(state.turn_count - spoken_at, for_turns):
+        if for_turns is not None and not _compare(state.turn_count - max(seqs), for_turns):
             return False
 
     if "turns_elapsed" in trigger and not _compare(state.turn_count, trigger["turns_elapsed"]):

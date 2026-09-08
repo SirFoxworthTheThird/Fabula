@@ -235,3 +235,62 @@ def test_pressure_intent_never_reaches_a_characters_context(scenario, store):
     assert all(intent not in event.content for event in all_events)
     for character in characters.values():
         assert intent not in director.contexts.for_character(character, all_events)
+
+
+def test_a_trigger_can_name_several_facts_at_once(scenario):
+    """A story with two people each holding something cannot say what it
+    needs to with a single id — "over once both are in the room" is the
+    whole shape of it. A bare string still means one fact, so nothing
+    authored against the old vocabulary changes meaning."""
+    from fabula.world import Fact
+
+    world, characters, scene = scenario
+    facts = {"a": Fact(id="a", keywords=["alpha"]), "b": Fact(id="b", keywords=["bravo"])}
+
+    def state_after(*contents):
+        events = [kitchen_event(scene, i + 1, c) for i, c in enumerate(contents)]
+        return scene_state(events, characters)
+
+    both = {"fact_spoken": ["a", "b"]}
+    assert evaluate_trigger(both, state_after("alpha"), facts) is False
+    assert evaluate_trigger(both, state_after("alpha", "bravo"), facts) is True
+
+    # A bare string is still one fact.
+    assert evaluate_trigger({"fact_spoken": "a"}, state_after("alpha"), facts) is True
+
+    # `fact_unspoken` with a list is "all still unheld": one surfacing
+    # is enough to stop holding.
+    neither = {"fact_unspoken": ["a", "b"]}
+    assert evaluate_trigger(neither, state_after("nothing"), facts) is True
+    assert evaluate_trigger(neither, state_after("alpha"), facts) is False
+
+
+def test_for_turns_counts_from_the_last_fact_to_land(scenario):
+    """The condition became true when the second one was said, not the
+    first."""
+    from fabula.world import Fact
+
+    world, characters, scene = scenario
+    facts = {"a": Fact(id="a", keywords=["alpha"]), "b": Fact(id="b", keywords=["bravo"])}
+    events = [
+        kitchen_event(scene, 1, "alpha"),
+        kitchen_event(scene, 2, "nothing"),
+        kitchen_event(scene, 3, "bravo"),
+        kitchen_event(scene, 4, "nothing"),
+    ]
+    state = scene_state(events, characters)
+
+    assert evaluate_trigger({"fact_spoken": ["a", "b"], "for_turns": 1}, state, facts) is True
+    assert evaluate_trigger({"fact_spoken": ["a", "b"], "for_turns": 3}, state, facts) is False
+
+
+def test_an_unknown_fact_id_in_a_list_satisfies_nothing(scenario):
+    """An authoring typo must not quietly make a pressure eligible."""
+    from fabula.world import Fact
+
+    world, characters, scene = scenario
+    facts = {"a": Fact(id="a", keywords=["alpha"])}
+    state = scene_state([kitchen_event(scene, 1, "alpha")], characters)
+
+    assert evaluate_trigger({"fact_spoken": ["a", "typo"]}, state, facts) is False
+    assert evaluate_trigger({"fact_unspoken": ["typo"]}, state, facts) is False

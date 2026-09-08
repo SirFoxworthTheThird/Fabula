@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 207 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 228 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -299,18 +299,67 @@ skips, off-screen intentions), `pressures.py`, `persistence.py`, `summaries.py`,
 Model calls are spent on bids only for ambiguous candidates; obvious ones resolve by
 heuristic.
 
+## Two worlds
+
+Everything here was built against one world, and code fitted to one shape looks general
+until a second one arrives. So there are two, deliberately unalike:
+
+| | **ashgrove** | **winterlight** |
+|---|---|---|
+| | a house after a funeral | a station on the plateau, nine months in |
+| rooms | 2, mutually audible | 4 in a chain, one of them one-way |
+| cast | 2 agents + you | 3 agents + you |
+| secrets | one, one holder | **two, two holders, from each other** |
+| ends | when the music box is said | when *both* things are finally in the room |
+
+`winterlight` is the test. Ilse has known for eleven days that the first flight out has
+slipped by two months and has not said so — not from shame but as policy, which is a
+different reason to reach for the same `protects` mechanic. Yusuf bled six hundred litres
+out of the reserve tank in June and has been quietly making the whiteboard add up ever
+since. Neither knows about the other. Nadia is the one who asks, and you are the doctor
+they both need on side.
+
+The engine ran it unchanged — the service, the shim and the browser client picked the
+world up with no code at all — but building it found four things one world had hidden:
+
+* **A trigger could only name one fact.** `end_condition: {fact_spoken: the_flight}` cannot
+  say "over when both are out", which is the entire shape of a two-secret story. Triggers
+  now take a list: `fact_spoken` means all of them, `fact_unspoken` means none of them,
+  and a bare string still means one, so nothing already authored changes meaning.
+* **Edges are directed, and nothing had ever used it.** The mess lists the generator shed,
+  the shed lists nothing back — so from the mess you hear Yusuf working, and inside the
+  shed the engine is all there is to hear. He can be overheard and cannot overhear. The
+  perception model already supported this; ashgrove's two rooms could not ask for it.
+* **A keyword has to be a phrase that cannot mean anything else.** Matching is substring
+  and deterministic — a model is never asked whether a subject came up — so the cost lands
+  on the author. `the reserve` was in the fuel fact's keywords until it matched *"the
+  reserve of patience in this room is thin"*.
+* **A room description reaches the log as narration.** So a fact keyword in one lets the
+  narrator raise the subject just by describing the room, firing pressures and ending
+  arcs nobody spoke about. The shed's description named the reserve drums until a test
+  caught it.
+
+The last two are now guarded for **every** world in the repo, present and future — along
+with the one that would have caught an early ashgrove bug, where Maria's persona named
+the music box in the same breath as saying she did not know about it. Authored prose is
+the one place a leak can be written by hand, because it never passes through a projection.
+
 ## Authoring
 
 Everything authored is plain YAML on disk — diffable, shareable, legible to a coding
 agent asked to change it.
 
 ```
-worlds/ashgrove/
+worlds/<name>/
   world.yaml          rooms, adjacency, facts the story can turn on
   characters/*.yaml   persona, traits, goals, intentions, relationships
   pressures.yaml      authored complications
   scenes/*.yaml       cast, starting positions, mode, turn budget
 ```
+
+Drop a directory in `worlds/` and every client finds it: the terminal, the playtest
+harness, `/worlds`, the browser picker and the shim's model list all enumerate the
+directory rather than a registry. `winterlight` needed no code.
 
 Personality is mechanical, not only prose. `traits` feed the bid function and encoding
 salience; `persona` feeds the voice. Both are required — if traits live only in the
@@ -452,12 +501,22 @@ The suite is the regression net *and* the clearest description of the product:
 * **Divergence** — two characters with different `salience_bias` form measurably
   different beliefs about the same event, and a degraded perceiver forms a belief
   consistent with what they half-heard rather than with the truth.
+* **Two-way asymmetry** — in `winterlight`, neither secret-holder ever learns the other's,
+  through projection or a played turn loop.
+* **Authoring guards**, parametrised over every world on disk: no persona names a fact
+  that is not that character's own, no room description names a fact at all, every scene
+  has exactly one player, and every authored room, fact, actor and cast id resolves — a
+  typo otherwise fails silently as a pressure that never fires.
 
 ## Known rough edges
 
-* `LiteLLMClient` defaults to `gpt-4o-mini`. Any model id litellm understands works, and
-  `fabula-playtest --model` selects one, but the interactive CLI and the service still
-  have no flag — construct the client directly to change it there.
+* `Room.adjacent` values are not read. The field maps a neighbour to how well sound
+  crosses that doorway, which would let an author seal one; perception uses only the
+  presence of an edge and the *event's* own audibility. Until it is wired up, a one-way
+  edge is how you make a room you cannot hear out of.
+* A fact counts as **spoken** when it appears anywhere in the log, not when anyone
+  perceived it. A secret confessed to an empty room still ends an arc that waits on it.
+  Only reachable in a world where somebody can be alone, which is why it surfaced here.
 * Prompt adherence is the soft spot. Structural rules hold regardless of model (the
   narrator cannot narrate the player, because it does not bid), but the ones that live in
   prompts — invent no props, never speak for a character, don't raise what you guard —

@@ -32,7 +32,16 @@ class Room(BaseModel):
     # nothing to describe a room from and invents furniture; with it, the
     # improvisation is in the wording rather than the invention.
     description: str = ""
-    # room_id -> audibility of that connection (how well sound crosses it)
+    # room_id -> a neighbouring room. Edges are directed: a room may list
+    # a neighbour that does not list it back, which is how you author a
+    # place you can listen into but not out of (the generator shed in
+    # `winterlight`). Perception uses the presence of an edge and the
+    # *event's* own audibility.
+    #
+    # The value is not read yet. It is meant to say how well sound
+    # crosses that particular doorway, which would let an author seal one
+    # without the one-way trick, but nothing consults it — see the rough
+    # edges in the README before relying on it.
     adjacent: dict[str, Audibility] = Field(default_factory=dict)
 
 

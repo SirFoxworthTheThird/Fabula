@@ -1,0 +1,20 @@
+# The sandbox. An ordinary evening nine months in, with everyone in a
+# different room — which is the point. Ashgrove's opener puts the player
+# beside the person with the secret; this one starts you alone in the
+# middle of a chain and makes you go and find people.
+id: the_long_dark
+world: winterlight
+mode: sandbox
+cast:
+  - ilse
+  - yusuf
+  - nadia
+  - ana
+starting_positions:
+  ilse: radio        # two rooms from the bunkroom: out of earshot entirely
+  yusuf: generator   # a room you can hear into and not out of
+  nadia: bunkroom
+  ana: mess
+start_time: 2024-08-14T21:40:00
+turn_budget: 8
+max_consecutive_agent_turns: 3

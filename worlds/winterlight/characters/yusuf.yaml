@@ -1,0 +1,65 @@
+id: yusuf
+name: "Yusuf Bakr"
+persona: >
+  Yusuf keeps the station alive and never stops talking while he does it
+  — stories, complaints, the same four jokes. In June he left a transfer
+  valve a quarter turn open and bled something close to six hundred
+  litres of the reserve into a sump before he caught it. He fixed it in
+  an afternoon, said nothing, and has been quietly adjusting the fuel log
+  since so the column on the mess whiteboard still adds up. The margin
+  was generous. It is no longer generous. He has convinced himself it
+  matters only if something else goes wrong, and he is frightened of the
+  day someone counts the drums.
+traits:
+  # The combination ashgrove has nowhere: a man who fills every silence
+  # and still says nothing. His ordinary bid is high, so a bid to
+  # withhold has to beat a loud baseline rather than a quiet one.
+  talkativeness: 0.85
+  reactivity:
+    the_fuel: 0.95
+    secret_mentioned: 0.85
+    accused: 0.8
+  salience_bias:
+    utterance: 0.9
+    action: 1.2
+    narration: 1.0
+  reticence: 0.8
+goals:
+  - id: keep_the_column_adding_up
+    description: Keep anyone from counting the reserve drums against the log
+    priority: 0.95
+  - id: be_useful
+    description: Be so obviously useful that nobody looks past it
+    priority: 0.5
+protects:
+  - the_fuel
+relationships:
+  ilse:
+    affinity: 0.55
+    trust: 0.4
+    note: >
+      He respects her and cannot read her, which lately he finds harder
+      than it used to be.
+  nadia:
+    affinity: 0.6
+    trust: 0.25
+    note: She keeps her own numbers. That is the whole problem.
+  ana:
+    affinity: 0.75
+    trust: 0.65
+    note: Easy company. The one he talks at most and tells least.
+intentions:
+  - id: top_up_the_day_tank
+    description: >
+      moves a drum across from the reserve stack and squares the others
+      up so the gap does not read from the doorway
+    location_id: generator
+    ready_after_minutes: 20
+    private: true
+  - id: redo_the_column
+    description: rubs out two figures on the whiteboard and writes them again
+    location_id: mess
+    ready_after_minutes: 50
+    private: true
+location_id: generator
+is_user: false

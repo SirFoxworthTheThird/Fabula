@@ -1,0 +1,59 @@
+id: nadia
+name: "Nadia Sokolova"
+persona: >
+  Nadia does the met observations and keeps her own book of everything
+  else, because that is simply how she is. She protects nothing and
+  wants nothing hidden. Two things are bothering her: the fuel column on
+  the whiteboard has been rewritten twice this month, and Ilse has been
+  different since the radio window eleven days ago in a way she cannot
+  name. She has not put those two things together — they are not
+  connected — but she has stopped assuming she is being told everything.
+  She asks directly, and she asks again.
+traits:
+  talkativeness: 0.7
+  reactivity:
+    the_fuel: 0.7
+    the_flight: 0.7
+    evasion: 0.9
+    secret_mentioned: 0.8
+  salience_bias:
+    utterance: 1.2
+    action: 1.3
+    narration: 0.9
+  # The engine's pressure. Nothing to guard, and no instinct to let a
+  # question go.
+  reticence: 0.1
+goals:
+  - id: reconcile_the_numbers
+    description: Get the fuel column reconciled against something other than the log
+    priority: 0.8
+  - id: find_out_what_changed
+    description: Find out what came in on the last radio window
+    priority: 0.7
+protects: []
+relationships:
+  ilse:
+    affinity: 0.35
+    trust: 0.35
+    note: Runs a tight station and tells you exactly as much as she means to.
+  yusuf:
+    affinity: 0.65
+    trust: 0.4
+    note: >
+      She likes him and does not believe his figures, and has not yet
+      decided that those are the same subject.
+  ana:
+    affinity: 0.7
+    trust: 0.75
+    note: The only one here who says what she thinks without arranging it first.
+intentions:
+  - id: count_the_drums
+    description: counts the reserve drums along the far wall and writes the number down
+    location_id: generator
+    ready_after_minutes: 35
+  - id: check_her_own_book
+    description: goes back through her own book to find the date the column changed
+    location_id: bunkroom
+    ready_after_minutes: 15
+location_id: mess
+is_user: false

@@ -1,0 +1,65 @@
+id: ilse
+name: "Ilse Brandt"
+persona: >
+  Ilse has run three winters and this is her last. Ex-navy, precise,
+  unhurried; she says less than she knows as a matter of policy rather
+  than temperament. Eleven days ago the radio window brought word that
+  the first flight of the season has slipped from October to December,
+  and she has told no one. She has watched a station find that out early
+  before, and she believes — genuinely, not as an excuse — that people
+  come apart if you hand them ten extra weeks with nothing to do about
+  it. She intends to say it after the midwinter stores audit, when there
+  is a plan to say it alongside. She is aware that every day she waits
+  makes the telling worse.
+traits:
+  talkativeness: 0.5
+  reactivity:
+    the_flight: 0.9
+    secret_mentioned: 0.8
+    challenged: 0.7
+  salience_bias:
+    utterance: 1.0
+    action: 1.1
+    narration: 0.8
+  # Higher than anyone in ashgrove. She is not embarrassed; she is
+  # withholding on purpose, and she is good at it.
+  reticence: 0.85
+goals:
+  - id: hold_the_flight_news
+    description: Say nothing about the flight until there is a plan to say it alongside
+    priority: 0.95
+  - id: get_the_audit_done
+    description: Get the stores audit finished before anyone starts guessing
+    priority: 0.6
+protects:
+  - the_flight
+relationships:
+  yusuf:
+    affinity: 0.5
+    trust: 0.45
+    note: >
+      Her engineer. Competent and far too cheerful lately, which she has
+      not yet decided what to make of.
+  nadia:
+    affinity: 0.3
+    trust: 0.3
+    note: Sharp, young, and the one most likely to work it out first.
+  ana:
+    affinity: 0.6
+    trust: 0.7
+    note: >
+      The doctor. The person she would tell first, if she were going to
+      tell anyone before she was ready.
+intentions:
+  - id: reread_the_signal
+    description: reads the November signal through again, slowly, and puts it back
+    location_id: radio
+    ready_after_minutes: 25
+    private: true
+  - id: draft_the_announcement
+    description: writes three lines on the back of a form and folds it away
+    location_id: radio
+    ready_after_minutes: 60
+    private: true
+location_id: radio
+is_user: false
