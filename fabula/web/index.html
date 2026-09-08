@@ -250,6 +250,7 @@
     <div class="actions">
       <button type="button" id="look">Look around</button>
       <button type="button" id="wait">Let time pass</button>
+      <button type="button" id="again">Again</button>
       <button type="button" id="reveal">What I missed</button>
       <span class="label" id="rooms-label">Go to</span>
       <span id="rooms"></span>
@@ -312,6 +313,7 @@ function render(event) {
 
   const line = document.createElement("p");
   line.className = "line";
+  line.dataset.seq = event.seq;
 
   if (event.kind === "time_skip") {
     line.classList.add("skip");
@@ -398,9 +400,21 @@ function describe(minutes) {
   return `${minutes} minutes`;
 }
 
+// A retake discarded everything from `from_seq` on, so the transcript has
+// to lose it before the new take arrives — including from `seen`, or the
+// replacement lines would be dropped as duplicates.
+function truncate(fromSeq) {
+  for (const node of [...el("scroll").children]) {
+    const seq = Number(node.dataset.seq);
+    if (Number.isFinite(seq) && seq >= fromSeq) node.remove();
+  }
+  for (const seq of [...seen]) if (seq >= fromSeq) seen.delete(seq);
+}
+
 function listen() {
   const stream = new EventSource(`/sessions/${sessionId}/stream`);
   stream.onmessage = message => render(JSON.parse(message.data));
+  stream.addEventListener("retake", message => truncate(JSON.parse(message.data).from_seq));
   stream.onerror = () => { el("notice").textContent = "Reconnecting…"; };
 }
 
@@ -481,6 +495,7 @@ el("reveal").onclick = () => {
     showReveal();
   }
 };
+el("again").onclick = () => act("regenerate");
 el("look").onclick = () => act("look");
 el("wait").onclick = async () => {
   const minutes = state.pending_skip_minutes;

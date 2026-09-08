@@ -79,8 +79,9 @@ def run(
     print(f"--- {session.scene.id} ({session.scene.mode}) ---")
     print(f"You are {you.name}, in {world.room_name(session.here())}.")
     print(
-        "(/go <room>, /wait, /look, /quit. /reveal spoils the scene when "
-        "you are done. Anything else you say aloud.)\n"
+        "(/go <room>, /wait, /look, /again to replay the last moment, "
+        "/quit. /reveal spoils the scene when you are done. Anything else "
+        "you say aloud.)\n"
     )
 
     while True:
@@ -92,6 +93,8 @@ def run(
         outcome = run_command(session, raw, consent=_ask_consent)
         if outcome.quit:
             break
+        if outcome.replaced:
+            print("  — again —")
         if outcome.message:
             # A reveal is a block, not a note; do not indent it into a line.
             print(outcome.message if "\n" in outcome.message else f"  {outcome.message}")

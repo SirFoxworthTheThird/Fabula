@@ -22,16 +22,22 @@ class Outcome:
     quit: bool = False
     # The scene reached its declared end on this action.
     ended: bool = False
+    # This replaces the previous take rather than following it, so a
+    # client showing a transcript has to drop the tail before rendering.
+    replaced: bool = False
 
 
 def run_command(
     session: Session, line: str, consent: Callable[[int], bool] | None = None
 ) -> Outcome:
-    was_over = session.ended()
+    played = session.turns_played
     outcome = _dispatch(session, line, consent)
-    # Report the ending on the action that caused it, once. A scene that
-    # was already over does not keep announcing itself.
-    outcome.ended = not was_over and session.ended()
+    # Report the ending on the action that caused it, once — and only for
+    # an action that actually played a turn. The comparison is against the
+    # state that turn started from, which the session records, because a
+    # retake rewinds and so it cannot be measured before dispatch.
+    if session.turns_played != played:
+        outcome.ended = not session.ended_at_turn_start and session.ended()
     return outcome
 
 
@@ -52,6 +58,13 @@ def _dispatch(
         if not perceived:
             return Outcome(message="Time stays where it is.")
         return Outcome(perceived=perceived)
+
+    if line in ("/again", "/retry"):
+        # A director calling "again", not an undo of the story: the take
+        # is thrown away and played once more from the same point.
+        if not session.can_regenerate():
+            return Outcome(message="Nothing has been played yet.")
+        return Outcome(perceived=session.regenerate(), replaced=True)
 
     if line == "/reveal":
         # A spoiler, and only ever on request. Read-only, so the scene is

@@ -46,6 +46,22 @@ class Session:
         # what the evening did to people, which is the one place the
         # engine is allowed to step outside a point of view.
         self.trust_at_open: dict[str, dict[str, float]] = {}
+        # The last thing the player did, kept so it can be played again.
+        # A closure rather than a command string: the engine has no verbs,
+        # and re-parsing text here would give the clients a second, worse
+        # dispatcher to disagree with.
+        self._last_take: Callable[[], list[ProjectedEvent]] | None = None
+        # The sequence number the open turn started at. A client showing a
+        # transcript needs it on a retake: everything from here on was
+        # discarded and must be dropped before the new take is rendered.
+        self.turn_started_at: int = 0
+        # Whether the scene had already reached its end when the open turn
+        # began, and how many turns have been played. A client reporting
+        # "this ended it" has to compare against the state the turn
+        # started from — which a retake rewinds to, so it cannot be
+        # measured before the command runs.
+        self.ended_at_turn_start: bool = False
+        self.turns_played: int = 0
 
     @classmethod
     def open(
@@ -147,13 +163,58 @@ class Session:
             self.user_character, self.store.get_events(self.scene.id)
         )
 
+    # --- Turns, and taking one again -----------------------------------
+
+    def _play(self, take: Callable[[], list[ProjectedEvent]]) -> list[ProjectedEvent]:
+        """Run one player action as a single unit of work.
+
+        Opening a turn settles the one before it, so the take that is
+        still discardable is always the most recent — exactly the one a
+        player would want back.
+        """
+        self.store.begin_turn()
+        self.turn_started_at = self.store.next_seq(self.scene.id)
+        self.ended_at_turn_start = self.ended()
+        self.turns_played += 1
+        self._last_take = take
+        return take()
+
+    def can_regenerate(self) -> bool:
+        return self._last_take is not None
+
+    def regenerate(self) -> list[ProjectedEvent]:
+        """Throw the last take away and play it again.
+
+        The player is a director calling "again", not a player being
+        asked to approve the world — which is why nothing in the engine
+        stops to ask permission before changing something. It acts, and
+        this is how the take gets rejected.
+
+        Everything durable lives in one connection, so discarding the
+        savepoint undoes the whole turn at once: the events, the beliefs
+        encoded from them, the readings, the rehearsals, the interaction
+        counts, and any trust that moved. The scene is left exactly where
+        it stood, down to the sequence number, so the retake occupies the
+        slot the discarded one did rather than being pasted after it.
+        """
+        if self._last_take is None:
+            raise ValueError("nothing has been played yet")
+        take = self._last_take
+        self.store.rollback_turn()
+        return self._play(take)
+
     def say(self, text: str) -> list[ProjectedEvent]:
         """The whole turn as this character perceived it, their own line
         included. Trimming the echo is a presentation choice, so it
         belongs to the client — a session that withheld a perceived event
         would hand different transcripts to different clients."""
-        event = self.director.build_event("utterance", self.user_character.id, self.here(), text)
-        return self.pov(self.director.run_turn(event))
+        def take() -> list[ProjectedEvent]:
+            event = self.director.build_event(
+                "utterance", self.user_character.id, self.here(), text
+            )
+            return self.pov(self.director.run_turn(event))
+
+        return self._play(take)
 
     def move(self, room_id: str) -> list[ProjectedEvent]:
         if room_id not in self.world.rooms:
@@ -161,14 +222,17 @@ class Session:
         here = self.here()
         if room_id == here:
             return []
-        arrival = self.director.build_event(
-            "arrival",
-            self.user_character.id,
-            room_id,
-            f"{self.user_character.name} comes in from {self.world.room_name(here)}.",
-            audibility="adjacent",
-        )
-        return self.pov(self.director.run_turn(arrival))
+        def take() -> list[ProjectedEvent]:
+            arrival = self.director.build_event(
+                "arrival",
+                self.user_character.id,
+                room_id,
+                f"{self.user_character.name} comes in from {self.world.room_name(self.here())}.",
+                audibility="adjacent",
+            )
+            return self.pov(self.director.run_turn(arrival))
+
+        return self._play(take)
 
     def ended(self) -> bool:
         """Has this scene reached its declared end condition?
@@ -191,14 +255,17 @@ class Session:
         return derive_skip_minutes(self.characters, self.store.get_events(self.scene.id))
 
     def wait(self, consent: Callable[[int], bool] | None = None) -> list[ProjectedEvent]:
-        return self.pov(self.director.advance_time(consent=consent))
+        return self._play(lambda: self.pov(self.director.advance_time(consent=consent)))
 
     def look(self) -> list[ProjectedEvent]:
         """Take in the room: coarse off-screen events here expand into
         what is visible now."""
-        revealed = []
-        for summary in self.director.unmaterialized_here(self.user_character):
-            event = self.director.materialize(summary, self.user_character)
-            if event is not None:
-                revealed.append(event)
-        return self.pov(revealed)
+        def take() -> list[ProjectedEvent]:
+            revealed = []
+            for summary in self.director.unmaterialized_here(self.user_character):
+                event = self.director.materialize(summary, self.user_character)
+                if event is not None:
+                    revealed.append(event)
+            return self.pov(revealed)
+
+        return self._play(take)

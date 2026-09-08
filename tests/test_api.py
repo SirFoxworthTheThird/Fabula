@@ -3,6 +3,7 @@
 The protocol is the product surface for every future client, so the leak
 invariant has to hold at the wire, not just in the engine.
 """
+import asyncio
 import json
 
 import pytest
@@ -324,3 +325,49 @@ def test_the_reveal_reports_regard_that_moved(client):
     assert ("Maria", "Tomás") in moved
     assert moved[("Maria", "Tomás")]["trust"] < moved[("Maria", "Tomás")]["started"]
     assert not [r for r in reveal["regard"] if r["who"] == reveal["character"]]
+
+
+def test_a_retake_reuses_the_sequence_numbers_over_http(client):
+    """A streaming client renders by seq, so a retake that appended
+    instead of replacing would show the discarded take and the new one
+    side by side."""
+    opened = client.post("/sessions", json={"world": "ashgrove", "scene": "the_reckoning"}).json()
+    session_id = opened["session_id"]
+    first = client.post(f"/sessions/{session_id}/say", json={"text": "Tomás?"}).json()
+
+    again = client.post(f"/sessions/{session_id}/regenerate").json()
+
+    assert [e["seq"] for e in again] == [e["seq"] for e in first]
+    body = client.get(f"/sessions/{session_id}/stream?follow=false").text
+    seqs = [json.loads(line[6:])["seq"] for line in body.split("\n") if line.startswith("data: ")]
+    assert seqs == sorted(set(seqs))  # no duplicates, nothing orphaned
+
+
+def test_the_stream_is_told_where_to_truncate(client):
+    """A retake can legitimately perceive nothing, so the instruction to
+    drop the tail is its own frame rather than a field on an event — a
+    client watching only events would keep showing the discarded take."""
+    from fabula.api import Retake
+
+    opened = client.post("/sessions", json={"world": "ashgrove", "scene": "the_reckoning"}).json()
+    session_id = opened["session_id"]
+    client.post(f"/sessions/{session_id}/say", json={"text": "Tomás?"})
+
+    entry = client.app.state.sessions[session_id]
+    queue = asyncio.Queue()
+    entry.subscribers.append(queue)
+    try:
+        client.post(f"/sessions/{session_id}/regenerate")
+        published = []
+        while not queue.empty():
+            published.append(queue.get_nowait())
+    finally:
+        entry.subscribers.remove(queue)
+
+    assert isinstance(published[0], Retake)
+    assert published[0].from_seq == 1  # everything this turn wrote
+    assert all(event.seq >= published[0].from_seq for event in published[1:])
+
+
+def test_regenerating_before_playing_is_refused(client, session_id):
+    assert client.post(f"/sessions/{session_id}/regenerate").status_code == 409

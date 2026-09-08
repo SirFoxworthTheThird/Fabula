@@ -121,7 +121,51 @@ class EventStore:
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
         self._migrate()
+        self._turn_open = False
         self.conn.commit()
+
+    # --- One turn, one unit of work -------------------------------------
+    #
+    # A turn writes far more than events: beliefs, rehearsals, summaries,
+    # readings, interaction counts, trust. All of it lives in this one
+    # connection, so a savepoint around a turn is a complete undo with no
+    # per-subsystem bookkeeping — and the discarded turn leaves no trace,
+    # so `next_seq` hands the retake the same slot.
+    #
+    # This is why writes no longer commit one at a time: a commit ends the
+    # transaction and takes the savepoint with it. The turn's writes stay
+    # uncommitted until the next turn opens, which is also what makes them
+    # discardable.
+
+    def _commit(self) -> None:
+        if not self._turn_open:
+            self.conn.commit()
+
+    def begin_turn(self) -> None:
+        """Open a turn, making whatever came before it permanent."""
+        with self._lock:
+            self.commit_turn()
+            self.conn.execute("SAVEPOINT fabula_turn")
+            self._turn_open = True
+
+    def commit_turn(self) -> None:
+        """Settle the open turn. After this it can no longer be discarded."""
+        with self._lock:
+            if self._turn_open:
+                self.conn.execute("RELEASE fabula_turn")
+                self._turn_open = False
+            self.conn.commit()
+
+    def rollback_turn(self) -> bool:
+        """Discard everything the open turn wrote. False if none is open."""
+        with self._lock:
+            if not self._turn_open:
+                return False
+            self.conn.execute("ROLLBACK TO fabula_turn")
+            self.conn.execute("RELEASE fabula_turn")
+            self._turn_open = False
+            self.conn.commit()
+            return True
 
     def _migrate(self) -> None:
         """Bring a database written by an older build up to date.
@@ -141,6 +185,7 @@ class EventStore:
 
     def close(self) -> None:
         with self._lock:
+            self.commit_turn()  # never lose a finished turn to a close
             self.conn.close()
 
     def next_seq(self, scene_id: str) -> int:
@@ -174,7 +219,7 @@ class EventStore:
                     json.dumps(event.metadata),
                 ),
             )
-            self.conn.commit()
+            self._commit()
             return event.model_copy(update={"id": cur.lastrowid})
 
     def get_events(self, scene_id: str) -> list[Event]:
@@ -205,7 +250,7 @@ class EventStore:
                     belief.salience,
                 ),
             )
-            self.conn.commit()
+            self._commit()
 
     def get_beliefs(self, character_id: str) -> list[Belief]:
         with self._lock:
@@ -220,7 +265,7 @@ class EventStore:
             self.conn.execute(
                 "UPDATE beliefs SET salience = ? WHERE id = ?", (salience, belief_id)
             )
-            self.conn.commit()
+            self._commit()
 
     def get_relationships(self, character_id: str) -> dict[str, Relationship]:
         with self._lock:
@@ -257,7 +302,7 @@ class EventStore:
                     relationship.interactions,
                 ),
             )
-            self.conn.commit()
+            self._commit()
 
     def set_trust(self, character_id: str, toward_id: str, trust: float) -> None:
         """How far one character now believes another. Written only from
@@ -268,7 +313,7 @@ class EventStore:
                    WHERE character_id = ? AND toward_id = ?""",
                 (max(0.0, min(1.0, trust)), character_id, toward_id),
             )
-            self.conn.commit()
+            self._commit()
 
     def bump_interaction(self, character_id: str, toward_id: str) -> None:
         with self._lock:
@@ -277,7 +322,7 @@ class EventStore:
                    WHERE character_id = ? AND toward_id = ?""",
                 (character_id, toward_id),
             )
-            self.conn.commit()
+            self._commit()
 
     def resolve_goal(self, character_id: str, goal_id: str) -> None:
         with self._lock:
@@ -285,7 +330,7 @@ class EventStore:
                 "INSERT OR IGNORE INTO resolved_goals (character_id, goal_id) VALUES (?, ?)",
                 (character_id, goal_id),
             )
-            self.conn.commit()
+            self._commit()
 
     def get_resolved_goals(self, character_id: str) -> set[str]:
         with self._lock:
@@ -310,7 +355,7 @@ class EventStore:
                    (character_id, scene_id, span_key, summary_text) VALUES (?, ?, ?, ?)""",
                 (character_id, scene_id, span_key, text),
             )
-            self.conn.commit()
+            self._commit()
 
     def get_beliefs_from_other_scenes(
         self, character_id: str, scene_id: str, limit: int = 5
@@ -355,7 +400,7 @@ class EventStore:
                    VALUES (?, ?, ?)""",
                 (character_id, span_key, text),
             )
-            self.conn.commit()
+            self._commit()
 
     def get_rehearsals(self, character_id: str) -> dict[int, int]:
         """event_id -> seq of the most recent event that re-mentioned it."""
@@ -375,7 +420,7 @@ class EventStore:
                    DO UPDATE SET last_rehearsed_seq = max(last_rehearsed_seq, excluded.last_rehearsed_seq)""",
                 (character_id, event_id, seq),
             )
-            self.conn.commit()
+            self._commit()
 
 
 def _row_to_belief(row: sqlite3.Row) -> Belief:

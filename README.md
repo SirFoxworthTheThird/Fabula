@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 233 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 246 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -87,6 +87,7 @@ Elena> Tomás, you've been strange all evening.
 /go study      move to another room
 /wait          let time pass, resolving what happens off-screen
 /look          take in the room — off-screen events here expand into detail
+/again         throw the last moment away and play it again
 /reveal        when you are done: what you could not perceive (a spoiler)
 /quit
 ```
@@ -111,6 +112,30 @@ The belief dump is deliberately omniscient — it is how you check the asymmetry
 that Maria really doesn't know. It is an author's tool; no player-facing client may show
 it. Pass `--script mine.txt` for your own sequence, `--no-beliefs` for the transcript
 alone.
+
+### Taking it again
+
+A take you don't like is not something to live with. `/again` in the terminal, **Again**
+in the browser: the last moment is thrown away and played once more from the same point.
+
+It is deliberately not a confirmation prompt. The engine never stops mid-scene to ask
+whether you want what just happened — a dialogue box is not a story — so it acts, and
+this is how a take gets rejected. You are a director calling *again*, not a player being
+asked to approve the world.
+
+What makes it cheap is that everything durable lives in one SQLite connection. A savepoint
+around a turn undoes all of it at once — the events, the beliefs encoded from them, their
+readings, the rehearsals, the interaction counts, and any trust that moved when somebody
+declined to answer. No per-subsystem bookkeeping, and no tombstones in an append-only log:
+a discarded take was never committed, so it is not history. The retake even reuses the
+sequence numbers the discarded one vacated, which is what lets a streaming client replace
+it in place rather than showing both.
+
+The cost of a write path that no longer commits one row at a time is that a turn is only
+made permanent when the next one opens (or on close). And a re-roll is a spoiler channel:
+you can take a moment again until somebody confesses, and learn what the scene was holding.
+That is not an invariant-1 break — that is about characters, not you — and in a
+single-player story it is your story to spoil.
 
 ### The reveal
 

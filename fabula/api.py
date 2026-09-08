@@ -129,10 +129,20 @@ class _LiveSession:
         self.session = session
         self.subscribers: list[asyncio.Queue[StreamEvent]] = []
 
-    def publish(self, events: list[StreamEvent]) -> None:
+    def publish(self, events: list) -> None:
         for queue in self.subscribers:
             for event in events:
                 queue.put_nowait(event)
+
+
+class Retake(BaseModel):
+    """Sent on its own SSE event type when a take is played again: drop
+    everything from `from_seq` onward, then render what follows. A
+    separate frame rather than a field, because a retake can legitimately
+    produce no perceived events at all and the client still has to
+    truncate."""
+
+    from_seq: int
 
 
 def to_stream_events(session: Session, perceived: list[ProjectedEvent]) -> list[StreamEvent]:
@@ -321,6 +331,23 @@ def create_app(
     async def look(session_id: str) -> list[StreamEvent]:
         return await act(session_id, lambda session: session.look())
 
+    @app.post("/sessions/{session_id}/regenerate", response_model=list[StreamEvent])
+    async def regenerate(session_id: str) -> list[StreamEvent]:
+        """Throw the last take away and play it again.
+
+        The engine never stops to ask whether a change to the world is
+        wanted; this is how it gets rejected instead. Everything the
+        discarded take wrote is gone — events, beliefs, readings, trust —
+        and the retake reuses the sequence numbers it vacated.
+        """
+        entry = get_live(session_id)
+        if not entry.session.can_regenerate():
+            raise HTTPException(status_code=409, detail="nothing has been played yet")
+        perceived = await run_in_threadpool(lambda s: s.regenerate(), entry.session)
+        events = to_stream_events(entry.session, perceived)
+        entry.publish([Retake(from_seq=entry.session.turn_started_at), *events])
+        return events
+
     @app.post("/sessions/{session_id}/reveal", response_model=RevealOut)
     def reveal(session_id: str) -> RevealOut:
         """What the player did not know, once they ask to be told.
@@ -368,7 +395,7 @@ def create_app(
         would rather poll than hold a connection open.
         """
         entry = get_live(session_id)
-        queue: asyncio.Queue[StreamEvent] = asyncio.Queue()
+        queue: asyncio.Queue[StreamEvent | Retake] = asyncio.Queue()
         if follow:
             entry.subscribers.append(queue)
 
@@ -379,7 +406,10 @@ def create_app(
                 yield ": caught up\n\n"
                 while follow:
                     event = await queue.get()
-                    yield f"data: {event.model_dump_json()}\n\n"
+                    if isinstance(event, Retake):
+                        yield f"event: retake\ndata: {event.model_dump_json()}\n\n"
+                    else:
+                        yield f"data: {event.model_dump_json()}\n\n"
             finally:
                 if queue in entry.subscribers:
                     entry.subscribers.remove(queue)
