@@ -79,7 +79,11 @@ def test_their_own_state_is_theirs_to_know(table):
     )
     sleeps(table, "maria", state="awake")
 
-    kinds = [p.event.kind for p in perceived(table, "maria")]
+    # The scene's own opening line is in the kitchen with her; what this
+    # is about is the two moments she felt happen to her.
+    kinds = [
+        p.event.kind for p in perceived(table, "maria") if p.event.kind != "narration"
+    ]
 
     assert kinds == ["state_change", "state_change"]
 

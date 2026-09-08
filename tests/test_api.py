@@ -110,8 +110,12 @@ def test_history_is_the_scene_as_this_character_experienced_it(client, session_i
 
     history = client.get(f"/sessions/{session_id}/events").json()
 
-    assert history[0]["speaker"] == "elena"
-    assert history[0]["content"] == "Tomas, hello."
+    # The scene opens with a line of its own, so the player's is not the
+    # first thing in the log — only the first thing they said.
+    spoken = [event for event in history if event["speaker"]]
+    assert spoken[0]["speaker"] == "elena"
+    assert spoken[0]["content"] == "Tomas, hello."
+    assert history[0]["speaker"] is None  # the scene establishing itself
     assert [event["seq"] for event in history] == sorted(event["seq"] for event in history)
 
 
@@ -270,8 +274,9 @@ def test_stream_sends_sse_frames(client, session_id):
     frames = _read_stream(client, session_id)
 
     assert frames
-    assert frames[0]["speaker"] == "elena"
-    assert frames[0]["visibility"] == "full"
+    spoken = [frame for frame in frames if frame["speaker"]]
+    assert spoken[0]["speaker"] == "elena"
+    assert spoken[0]["visibility"] == "full"
 
 
 def test_live_subscribers_receive_each_turn_as_it_happens(client, session_id):
@@ -368,7 +373,9 @@ def test_the_stream_is_told_where_to_truncate(client):
         entry.subscribers.remove(queue)
 
     assert isinstance(published[0], Retake)
-    assert published[0].from_seq == 1  # everything this turn wrote
+    # Back to where the turn began, which is after the scene's opening
+    # line — a retake rewinds a turn, not the scene.
+    assert published[0].from_seq == 2
     assert all(event.seq >= published[0].from_seq for event in published[1:])
 
 

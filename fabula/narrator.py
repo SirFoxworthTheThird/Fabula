@@ -56,7 +56,9 @@ class Narrator:
             "an object or an action they did not take."
         )
 
-    def bid(self, event: Event, events: list[Event], world: World) -> Bid | None:
+    def bid(
+        self, event: Event, events: list[Event], world: World, alone: bool = False
+    ) -> Bid | None:
         """Bids on a lull, an undescribed physical action, or a scene that
         needs establishing — never on ordinary dialogue exchange."""
         if not events:
@@ -78,6 +80,17 @@ class Narrator:
                     character_id=NARRATOR_ID,
                     desire=0.6,
                     one_line_reason="describe the room they walked into",
+                )
+            if alone:
+                # Nobody is here to answer, so refusing to narrate means
+                # the turn produces nothing at all: the player speaks into
+                # an empty room and the app prints "No one answers." A
+                # room that never responds is not a story. What is
+                # described is still the place and never the person.
+                return Bid(
+                    character_id=NARRATOR_ID,
+                    desire=0.55,
+                    one_line_reason="nobody is here to answer them",
                 )
             return None
 

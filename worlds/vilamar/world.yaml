@@ -71,6 +71,7 @@ phrasing:
     nothing_pending: "Não está nada pendente; o tempo fica onde está."
     time_stays: "O tempo fica onde está."
     nothing_played: "Ainda não se jogou nada."
+    model_failed: "O modelo não respondeu, por isso esse momento não aconteceu: {reason}"
     again: "— outra vez —"
     ended: "— {scene} chegou ao fim. /reveal para veres o que não pudeste, ou continua a falar."
     ended_with_next: >-

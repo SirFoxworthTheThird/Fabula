@@ -30,6 +30,7 @@ from fabula.chronology import (
     due_intentions,
 )
 from fabula.db import EventStore
+from fabula.discovery import invents_a_fact
 from fabula.loader import Scene
 from fabula.memory import ContextBuilder, form_belief, location_at_seq, record_rehearsals
 from fabula.interpret import (
@@ -227,7 +228,11 @@ class Director:
 
             asked = in_parallel(
                 [bid_for(character) for character in candidates]
-                + [lambda: self.narrator.bid(last_event, all_events, self.world)],
+                + [
+                    lambda: self.narrator.bid(
+                        last_event, all_events, self.world, alone=not candidates
+                    )
+                ],
                 self.workers,
             )
             bids: list[Bid] = asked[:-1]
@@ -344,6 +349,43 @@ class Director:
         appended.extend(self._resolve_offscreen(minutes))
         self._absorb()
         return appended
+
+    def establish(self, where: str) -> Event | None:
+        """The line that opens a scene.
+
+        A story that begins with a blank prompt is a text box, not a
+        story: the player is told the name of the room and left to guess
+        what is in it. The narrator has always had a 0.9 "establish the
+        scene" bid for exactly this and it could never fire — by the time
+        anything is bid on, the player has already spoken and the log is
+        no longer empty. So the opening is not bid on at all; it is the
+        one narration the scene owes the player before they type.
+
+        Nothing if the scene has already started, so resuming a story
+        does not re-describe a room somebody is standing in the middle of.
+        """
+        if self.store.get_events(self.scene.id):
+            return None
+        content = self.narrator.describe_place(where, self.world)
+        named = invents_a_fact(content, self.world)
+        if named:
+            # An opening line that names a secret hands it to everyone in
+            # the room before anyone has spoken — and can end an arc on
+            # the first beat. Fall back to what the author wrote, and to
+            # silence if that names one too.
+            authored = self.world.rooms[where].description if where in self.world.rooms else ""
+            if not authored or invents_a_fact(authored, self.world):
+                return None
+            content = authored
+        # Not absorbed: the curtain going up is not something that
+        # happened to anybody. Everyone in the room reads it in their
+        # context like any other line, but nobody forms a durable memory
+        # of what the room they are standing in looks like — which would
+        # otherwise cost a reading per character before the player has
+        # typed anything.
+        return self.store.append_event(
+            self.build_event("narration", None, where, content)
+        )
 
     def current_location(self, character: Character) -> str:
         """Where a character is now, replayed from their arrivals in the

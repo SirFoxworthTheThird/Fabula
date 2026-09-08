@@ -19,7 +19,12 @@ from pathlib import Path
 
 from fabula.commands import run_command
 from fabula.env import load_env
-from fabula.llm import LiteLLMClient, LLMClient, get_default_llm
+from fabula.llm import (
+    LiteLLMClient,
+    LLMClient,
+    get_default_llm,
+    missing_credentials,
+)
 from fabula.models import Character, ProjectedEvent
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.session import Session
@@ -68,6 +73,10 @@ def playtest(
     workers: int = DEFAULT_WORKERS,
 ) -> None:
     if llm is None:
+        if model:
+            unreachable = missing_credentials(model, api_base)
+            if unreachable:
+                raise SystemExit(f"fabula-playtest: {unreachable}")
         llm = LiteLLMClient(model=model, api_base=api_base) if model else get_default_llm()
     session = Session.open(
         world_dir, scene_name, llm=llm, interpret_beliefs=interpret_beliefs, workers=workers

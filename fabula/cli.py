@@ -16,7 +16,7 @@ from fabula.commands import run_command
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
 from fabula.env import load_env
-from fabula.llm import LiteLLMClient
+from fabula.llm import LiteLLMClient, ModelUnavailable, missing_credentials
 from fabula.models import Character, ProjectedEvent
 from fabula.session import Session
 
@@ -97,6 +97,12 @@ def run(
     print(f"--- {session.scene.id} ({session.scene.mode}) ---")
     print(say("you_are", name=you.name, room=world.room_name(session.here())))
     print(say("help") + "\n")
+    # Whatever the character has already perceived: the scene's opening
+    # line on a new story, and everything they lived through on a resumed
+    # one. A player picking a story back up needs to be told where they
+    # left off, not just which room they are standing in.
+    _show(session.perceived_so_far(), characters)
+    print()
 
     try:
         session = _play(session, you, characters, say) or session
@@ -119,7 +125,14 @@ def _play(session: Session, you: Character, characters, say) -> None:
         except EOFError:
             print()
             return session
-        outcome = run_command(session, raw, consent=_consent_asker(session))
+        try:
+            outcome = run_command(session, raw, consent=_consent_asker(session))
+        except ModelUnavailable as failure:
+            # The scene is intact — the take was rolled back — so say what
+            # happened and hand the prompt back rather than dying with a
+            # stack trace and taking the story with it.
+            print(f"  {say('model_failed', reason=failure)}\n")
+            continue
         if outcome.quit:
             return session
         if outcome.replaced:
@@ -131,7 +144,11 @@ def _play(session: Session, you: Character, characters, say) -> None:
         if outcome.went_on is not None:
             session = outcome.went_on
             print(say("you_are", name=session.user_character.name,
-                      room=session.world.room_name(session.here())) + "\n")
+                      room=session.world.room_name(session.here())))
+            # The next scene opens with its own line, exactly as the first
+            # one did — a seam in the story is still a curtain going up.
+            _show(session.perceived_so_far(), session.characters)
+            print()
             continue
         if outcome.ended:
             key = "ended_with_next" if session.next_scene() else "ended"
@@ -175,6 +192,12 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     library = Library(root=args.library, worlds_root=args.worlds)
+    if args.model:
+        # Before the story opens, not several turns in. A key that was
+        # never set used to surface as a provider traceback mid-scene.
+        unreachable = missing_credentials(args.model, args.api_base)
+        if unreachable:
+            parser.error(unreachable)
     llm = LiteLLMClient(model=args.model, api_base=args.api_base) if args.model else None
     interpret = not args.no_interpret
     opening = {"interpret_beliefs": interpret, "workers": args.workers}

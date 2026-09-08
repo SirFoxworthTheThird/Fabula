@@ -88,9 +88,17 @@ def test_what_reaches_whom_across_the_chain(station):
     ]
     log = session.store.get_events(session.scene.id)
 
+    # Numbered by the three events this test made, not by their place in
+    # the log — the scene opens with a line of its own before them.
+    said = {event.seq: index for index, event in enumerate(events, start=1)}
+
     def perceived(character_id):
         character = session.characters[character_id]
-        return {p.event.seq: p.perception for p in seen_by(character, log, session.world)}
+        return {
+            said[p.event.seq]: p.perception
+            for p in seen_by(character, log, session.world)
+            if p.event.seq in said
+        }
 
     # from the mess (building) | from the shed (adjacent) | from the radio (adjacent)
     assert perceived("ana") == {1: "full", 2: "degraded", 3: "degraded"}
@@ -155,7 +163,7 @@ def test_a_quiet_act_in_the_shed_reaches_nobody(station):
     is what makes the shed the place to do something you would rather
     nobody saw."""
     session = Session.open(WINTERLIGHT, "the_long_dark", llm=FakeLLM())
-    session.store.append_event(
+    quiet = session.store.append_event(
         session.director.build_event(
             "action", "yusuf", "generator",
             "squares up the drums so the gap does not read from the doorway",
@@ -163,8 +171,14 @@ def test_a_quiet_act_in_the_shed_reaches_nobody(station):
     )
     log = session.store.get_events(session.scene.id)
 
+    def saw_it(character_id):
+        return [
+            p for p in seen_by(session.characters[character_id], log, session.world)
+            if p.event.seq == quiet.seq
+        ]
+
     for other in ("ana", "ilse", "nadia"):
-        assert seen_by(session.characters[other], log, session.world) == []
+        assert saw_it(other) == []
     assert len(seen_by(session.characters["yusuf"], log, session.world)) == 1
 
 

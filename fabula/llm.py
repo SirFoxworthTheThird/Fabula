@@ -18,6 +18,17 @@ class LLMClient(Protocol):
         ...
 
 
+class ModelUnavailable(RuntimeError):
+    """The model did not answer.
+
+    Everything past this boundary is somebody else's machine — a key that
+    was never set, a rate limit, a laptop that went to sleep — and none of
+    it is a bug in the story. It is caught here and named here so a turn
+    can be discarded and offered again instead of taking the session down
+    and losing the scene with it.
+    """
+
+
 class LiteLLMClient:
     """Provider-agnostic model calls via litellm.
 
@@ -36,15 +47,28 @@ class LiteLLMClient:
         import litellm
 
         extra = {"api_base": self.api_base} if self.api_base else {}
-        response = litellm.completion(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
-            ],
-            **extra,
-        )
+        try:
+            response = litellm.completion(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt},
+                ],
+                **extra,
+            )
+        except Exception as failure:
+            # Deliberately everything: litellm raises its own hierarchy on
+            # top of each provider's, and a player does not need to know
+            # which of the two lost. What they need is the scene back.
+            raise ModelUnavailable(_one_line(failure)) from failure
         return response["choices"][0]["message"]["content"]
+
+
+def _one_line(failure: Exception) -> str:
+    """The first line of a provider error, which is the part that says
+    what went wrong; the rest is a stack from three libraries down."""
+    text = str(failure).strip().splitlines()
+    return text[0][:300] if text else failure.__class__.__name__
 
 
 class FakeLLM:
@@ -78,6 +102,33 @@ _KEY_ENV_VARS = (
     "GEMINI_API_KEY",
     "COHERE_API_KEY",
 )
+
+
+def missing_credentials(model: str, api_base: str | None = None) -> str | None:
+    """Why this model cannot be reached from this environment, or None.
+
+    Checked before a story opens rather than at the first model call: the
+    old behaviour was a traceback several turns in, with the scene lost
+    and a stack from three libraries in place of "no key".
+    """
+    try:
+        import litellm
+    except ImportError:  # pragma: no cover - depends on the install
+        return "litellm is not installed: pip install -e ."
+    verdict = litellm.validate_environment(model=model, api_base=api_base)
+    if verdict.get("keys_in_environment"):
+        return None
+    missing = ", ".join(verdict.get("missing_keys") or []) or "a provider key"
+    where = " (a .env file beside you is read too)"
+    if api_base:
+        # A local server usually ignores the key but the client still
+        # insists on one, which is a confusing way to be told to type
+        # any string at all.
+        return (
+            f"{model} at {api_base} needs {missing} in the environment{where}. "
+            "A local server generally ignores its value — set it to anything."
+        )
+    return f"no {missing} in the environment{where}, and {model} needs one."
 
 
 def get_default_llm(model: str = "gpt-4o-mini") -> LLMClient:

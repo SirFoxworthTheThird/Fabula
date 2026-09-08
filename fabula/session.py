@@ -164,6 +164,10 @@ class Session:
             }
             for character_id in characters
         }
+        # The scene says its first line before the player has to. A story
+        # that opens on a bare prompt is a text box: the room has a name
+        # and nothing in it until somebody thinks to type /look.
+        session.director.establish(user_character.location_id)
         return session
 
     def here(self) -> str:
@@ -212,18 +216,36 @@ class Session:
         Opening a turn settles the one before it, so the take that is
         still discardable is always the most recent — exactly the one a
         player would want back.
+
+        A take that raises is thrown away whole, and the scene is left
+        exactly where it stood. Half a turn is the worst outcome
+        available: a model that failed on the third of five characters
+        would otherwise leave two of them having heard something the
+        others never will, permanently, in the file. The machinery for
+        this is the same savepoint `/again` uses — the only new part is
+        that a failure counts as a reason to use it.
         """
         self.store.begin_turn()
         self.turn_started_at = self.store.next_seq(self.scene.id)
         self.ended_at_turn_start = self.ended()
         self._turns_before_take = self.turns_played
+        was_playable = self._last_take
         self.turns_played += 1
         self.takes_played += 1
         self._last_take = take
         # Inside the turn, so a take that is thrown away does not leave
         # the library claiming it happened.
         self.store.touch_story(self.scene.id, self.turns_played)
-        return take()
+        try:
+            return take()
+        except Exception:
+            self.store.rollback_turn()
+            self.turns_played = self._turns_before_take
+            self.takes_played -= 1
+            # A take that never landed is not one to offer back: `/again`
+            # still means the last moment that actually happened.
+            self._last_take = was_playable
+            raise
 
     def close(self) -> None:
         """Settle the scene and let go of the database.

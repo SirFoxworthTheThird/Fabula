@@ -73,6 +73,7 @@ CLIENT_TEMPLATES: dict[str, str] = {
     "nothing_pending": "Nothing is pending; time stays where it is.",
     "time_stays": "Time stays where it is.",
     "nothing_played": "Nothing has been played yet.",
+    "model_failed": "The model did not answer, so that moment did not happen: {reason}",
     "again": "— again —",
     "ended": "— {scene} has reached its end. /reveal to see what you could not, or keep talking.",
     "ended_with_next": (

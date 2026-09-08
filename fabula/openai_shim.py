@@ -27,6 +27,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from fabula.llm import ModelUnavailable
 from fabula.models import ProjectedEvent
 from fabula.session import Session
 
@@ -170,7 +171,12 @@ def add_openai_shim(
         if not text:
             raise HTTPException(status_code=400, detail="no user message to act on")
 
-        perceived = session.say(text)
+        try:
+            perceived = session.say(text)
+        except ModelUnavailable as failure:
+            raise HTTPException(
+                status_code=502, detail=f"the model did not answer: {failure}"
+            )
         content = render_turn(session, perceived)
         # Always the scene token, never the session id: a session id is
         # accepted as a bearer token, so echoing one into every response

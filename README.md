@@ -52,7 +52,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 413 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 432 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -74,6 +74,11 @@ text and a warning on stderr:
 ```bash
 export OPENAI_API_KEY=...     # ANTHROPIC_API_KEY, GEMINI_API_KEY etc. are also detected
 ```
+
+Name a model with `--model` and the key for it is checked *before* the story opens, so a
+key that was never set is one sentence rather than a provider traceback several turns in.
+A local server usually ignores the key's value but its client still insists on one — set
+it to any string at all.
 
 **On Windows / PowerShell**, the environment variable is set differently, and the
 `fabula-*` console scripts only exist if `pip install` ran *after* they were added and
@@ -100,6 +105,11 @@ python -m fabula.cli worlds/ashgrove the_dinner
 
 You are Elena, in the kitchen with your brother Tomás. Your sister Maria is in the
 study. Tomás is sitting on something he does not want Maria to hear.
+
+The scene says its first line before you have to: a story that opens on a bare prompt is
+a text box, with a room that has a name and nothing in it until somebody thinks to type
+`/look`. And when nobody is there to answer you, the room answers — a player alone used
+to speak into "No one answers." and nothing else, which is not a story.
 
 ```
 Elena> Tomás, you've been strange all evening.
@@ -256,9 +266,9 @@ player lines:
 
 | scene | calls | one at a time | together | |
 |---|---|---|---|---|
-| `ashgrove/the_dinner` (2 agents, split rooms) | 16 | 4.8s | 3.9s | 1.2× |
-| `ashgrove/the_reckoning` (2 agents, one room) | 36 | 10.8s | 7.6s | 1.4× |
-| `winterlight/the_manifest` (4 agents, one room) | 51 | 15.3s | 9.4s | 1.6× |
+| `ashgrove/the_dinner` (2 agents, split rooms) | 24 | 7.0s | 5.1s | 1.4× |
+| `ashgrove/the_reckoning` (2 agents, one room) | 37 | 10.8s | 7.6s | 1.4× |
+| `winterlight/the_manifest` (4 agents, one room) | 52 | 15.4s | 9.4s | 1.6× |
 
 The win scales with how many characters are in the room with you, which is the case that
 was worst. What is left is the part that cannot be parallel: each character has to hear
@@ -271,6 +281,19 @@ the turn's own thread, in cast order, so a parallel turn tells the same story as
 sequential one and can still be thrown away whole by `/again`. There is a test that plays
 the same scene both ways and compares every event, belief and relationship, and another
 that fails if anything writes to the store from a worker thread.
+
+### When the model does not answer
+
+Everything past the model boundary is somebody else's machine: a key that was never set,
+a rate limit, a laptop that went to sleep. None of it is a bug in the story, and none of
+it costs you the story.
+
+A take that fails is thrown away whole and the scene is left exactly where it stood —
+the same savepoint `/again` uses, because half a turn is the worst outcome available:
+a model that failed on the third of five characters would otherwise leave two of them
+having heard something the others never will, permanently, in the file. The terminal says
+so in a sentence and hands the prompt back; the service answers `502` and the session
+stays open on the same scene. Retype the line and play on.
 
 ### Point it at your own model
 

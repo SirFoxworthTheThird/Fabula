@@ -101,11 +101,13 @@ def test_they_walk_in_already_believing_something(fake_llm):
     assert "What you already believed" in context
 
 
-def test_the_new_scene_starts_with_its_own_empty_log(fake_llm):
-    """Events are per scene; only the characters carry."""
+def test_the_new_scene_starts_with_a_log_of_its_own(fake_llm):
+    """Events are per scene; only the characters carry. The new scene's
+    log holds nothing but its own opening line."""
     second = a_reckoning(fake_llm, maria_stays=True).go_on()
 
-    assert second.store.get_events("the_morning_after") == []
+    opened = second.store.get_events("the_morning_after")
+    assert [e.kind for e in opened] == ["narration"]
     assert second.store.get_events("the_reckoning")  # the old one is still there
 
 

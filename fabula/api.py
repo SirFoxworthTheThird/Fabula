@@ -27,7 +27,12 @@ from starlette.concurrency import run_in_threadpool
 from fabula.env import load_env
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
-from fabula.llm import LiteLLMClient, LLMClient
+from fabula.llm import (
+    LiteLLMClient,
+    LLMClient,
+    ModelUnavailable,
+    missing_credentials,
+)
 from fabula.models import ProjectedEvent
 from fabula.openai_shim import add_openai_shim
 from fabula.reveal import build_reveal, render
@@ -329,7 +334,13 @@ def create_app(
         """Run one blocking engine operation and fan its POV out to
         anyone streaming."""
         entry = get_live(session_id)
-        perceived = await run_in_threadpool(operation, entry.session)
+        try:
+            perceived = await run_in_threadpool(operation, entry.session)
+        except ModelUnavailable as failure:
+            # The take was rolled back, so the scene is exactly where it
+            # was and the client can send the same line again. 502: the
+            # thing upstream of us failed, not the request.
+            raise HTTPException(status_code=502, detail=f"the model did not answer: {failure}")
         events = to_stream_events(entry.session, perceived)
         entry.publish(events)
         return events
@@ -578,6 +589,10 @@ def serve(
         import uvicorn
     except ImportError:  # pragma: no cover - depends on the install
         raise SystemExit("serving needs uvicorn: pip install uvicorn")
+    if model:
+        unreachable = missing_credentials(model, api_base)
+        if unreachable:
+            raise SystemExit(f"fabula-serve: {unreachable}")
     llm = LiteLLMClient(model=model, api_base=api_base) if model else None
     uvicorn.run(create_app(worlds_root, llm=llm, workers=workers), host=host, port=port)
 

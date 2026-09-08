@@ -167,13 +167,25 @@ def test_a_retake_leaves_no_tombstone_in_the_log(fake_llm):
     was never committed. Nothing is marked deleted, because nothing was
     ever there."""
     session = Session.open(ASHGROVE, "the_reckoning", llm=VaryingLLM())
+    # The scene's own opening line comes before the first turn, so it is
+    # not part of any take and is not what this is about.
+    opening = {e.content for e in session.store.get_events(session.scene.id)}
     session.say("Tomás?")
+    # Only what the model wrote: the player's line is retyped identically
+    # by every take, so it is in the log either way.
+    rolled = [
+        e.content
+        for e in session.store.get_events(session.scene.id)
+        if e.content not in opening and e.content.startswith("take")
+    ]
     session.regenerate()
     session.regenerate()
 
     events = session.store.get_events(session.scene.id)
-    assert [e.seq for e in events] == list(range(1, len(events) + 1))
-    assert not any("take 1" == e.content for e in events)  # the first roll is gone
+    kept = {e.content for e in events}
+    assert rolled, "the first take wrote something to throw away"
+    assert not any(content in kept for content in rolled)  # the first roll is gone
+    assert [e.seq for e in events] == list(range(1, len(events) + 1))  # and left no gap
 
 
 def test_the_last_turn_reaches_disk(tmp_path, fake_llm):
