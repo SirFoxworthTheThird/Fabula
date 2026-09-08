@@ -83,8 +83,11 @@ def test_skip_is_committed_to_the_log_with_an_explicit_duration(scenario, store)
 
     skip = appended[0]
     assert skip.kind == "time_skip"
-    assert skip.metadata["minutes"] == 20
-    assert skip.story_time == before + timedelta(minutes=20)
+    # 30, Maria's, not 20, Tomás's: he is standing in the kitchen with
+    # the player, so resolution would decline his intention and a skip to
+    # it would land on nothing.
+    assert skip.metadata["minutes"] == 30
+    assert skip.story_time == before + timedelta(minutes=30)
 
 
 def move(director, character, destination):

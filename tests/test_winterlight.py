@@ -287,6 +287,16 @@ def test_every_authored_reference_resolves(world_dir):
             assert fact_id in world.facts, f"{character.id} protects {fact_id}"
         for intention in character.intentions:
             assert intention.location_id in world.rooms, intention.id
+        # Somebody put under with nothing to wake them stays under for the
+        # rest of the scene, perceiving nothing — almost never what an
+        # author meant, and silent when it is wrong.
+        sleeps = [i for i in character.intentions if i.state == "asleep"]
+        wakes = [i for i in character.intentions if i.state == "awake"]
+        for turning_in in sleeps:
+            assert any(w.ready_after_minutes > turning_in.ready_after_minutes for w in wakes), (
+                f"{character.id} falls asleep at {turning_in.ready_after_minutes}m "
+                "and nothing wakes them"
+            )
         for goal in character.goals:
             # A goal naming a fact that does not exist stays open forever
             # and raises nobody's bid, silently.

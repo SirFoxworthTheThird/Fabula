@@ -37,7 +37,7 @@ from fabula.persistence import (
     encode_belief,
     witnessed_withholding,
 )
-from fabula.models import Bid, Character, Event, Pressure
+from fabula.models import Bid, Character, Event, Intention, Pressure
 from fabula.narrator import NARRATOR_ID, Narrator
 from fabula.pressures import scene_state, select_pressure
 from fabula.world import World, resolve_perception
@@ -278,7 +278,7 @@ class Director:
         """
         all_events = self.store.get_events(self.scene.id)
         if minutes is None:
-            minutes = derive_skip_minutes(self.characters, all_events)
+            minutes = derive_skip_minutes(self.characters, all_events, blocked=self.unreachable)
         if minutes is None or minutes <= 0:
             return []
 
@@ -350,7 +350,45 @@ class Director:
                     detail_level="summary",
                 )
                 appended.append(self.store.append_event(summary))
+                if intention.state:
+                    # A state is a fact about them, not a coarse stub of
+                    # something they did, so it is logged in full and
+                    # separately — `was_asleep` reads these, and a summary
+                    # that later materialises must not change the answer.
+                    appended.append(
+                        self.store.append_event(
+                            self.build_event(
+                                "state_change",
+                                character.id,
+                                intention.location_id,
+                                f"{character.name} is {intention.state}.",
+                                metadata={
+                                    "character_id": character.id,
+                                    "state": intention.state,
+                                    "intention_id": intention.id,
+                                },
+                            )
+                        )
+                    )
         return appended
+
+    def unreachable(self, character: Character, intention: Intention) -> bool:
+        """Would resolution refuse this intention as things stand?
+
+        The same two conditions `_resolve_offscreen` applies, so the skip
+        derivation cannot propose a jump that resolution will decline.
+        """
+        user = next((c for c in self.characters.values() if c.is_user), None)
+        if user is not None and self.current_location(character) == self.current_location(user):
+            return True
+        return bool(intention.private and self._others_present(intention.location_id, character.id))
+
+    def pending_skip(self) -> int | None:
+        """How long the next skip would be, counting only what could
+        actually come of it."""
+        return derive_skip_minutes(
+            self.characters, self.store.get_events(self.scene.id), blocked=self.unreachable
+        )
 
     def _others_present(self, location_id: str, actor_id: str) -> bool:
         """Is anyone but the actor standing in this room right now?"""
@@ -424,6 +462,9 @@ class Director:
         actor_id = effect.get("actor")
         if effect["kind"] == "arrival" and actor_id in self.waiting:
             self.admit(actor_id)
+        metadata = {"pressure_id": pressure.id}
+        if effect["kind"] == "state_change":
+            metadata |= {"character_id": actor_id, "state": effect["state"]}
         content = self.narrator.render_pressure(pressure, location_id, self.world)
         return self.build_event(
             effect["kind"],
@@ -431,7 +472,7 @@ class Director:
             location_id,
             content,
             audibility=effect.get("audibility", "room"),
-            metadata={"pressure_id": pressure.id},
+            metadata=metadata,
         )
 
     def admit(self, character_id: str) -> Character:

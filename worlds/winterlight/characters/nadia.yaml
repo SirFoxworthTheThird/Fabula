@@ -56,5 +56,19 @@ intentions:
     description: goes back through her own book to find the date the column changed
     location_id: bunkroom
     ready_after_minutes: 15
+  # Turning in and waking are authored moments, not something the engine
+  # decides for somebody. Asleep in a room is not the same as being in
+  # it: she perceives nothing while she is under, and a jump in time
+  # reaches her as a gap rather than as hours she felt.
+  - id: turns_in
+    description: gives up on the book, pulls the curtain across the berth and turns in
+    location_id: bunkroom
+    ready_after_minutes: 90
+    state: asleep
+  - id: wakes_for_the_obs
+    description: surfaces for the three o'clock observations, still dressed
+    location_id: bunkroom
+    ready_after_minutes: 210
+    state: awake
 location_id: mess
 is_user: false

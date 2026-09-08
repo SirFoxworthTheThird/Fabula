@@ -132,7 +132,10 @@ def test_moving_to_a_room_that_does_not_exist_is_rejected(client, session_id):
 def test_the_next_skip_is_reported_so_a_client_can_ask_first(client, session_id):
     state = client.get(f"/sessions/{session_id}").json()
 
-    assert state["pending_skip_minutes"] == 20  # derived from intentions, not arbitrary
+    # Derived from intentions, not arbitrary — and only from those that
+    # could actually resolve. Tomás's are private and he is in the room
+    # with the player, so the next reachable moment is Maria's.
+    assert state["pending_skip_minutes"] == 30
 
 
 def test_a_large_skip_is_refused_without_consent_in_the_request(client, session_id):

@@ -75,6 +75,10 @@ class Intention(BaseModel):
     # the room to be empty rather than playing out in front of whoever
     # happens to be standing there.
     private: bool = False
+    # An intention that also changes what state the character is in.
+    # Sleep is the one that exists: turning in and waking are authored
+    # moments, not something the engine decides for somebody.
+    state: Literal["asleep", "awake"] | None = None
 
 
 class Character(BaseModel):

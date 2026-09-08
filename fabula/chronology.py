@@ -11,6 +11,8 @@ characters intend to do; the prose about it is the narrator's job.
 """
 from __future__ import annotations
 
+from typing import Callable
+
 from fabula.models import Character, Event, Intention
 from fabula.world import DURATION_TEMPLATES, TIME_SKIP_TEMPLATES, Phrasing
 
@@ -30,19 +32,32 @@ def pending_intentions(character: Character, events: list[Event]) -> list[Intent
     return [i for i in character.intentions if i.id not in resolved]
 
 
-def derive_skip_minutes(characters: dict[str, Character], events: list[Event]) -> int | None:
+def derive_skip_minutes(
+    characters: dict[str, Character],
+    events: list[Event],
+    blocked: Callable[[Character, Intention], bool] | None = None,
+) -> int | None:
     """The next moment something worth discovering is ready.
 
     Deliberately the *minimum* pending readiness across the cast: skipping
     further would step over a moment someone was about to reach, and
     skipping to nothing is how you get an arbitrary "three hours pass"
     that lands on an empty room.
+
+    `blocked` says which pending intentions resolution would refuse right
+    now — a private one in an occupied room, or one belonging to somebody
+    standing in front of the player. Without it the two disagree: the
+    derivation proposes a skip that resolution then declines, the
+    intention stays pending, and the next skip derives to the same number
+    again. `/wait` in `winterlight` burned fifty minutes of story time a
+    turn, forever, resolving nothing.
     """
     ready_at = [
         intention.ready_after_minutes
         for character in characters.values()
         if not character.is_user
         for intention in pending_intentions(character, events)
+        if not (blocked and blocked(character, intention))
     ]
     return min(ready_at) if ready_at else None
 

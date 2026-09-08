@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 304 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 315 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -505,6 +505,39 @@ on guarding it — the same rule that decides whether a fact was really spoken. 
 written as prose alone never closes and never moves a bid, which is honest: nothing here
 can read "sort out grandmother's belongings fairly" and judge it done.
 
+An `intention` can also change what state a character is in, which today means sleep:
+
+```yaml
+intentions:
+  - id: turns_in
+    description: pulls the curtain across the berth and turns in
+    location_id: bunkroom
+    ready_after_minutes: 90
+    state: asleep
+  - id: wakes_for_the_obs
+    ready_after_minutes: 210
+    state: awake
+```
+
+**Asleep in a room is not the same as being in it.** A sleeper perceives nothing — not
+into their context, not into their beliefs — and does not bid, because asleep is absent
+rather than quiet. Their own state is still theirs to know, so going under and coming back
+up are both felt. Sleeping through something said in front of you is the sharpest
+asymmetry here, and it costs nothing to allow: the filter only ever *removes* perception.
+
+A jump in time still reaches them, which is the point — this is what spec §8 means by
+elapsed time being perceived non-uniformly. One skip, two experiences of it:
+
+```
+Maria (asleep) : (a gap — you surface to find 2 hours gone, unfelt)
+Elena (awake)  : (2 hours pass, and you feel every one of them)
+```
+
+Turning in is an authored moment, never something the engine decides for somebody — an
+intention or a `state_change` pressure. The world guards catch a character put under with
+nothing to wake them, which would otherwise leave them perceiving nothing for the rest of
+the scene, in silence.
+
 A character with high `reticence` who is pressed on something in `protects` bids to
 **withhold** — the narrator renders them visibly not answering, which the room can see.
 That matters because a reticent character who merely loses the bid reads exactly like
@@ -677,6 +710,10 @@ The suite is the regression net *and* the clearest description of the product:
 
 ## Known rough edges
 
+* Nothing wakes a sleeper on noise. Waking is an authored moment — an intention that
+  comes due, or a pressure — so a shout next to somebody who has turned in does not rouse
+  them. That would want an audibility threshold on the perception path, and it is a
+  feature rather than an oversight until somebody asks for it.
 * CJK retrieval is a heuristic, not segmentation. A Japanese or Chinese token gets
   character bigrams, which finds real overlap between two lines about the same thing but
   is nobody's idea of a tokenizer. A language with more than two plural forms (Russian

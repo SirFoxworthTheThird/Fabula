@@ -265,7 +265,7 @@ class Session:
     def pending_skip(self) -> int | None:
         """How long the next derived skip would be, so a client can ask
         the user before spending their character's time."""
-        return derive_skip_minutes(self.characters, self.store.get_events(self.scene.id))
+        return self.director.pending_skip()
 
     def wait(self, consent: Callable[[int], bool] | None = None) -> list[ProjectedEvent]:
         return self._play(lambda: self.pov(self.director.advance_time(consent=consent)))

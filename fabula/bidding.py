@@ -6,6 +6,7 @@ triggering event is never even asked.
 """
 from __future__ import annotations
 
+from fabula.chronology import was_asleep
 from fabula.db import EventStore
 from fabula.llm import LLMClient
 from fabula.memory import ContextBuilder, location_at_seq
@@ -76,6 +77,8 @@ def prefilter_candidates(
     for character in characters.values():
         if character.is_user or character.id == event.actor_id:
             continue
+        if was_asleep(character.id, events, event.seq):
+            continue  # asleep is not quiet, it is absent
         location = location_at_seq(character.id, character.location_id, events, event.seq + 1)
         level = resolve_perception(event, character.id, location, world)
         if level == "none":

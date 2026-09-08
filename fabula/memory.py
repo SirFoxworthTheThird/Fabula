@@ -18,7 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from fabula.chronology import render_time_skip
+from fabula.chronology import render_time_skip, was_asleep
 from fabula.db import EventStore
 from fabula.llm import LLMClient
 from fabula.models import Belief, Character, Event, ProjectedEvent
@@ -100,7 +100,23 @@ def project(
     here and never reaches anything downstream."""
     start_location = initial_location if initial_location is not None else character.location_id
     projected: list[ProjectedEvent] = []
+    asleep = False
     for event in events:
+        own_state = (
+            event.kind == "state_change"
+            and event.metadata.get("character_id") == character.id
+        )
+        if own_state:
+            # Their own state is theirs to know, waking included, so this
+            # is decided before the filter below rather than after it.
+            asleep = event.metadata.get("state") == "asleep"
+        elif asleep and event.kind != "time_skip":
+            # Asleep in the room is not the same as being in the room.
+            # Missing what was said while you were lying right there is
+            # the sharpest asymmetry this engine has, and it costs
+            # nothing to allow: this only ever removes perception.
+            continue
+
         char_location = location_at_seq(character.id, start_location, events, event.seq)
         level = resolve_perception(event, character.id, char_location, world)
         if level == "none":
@@ -433,11 +449,12 @@ class ContextBuilder:
         last_seq = events[-1].seq if events else 0
         here = location_at_seq(character.id, character.location_id, events, last_seq + 1)
         others = co_present(character, self.characters, events)
-        company = (
-            "With you: " + ", ".join(sorted(other.name for other in others)) + "."
-            if others
-            else "You are alone."
+        last = events[-1].seq + 1 if events else 1
+        names = sorted(
+            other.name + (" (asleep)" if was_asleep(other.id, events, last) else "")
+            for other in others
         )
+        company = "With you: " + ", ".join(names) + "." if names else "You are alone."
         return f"(Right now: you are in {self.world.room_name(here)}. {company})"
 
     def for_character(self, character: Character, events: list[Event]) -> str:
