@@ -111,6 +111,21 @@ def evaluate_trigger(trigger: dict, state: SceneState, facts: dict[str, Fact]) -
     return True
 
 
+def has_ended(end_condition: dict, state: SceneState, facts: dict[str, Fact]) -> bool:
+    """Has the scene reached its declared end?
+
+    Deliberately the same evaluator a pressure trigger uses. An author
+    writing "this ends when the music box is finally said out loud"
+    should not need a second condition language to say it, and the
+    vocabulary is already covered by tests.
+
+    An arc without an end condition is just a sandbox that escalates.
+    """
+    if not end_condition:
+        return False
+    return evaluate_trigger(end_condition, state, facts)
+
+
 def is_eligible(pressure: Pressure, state: SceneState, facts: dict[str, Fact]) -> bool:
     fires = state.fires.get(pressure.id, [])
     if len(fires) >= pressure.max_fires:

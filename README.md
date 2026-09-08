@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 97 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 164 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -94,6 +94,9 @@ Elena> Tomás, you've been strange all evening.
 Pass `--db scene.sqlite` to keep a scene on disk. Characters are durable: run it again
 against the same file and they arrive remembering the last one.
 
+`the_reckoning` is the same three people with nowhere to hide — one room, and an ending
+the director escalates toward. Swap the scene name to play it.
+
 ### Playtest a scene
 
 Whether a scene *reads well* is a judgment a person has to make, but it shouldn't need
@@ -116,7 +119,8 @@ exactly like a character saying nothing, and a scene where the secret held reads
 the inside — like a scene with no secret in it. So the payoff comes afterwards: `/reveal`
 in the terminal, or **What I missed** in the browser, shows what happened out of your
 sight, what you half-heard set against what it actually was, and who ended the scene
-knowing the secret.
+knowing the secret. In a scene with an `end_condition` you are offered it at the moment
+the scene reaches its end, rather than having to remember it exists.
 
 It is the one part of the engine that deliberately steps outside a point of view, which
 is why it lives in its own module rather than on `Session` (where everything is POV with
@@ -297,6 +301,24 @@ thunder, a stranger — with no stake in the world.
 Scene `mode` changes how pressures are *selected*, not what they are: `arc` escalates as
 the scene runs on, `sandbox` stays out of the way until the characters go quiet and then
 reseeds tension.
+
+An arc can also say what it is escalating *toward*. `end_condition` is written in the
+same vocabulary as a pressure trigger — deliberately, because an author saying "this is
+over once the music box is finally said out loud" should not need a second condition
+language to say it:
+
+```yaml
+mode: arc
+end_condition: {fact_spoken: music_box}
+```
+
+The ending is **advisory**. The engine reports that the thing the author was building
+toward has happened; it does not lock the scene, refuse input, or stop the cast. The
+terminal prints a line and the browser marks **What I missed**, and if you want to sit
+in the kitchen afterwards and ask how long he has known, you can. `the_dinner` has no
+`end_condition` at all — a sandbox is an evening, not a story with a shape — while
+`the_reckoning` is the same house and the same three people with all of them at the
+table and nowhere to slip off to.
 
 ## HTTP API
 

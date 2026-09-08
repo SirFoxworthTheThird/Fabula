@@ -21,6 +21,7 @@ from fabula.loader import Scene, load_pressures, load_scenario
 from fabula.models import Character, Event, ProjectedEvent
 from fabula.narrator import Narrator
 from fabula.persistence import begin_scene
+from fabula.pressures import has_ended, scene_state
 from fabula.world import World
 
 
@@ -137,6 +138,21 @@ class Session:
             audibility="adjacent",
         )
         return self.pov(self.director.run_turn(arrival))
+
+    def ended(self) -> bool:
+        """Has this scene reached its declared end condition?
+
+        Advisory rather than enforced: the engine does not lock the scene,
+        it reports that the thing the author was building toward has
+        happened. What a client does with that — offer the reveal, roll
+        credits, keep going — is the client's call.
+        """
+        events = self.store.get_events(self.scene.id)
+        return has_ended(
+            self.scene.end_condition,
+            scene_state(events, self.characters),
+            self.world.facts,
+        )
 
     def pending_skip(self) -> int | None:
         """How long the next derived skip would be, so a client can ask

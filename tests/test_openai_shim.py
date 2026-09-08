@@ -34,9 +34,12 @@ def chat(client, messages, token=TOKEN, **extra):
 def test_models_lists_every_scene_as_a_model(client):
     body = client.get("/v1/models").json()
 
+    ids = [model["id"] for model in body["data"]]
+
     assert body["object"] == "list"
-    assert [model["id"] for model in body["data"]] == [TOKEN]
-    assert body["data"][0]["owned_by"] == "fabula"
+    assert TOKEN in ids
+    assert "ashgrove/the_reckoning" in ids  # every scene, not just the first
+    assert all(model["owned_by"] == "fabula" for model in body["data"])
 
 
 def test_a_completion_has_the_openai_shape(client):

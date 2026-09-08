@@ -1,0 +1,20 @@
+# A bounded arc, where the dinner is a sandbox. Same house, same three
+# people, same secret — but this one is over the moment the music box is
+# finally said out loud, and the director escalates toward that.
+id: the_reckoning
+world: ashgrove
+mode: arc
+cast:
+  - tomas
+  - maria
+  - elena
+starting_positions:
+  tomas: kitchen
+  maria: kitchen
+  elena: kitchen
+# All three in one room from the start: nobody can slip out of earshot,
+# and Tomás has to hold it with his sister at the table.
+end_condition:
+  fact_spoken: music_box
+turn_budget: 6
+max_consecutive_agent_turns: 3

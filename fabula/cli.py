@@ -92,7 +92,12 @@ def run(
             # A reveal is a block, not a note; do not indent it into a line.
             print(outcome.message if "\n" in outcome.message else f"  {outcome.message}")
         _show(_without_own_echo(outcome.perceived, you), characters)
-        if outcome.message or outcome.perceived:
+        if outcome.ended:
+            print(
+                f"\n  — {session.scene.id} has reached its end. "
+                "/reveal to see what you could not, or keep talking.\n"
+            )
+        elif outcome.message or outcome.perceived:
             print()
 
 

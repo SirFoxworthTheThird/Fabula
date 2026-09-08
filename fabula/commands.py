@@ -20,9 +20,22 @@ class Outcome:
     # A note from the client to the player — never story content.
     message: str | None = None
     quit: bool = False
+    # The scene reached its declared end on this action.
+    ended: bool = False
 
 
 def run_command(
+    session: Session, line: str, consent: Callable[[int], bool] | None = None
+) -> Outcome:
+    was_over = session.ended()
+    outcome = _dispatch(session, line, consent)
+    # Report the ending on the action that caused it, once. A scene that
+    # was already over does not keep announcing itself.
+    outcome.ended = not was_over and session.ended()
+    return outcome
+
+
+def _dispatch(
     session: Session, line: str, consent: Callable[[int], bool] | None = None
 ) -> Outcome:
     line = line.strip()

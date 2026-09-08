@@ -113,6 +113,19 @@
   }
   .line.skip::before, .line.skip::after { content: "· · ·"; display: block; opacity: .5; }
 
+  /* A note from the client that the scene has reached its declared end.
+     Nobody in the room said this, so it must not look like they did. */
+  .line.ending {
+    text-align: center;
+    color: var(--accent);
+    font-family: var(--sans);
+    font-size: 13px;
+    border-top: 1px solid var(--edge);
+    padding-top: 16px;
+    margin: 22px 0;
+  }
+  button.lit { color: var(--accent); border-color: var(--accent); }
+
   /* The reveal steps outside the story, and has to look like it does. */
   .reveal {
     border: 1px solid var(--accent);
@@ -330,9 +343,11 @@ function render(event) {
 }
 
 let state = {};
+let announcedEnd = false;
 
 async function refresh() {
   state = await api.state(sessionId);
+  announceEnd();
   el("where").textContent = state.location_name;
   el("who").innerHTML = state.present.length
     ? "with " + state.present.map(p => `<em>${p.name}</em>`).join(", ")
@@ -357,6 +372,22 @@ async function refresh() {
   const pending = state.pending_skip_minutes;
   waitButton.textContent = pending ? `Let ${describe(pending)} pass` : "Let time pass";
   waitButton.disabled = pending === null;
+}
+
+// The end condition is advisory: the scene is over in the authored sense,
+// but nothing is locked. Say so once, point at the reveal, and let anyone
+// who wants to keep talking keep talking.
+function announceEnd() {
+  if (!state.ended || announcedEnd) return;
+  announcedEnd = true;
+  const line = document.createElement("p");
+  line.className = "line ending";
+  line.textContent =
+    `${state.scene.replace(/_/g, " ")} has reached its end. ` +
+    "“What I missed” shows what you could not — or keep talking.";
+  el("scroll").appendChild(line);
+  scroll();
+  el("reveal").classList.add("lit");
 }
 
 function describe(minutes) {

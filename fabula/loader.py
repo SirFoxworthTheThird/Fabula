@@ -27,7 +27,10 @@ class Scene(BaseModel):
     start_time: datetime = datetime(2024, 1, 1, 19, 0, 0)
     turn_budget: int = 8
     max_consecutive_agent_turns: int = 4
-    end_condition: str | None = None
+    # What has to become true for the scene to be over. Same condition
+    # vocabulary as a pressure trigger — one language for everything an
+    # author declares about scene state. Empty means the scene just runs.
+    end_condition: dict = Field(default_factory=dict)
 
 
 def load_world(world_dir: Path) -> World:

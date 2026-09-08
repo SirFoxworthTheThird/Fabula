@@ -65,6 +65,8 @@ class SceneState(BaseModel):
     story_time: datetime
     cast: list[str]
     pending_skip_minutes: int | None
+    # Whether the scene has reached its declared end condition.
+    ended: bool
 
 
 class MissedOut(BaseModel):
@@ -240,6 +242,7 @@ def create_app(
             story_time=events[-1].story_time if events else session.scene.start_time,
             cast=list(session.scene.cast),
             pending_skip_minutes=session.pending_skip(),
+            ended=session.ended(),
         )
 
     async def act(session_id: str, operation) -> list[StreamEvent]:
