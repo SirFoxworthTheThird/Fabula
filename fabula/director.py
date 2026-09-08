@@ -285,7 +285,7 @@ class Director:
             "time_skip",
             None,
             user_location,
-            f"{describe_duration(minutes)} pass.",
+            f"{describe_duration(minutes, self.world.phrasing)} pass.",
             audibility="building",
             metadata={"minutes": minutes},
             story_time=previous_time + timedelta(minutes=minutes),
@@ -382,8 +382,17 @@ class Director:
         return appended
 
     def unmaterialized_here(self, observer: Character) -> list[Event]:
-        """Coarse off-screen events waiting in the observer's room."""
+        """Coarse off-screen events waiting in the observer's room.
+
+        An empty log is a real case, not an edge one: looking around is
+        the first thing many players do, and before that there is nothing
+        to look past. This used to index the last event of an empty list
+        and crash — in every world, since M4 — because every test spoke
+        before it looked.
+        """
         all_events = self.store.get_events(self.scene.id)
+        if not all_events:
+            return []
         location = location_at_seq(
             observer.id, observer.location_id, all_events, all_events[-1].seq + 1
         )
@@ -428,7 +437,9 @@ class Director:
 
         for character in self.characters.values():
             projected = self.contexts.project(character, all_events)
-            record_rehearsals(character, projected, self.store)
+            record_rehearsals(
+                character, projected, self.store, self.world.phrasing.stopwords
+            )
             if not projected or projected[-1].event.seq != appended:
                 # They did not perceive the event that was just appended,
                 # so there is nothing new for them to take in. Without

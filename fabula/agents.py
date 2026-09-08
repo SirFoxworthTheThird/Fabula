@@ -7,6 +7,7 @@ import unicodedata
 from fabula.llm import LLMClient
 from fabula.memory import ContextBuilder, co_present
 from fabula.models import Character, Event
+from fabula.world import write_in
 
 
 def _fold(text: str) -> str:
@@ -88,6 +89,7 @@ def _system_prompt(
         "reveal, reference, or act on anything outside it, even if it would make a "
         "better line — you do not have access to it."
         f"{_guarded_subjects(character, contexts, events)}"
+        f"{write_in(contexts.world.language)}"
     )
 
 

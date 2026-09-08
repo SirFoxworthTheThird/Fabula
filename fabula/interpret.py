@@ -32,7 +32,7 @@ from fabula.db import EventStore
 from fabula.llm import LLMClient
 from fabula.models import Character, ProjectedEvent
 from fabula.summaries import span_key
-from fabula.world import World, mentions_fact
+from fabula.world import World, mentions_fact, write_in
 
 # How much run-up the reading gets. A line alone is not interpretable —
 # "he said nothing" means one thing after small talk and another after
@@ -86,7 +86,7 @@ def interpret(
     if stored is not None:
         return stored
 
-    text = _read(character, window, llm).strip()
+    text = _read(character, window, llm, world.language).strip()
     if not text or invented_fact(text, window, character, world, store):
         # Store the refusal too, so a bad reading is not paid for twice.
         store.put_interpretation(character.id, key, "")
@@ -96,7 +96,9 @@ def interpret(
     return text
 
 
-def _read(character: Character, window: list[ProjectedEvent], llm: LLMClient) -> str:
+def _read(
+    character: Character, window: list[ProjectedEvent], llm: LLMClient, language: str = "en"
+) -> str:
     lines = "\n".join(f"- {p.perceived_content}" for p in window)
     unclear = any(p.perception == "degraded" for p in window)
     system = (
@@ -107,6 +109,7 @@ def _read(character: Character, window: list[ProjectedEvent], llm: LLMClient) ->
         "tense, naming what they now think is going on. Never add a fact that is not "
         "in the lines given, never resolve something unclear into something specific, "
         "and never write what anyone else is thinking."
+        + write_in(language)
     )
     prompt = (
         f"What {character.name} perceived, oldest first:\n{lines}\n\n"

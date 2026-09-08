@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Callable
 
 from fabula.chronology import describe_duration
 from fabula.commands import run_command
@@ -54,11 +55,20 @@ def _without_own_echo(
     return projected
 
 
-def _ask_consent(minutes: int) -> bool:
+def _consent_asker(session: Session) -> Callable[[int], bool]:
     """Large skips are the user's call — they are a character with agency,
-    and time is not something they should lose without noticing."""
-    answer = input(f"  Let {describe_duration(minutes)} pass? [y/N] ").strip().lower()
-    return answer in ("y", "yes")
+    and time is not something they should lose without noticing.
+
+    The duration is phrased by the world, so the question does not read
+    half in one language and half in another.
+    """
+
+    def ask(minutes: int) -> bool:
+        duration = describe_duration(minutes, session.world.phrasing)
+        question = session.world.phrasing.say("let_time_pass", duration=duration)
+        return input(f"  {question}").strip().lower() in ("y", "yes")
+
+    return ask
 
 
 def run(
@@ -76,13 +86,10 @@ def run(
     world, characters = session.world, session.characters
     you = session.user_character
 
+    say = world.phrasing.say
     print(f"--- {session.scene.id} ({session.scene.mode}) ---")
-    print(f"You are {you.name}, in {world.room_name(session.here())}.")
-    print(
-        "(/go <room>, /wait, /look, /again to replay the last moment, "
-        "/quit. /reveal spoils the scene when you are done. Anything else "
-        "you say aloud.)\n"
-    )
+    print(say("you_are", name=you.name, room=world.room_name(session.here())))
+    print(say("help") + "\n")
 
     while True:
         try:
@@ -90,20 +97,17 @@ def run(
         except EOFError:
             print()
             break
-        outcome = run_command(session, raw, consent=_ask_consent)
+        outcome = run_command(session, raw, consent=_consent_asker(session))
         if outcome.quit:
             break
         if outcome.replaced:
-            print("  — again —")
+            print(f"  {say('again')}")
         if outcome.message:
             # A reveal is a block, not a note; do not indent it into a line.
             print(outcome.message if "\n" in outcome.message else f"  {outcome.message}")
         _show(_without_own_echo(outcome.perceived, you), characters)
         if outcome.ended:
-            print(
-                f"\n  — {session.scene.id} has reached its end. "
-                "/reveal to see what you could not, or keep talking.\n"
-            )
+            print("\n  " + say("ended", scene=session.scene.id) + "\n")
         elif outcome.message or outcome.perceived:
             print()
 

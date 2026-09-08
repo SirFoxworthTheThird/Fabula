@@ -19,6 +19,7 @@ import json
 from fabula.db import EventStore
 from fabula.llm import LLMClient
 from fabula.models import Character, ProjectedEvent
+from fabula.world import write_in
 
 
 def span_key(character_id: str, span: list[ProjectedEvent]) -> str:
@@ -36,18 +37,21 @@ def get_or_create_summary(
     scene_id: str,
     store: EventStore,
     llm: LLMClient,
+    language: str = "en",
 ) -> str:
     key = span_key(character.id, span)
     stored = store.get_summary(character.id, scene_id, key)
     if stored is not None:
         return stored
 
-    text = _summarize(character, span, llm)
+    text = _summarize(character, span, llm, language)
     store.put_summary(character.id, scene_id, key, text)
     return text
 
 
-def _summarize(character: Character, span: list[ProjectedEvent], llm: LLMClient) -> str:
+def _summarize(
+    character: Character, span: list[ProjectedEvent], llm: LLMClient, language: str = "en"
+) -> str:
     lines = "\n".join(f"- {p.perceived_content}" for p in span)
     system = (
         f"You compress one character's memory. Everything you are given is what "
@@ -55,6 +59,7 @@ def _summarize(character: Character, span: list[ProjectedEvent], llm: LLMClient)
         "to them. Compress it into two or three sentences in the third person, "
         "preserving who did what. Never add a detail that is not in the lines given, "
         "and never resolve something they perceived as unclear into something specific."
+        + write_in(language)
     )
     prompt = f"What {character.name} perceived:\n{lines}\n\nCompress this."
     return llm.complete(system=system, prompt=prompt, key=f"summary:{character.id}")

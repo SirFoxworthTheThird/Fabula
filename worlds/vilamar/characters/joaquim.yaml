@@ -1,0 +1,44 @@
+id: joaquim
+name: "Joaquim"
+persona: >
+  Joaquim tem quarenta e dois anos e ficou com a casa quando o pai
+  morreu. Em Fevereiro vendeu o barco e a licença a um homem de Peniche,
+  e pagou dívidas que ninguém sabia que existiam. Disse à irmã que o
+  barco está em seco à espera de obras. Não é ganância nem vergonha do
+  dinheiro: é que foi o pai que construiu aquele barco, e dizê-lo em voz
+  alta torna aquilo definitivo. Cada semana que passa torna a conversa
+  pior.
+traits:
+  talkativeness: 0.45
+  reactivity:
+    o_barco: 0.9
+    acusado: 0.7
+  salience_bias:
+    utterance: 1.0
+    action: 0.9
+  reticence: 0.8
+goals:
+  - id: guardar_o_barco
+    description: Não falar do barco enquanto não houver maneira de o dizer
+    priority: 0.9
+protects:
+  - o_barco
+relationships:
+  teresa:
+    affinity: 0.4
+    trust: 0.3
+    note: A irmã mais velha. Repara em tudo, e não deixa cair nada.
+  ines:
+    affinity: 0.75
+    trust: 0.75
+    note: A sobrinha. A única a quem talvez conseguisse dizer.
+intentions:
+  - id: ver_os_papeis
+    description: >
+      tira uns papéis dobrados do bolso do casaco, lê-os outra vez e
+      volta a guardá-los
+    location_id: cozinha
+    ready_after_minutes: 20
+    private: true
+location_id: cozinha
+is_user: false

@@ -12,6 +12,7 @@ characters intend to do; the prose about it is the narrator's job.
 from __future__ import annotations
 
 from fabula.models import Character, Event, Intention
+from fabula.world import DURATION_TEMPLATES, TIME_SKIP_TEMPLATES, Phrasing
 
 LARGE_SKIP_MINUTES = 60  # beyond this, the user is asked before time moves
 
@@ -73,21 +74,37 @@ def was_asleep(character_id: str, events: list[Event], before_seq: int) -> bool:
     return asleep
 
 
-def describe_duration(minutes: int) -> str:
+def describe_duration(minutes: int, phrasing: Phrasing | None = None) -> str:
+    """How long that was, in the world's own words.
+
+    Singular and plural are separate templates because languages do not
+    agree on how many forms that needs. Two covers English, Portuguese
+    and most of Europe; a language with more (Russian has three) can only
+    pick the least wrong one here, which is a real limit of this shape
+    rather than something the author can work around.
+    """
+    templates = (phrasing.duration if phrasing else None) or DURATION_TEMPLATES
+
+    def form(key: str, n: int) -> str:
+        return (templates.get(key) or DURATION_TEMPLATES[key]).format(n=n)
+
     if minutes >= 60 and minutes % 60 == 0:
         hours = minutes // 60
-        return "an hour" if hours == 1 else f"{hours} hours"
+        return form("hour", 1) if hours == 1 else form("hours", hours)
     if minutes == 1:
-        return "a minute"
-    return f"{minutes} minutes"
+        return form("minute", 1)
+    return form("minutes", minutes)
 
 
-def render_time_skip(event: Event, character_id: str, events: list[Event]) -> str:
+def render_time_skip(
+    event: Event, character_id: str, events: list[Event], phrasing: Phrasing | None = None
+) -> str:
     """Elapsed time is perceived non-uniformly (spec §8). Someone asleep
     gets a discontinuity; someone awake and waiting lived every hour of
     it. This is a projection concern like any other, so it is a
-    deterministic template, never a model call."""
-    duration = describe_duration(int(event.metadata.get("minutes", 0)))
-    if was_asleep(character_id, events, event.seq):
-        return f"(a gap — you surface to find {duration} gone, unfelt)"
-    return f"({duration} pass, and you feel every one of them)"
+    deterministic template, never a model call — and the words are the
+    author's, since this lands in what a character perceived."""
+    duration = describe_duration(int(event.metadata.get("minutes", 0)), phrasing)
+    templates = (phrasing.time_skip if phrasing else None) or TIME_SKIP_TEMPLATES
+    key = "asleep" if was_asleep(character_id, events, event.seq) else "awake"
+    return (templates.get(key) or TIME_SKIP_TEMPLATES[key]).format(duration=duration)

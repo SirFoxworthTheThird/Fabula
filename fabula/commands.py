@@ -44,6 +44,7 @@ def run_command(
 def _dispatch(
     session: Session, line: str, consent: Callable[[int], bool] | None = None
 ) -> Outcome:
+    say = session.world.phrasing.say
     line = line.strip()
     if not line:
         return Outcome()
@@ -53,17 +54,17 @@ def _dispatch(
 
     if line == "/wait":
         if session.pending_skip() is None:
-            return Outcome(message="Nothing is pending; time stays where it is.")
+            return Outcome(message=say("nothing_pending"))
         perceived = session.wait(consent=consent)
         if not perceived:
-            return Outcome(message="Time stays where it is.")
+            return Outcome(message=say("time_stays"))
         return Outcome(perceived=perceived)
 
     if line in ("/again", "/retry"):
         # A director calling "again", not an undo of the story: the take
         # is thrown away and played once more from the same point.
         if not session.can_regenerate():
-            return Outcome(message="Nothing has been played yet.")
+            return Outcome(message=say("nothing_played"))
         return Outcome(perceived=session.regenerate(), replaced=True)
 
     if line == "/reveal":
@@ -76,7 +77,7 @@ def _dispatch(
     if line == "/look":
         perceived = session.look()
         if not perceived:
-            return Outcome(message="Nothing here has changed since you last looked.")
+            return Outcome(message=say("nothing_changed"))
         return Outcome(perceived=perceived)
 
     if line.startswith("/go "):
@@ -84,10 +85,10 @@ def _dispatch(
         try:
             perceived = session.move(destination)
         except ValueError:
-            return Outcome(message=f"There is no {destination} to go to.")
+            return Outcome(message=say("no_such_room", room=destination))
         return Outcome(
             perceived=perceived,
-            message=f"You are in {session.world.room_name(session.here())}.",
+            message=say("now_in", room=session.world.room_name(session.here())),
         )
 
     perceived = session.say(line)
@@ -96,5 +97,5 @@ def _dispatch(
         # have left, and the player only heard a door. But a client that
         # prints nothing is indistinguishable from one that crashed, so
         # say plainly that the silence is the answer.
-        return Outcome(perceived=perceived, message="No one answers.")
+        return Outcome(perceived=perceived, message=say("no_answer"))
     return Outcome(perceived=perceived)

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from fabula.llm import LLMClient
 from fabula.models import Bid, Character, Event, Pressure
-from fabula.world import World
+from fabula.world import World, write_in
 
 NARRATOR_ID = "__narrator__"
 
@@ -111,7 +111,7 @@ class Narrator:
             "spare prose. You are given the beat that should happen now. Render it as "
             "perceivable action in the given location — what someone standing there would "
             "see or hear. Never explain the beat's purpose, never name it as a device, and "
-            f"never state anything no one present could observe. {RESTRAINT}{self._hands_off()}"
+            f"never state anything no one present could observe. {RESTRAINT}{write_in(world.language)}{self._hands_off()}"
         )
         prompt = (
             f"Location: {world.room_name(location_id)}\n"
@@ -141,6 +141,7 @@ class Narrator:
             "a deflection, a busied hand, a look away, a change of subject. Never state "
             "or hint at what they are avoiding, never explain why, and never give them "
             "dialogue that answers the question."
+            + write_in(world.language)
         )
         prompt = (
             f"Character: {character.name}\n"
@@ -161,7 +162,7 @@ class Narrator:
             "spare prose. You are told, in one coarse line, something that happened in "
             "this room while no one was watching. Describe only the traces of it that "
             "are visible now to someone standing here — what was left, moved, or "
-            f"disturbed. Never narrate the act itself as if it were witnessed. {RESTRAINT}"
+            f"disturbed. Never narrate the act itself as if it were witnessed. {RESTRAINT}{write_in(world.language)}"
         )
         prompt = (
             f"Location: {world.room_name(summary_event.location_id)}\n"
@@ -193,6 +194,7 @@ class Narrator:
                 if self.protagonist
                 else ""
             )
+            + write_in(world.language)
         )
         prompt = f"Room: {world.room_name(location_id)}{grounding}\nDescribe the room."
         return self.llm.complete(system=system, prompt=prompt, key=f"place:{location_id}")
@@ -211,7 +213,7 @@ class Narrator:
             "spare prose, at most two sentences. Describe only perceivable action in the "
             "given location. Never narrate a character's private thoughts, never state "
             "information no one present could observe, never resolve dialogue for a "
-            f"character. {RESTRAINT}{self._hands_off()}"
+            f"character. {RESTRAINT}{write_in(world.language)}{self._hands_off()}"
         )
         prompt = (
             f"Location: {location_name}\n"

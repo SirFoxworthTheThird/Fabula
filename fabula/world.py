@@ -24,6 +24,76 @@ DEGRADED_TEMPLATES: dict[str, str] = {
     "state_change": "a faint change felt from {location}",
 }
 
+DURATION_TEMPLATES: dict[str, str] = {
+    "minute": "a minute",
+    "minutes": "{n} minutes",
+    "hour": "an hour",
+    "hours": "{n} hours",
+}
+
+TIME_SKIP_TEMPLATES: dict[str, str] = {
+    "awake": "({duration} pass, and you feel every one of them)",
+    "asleep": "(a gap — you surface to find {duration} gone, unfelt)",
+}
+
+# Filtered out of lexical overlap, which drives rehearsal and retrieval.
+# A default rather than a rule: a world in another language overrides it,
+# and getting it wrong makes overlap noisier, never wrong.
+STOPWORDS: frozenset[str] = frozenset(
+    """
+    about after again against because been before being between both could
+    does doing during each from have having here into itself just more most
+    only other over same should some such than that their them then there
+    these they this those through under until very were what when where
+    which while with would your yours
+    """.split()
+)
+
+
+# What a client says in its own voice, next to the story rather than in
+# it. Not story text, but it is read in the same breath — "You are in o
+# quintal" is the same bug as an English descriptor, one layer out. The
+# verbs (/go, /wait) are deliberately not here: those are commands, and a
+# command that changes name per world is a command nobody can document.
+CLIENT_TEMPLATES: dict[str, str] = {
+    "you_are": "You are {name}, in {room}.",
+    "now_in": "You are in {room}.",
+    "no_such_room": "There is no {room} to go to.",
+    "no_answer": "No one answers.",
+    "nothing_changed": "Nothing here has changed since you last looked.",
+    "nothing_pending": "Nothing is pending; time stays where it is.",
+    "time_stays": "Time stays where it is.",
+    "nothing_played": "Nothing has been played yet.",
+    "again": "— again —",
+    "ended": "— {scene} has reached its end. /reveal to see what you could not, or keep talking.",
+    "let_time_pass": "Let {duration} pass? [y/N] ",
+    "help": (
+        "(/go <room>, /wait, /look, /again to replay the last moment, /quit. "
+        "/reveal spoils the scene when you are done. Anything else you say aloud.)"
+    ),
+}
+
+
+class Phrasing(BaseModel):
+    """Every string the engine itself can put into a character's
+    perception, and the words it ignores when judging what echoes what.
+
+    Authored per world, because a scene in another language must not have
+    English injected into what somebody hears. The defaults are English
+    so the two worlds written before this existed keep working.
+    """
+
+    degraded: dict[str, str] = Field(default_factory=lambda: dict(DEGRADED_TEMPLATES))
+    duration: dict[str, str] = Field(default_factory=lambda: dict(DURATION_TEMPLATES))
+    time_skip: dict[str, str] = Field(default_factory=lambda: dict(TIME_SKIP_TEMPLATES))
+    stopwords: frozenset[str] = STOPWORDS
+    client: dict[str, str] = Field(default_factory=lambda: dict(CLIENT_TEMPLATES))
+
+    def say(self, key: str, **fields: object) -> str:
+        """One client line, in the world's words."""
+        template = self.client.get(key) or CLIENT_TEMPLATES[key]
+        return template.format(**fields)
+
 
 class Room(BaseModel):
     id: str
@@ -57,6 +127,10 @@ class World(BaseModel):
     id: str
     rooms: dict[str, Room]
     facts: dict[str, Fact] = Field(default_factory=dict)
+    # A BCP-47 tag, passed to the model so it writes in the world's
+    # language rather than defaulting to the language of the prompts.
+    language: str = "en"
+    phrasing: Phrasing = Field(default_factory=Phrasing)
 
     def distance(self, from_room: str, to_room: str) -> int:
         """BFS distance in rooms. 0 = same room, 1 = adjacent, etc."""
@@ -84,6 +158,21 @@ class World(BaseModel):
     def room_name(self, room_id: str) -> str:
         room = self.rooms.get(room_id)
         return room.name if room else room_id
+
+
+def write_in(language: str) -> str:
+    """A line for a system prompt naming the language to write in.
+
+    Empty for English, so the prompts the two English worlds have always
+    used are unchanged — every prompt-level rule here was measured on
+    them, and quietly adding a sentence would invalidate that.
+    """
+    if not language or language.split("-")[0].lower() == "en":
+        return ""
+    return (
+        f"\nEverything you write is read by someone inside the story, and this story "
+        f"is written in {language}. Write only in {language}."
+    )
 
 
 def _fold(text: str) -> str:
@@ -140,6 +229,12 @@ def resolve_perception(
 
 def degrade_content(event: Event, world: World) -> str:
     """Deterministic, template-based transformation of event content for
-    a character who only partially perceives it. Never a model call."""
-    template = DEGRADED_TEMPLATES.get(event.kind, "something happens nearby, unclear")
+    a character who only partially perceives it. Never a model call.
+
+    The templates come from the world, not from this module: what a
+    character half-hears is story text, and story text is the author's.
+    """
+    template = world.phrasing.degraded.get(event.kind) or DEGRADED_TEMPLATES.get(
+        event.kind, "something happens nearby, unclear"
+    )
     return template.format(location=world.room_name(event.location_id))

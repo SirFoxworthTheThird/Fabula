@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 246 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 279 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -324,18 +324,18 @@ skips, off-screen intentions), `pressures.py`, `persistence.py`, `summaries.py`,
 Model calls are spent on bids only for ambiguous candidates; obvious ones resolve by
 heuristic.
 
-## Two worlds
+## Three worlds
 
 Everything here was built against one world, and code fitted to one shape looks general
 until a second one arrives. So there are two, deliberately unalike:
 
-| | **ashgrove** | **winterlight** |
-|---|---|---|
-| | a house after a funeral | a station on the plateau, nine months in |
-| rooms | 2, mutually audible | 4 in a chain, one of them one-way |
-| cast | 2 agents + you | 3 agents + you |
-| secrets | one, one holder | **two, two holders, from each other** |
-| ends | when the music box is said | when *both* things are finally in the room |
+| | **ashgrove** | **winterlight** | **vilamar** |
+|---|---|---|---|
+| | a house after a funeral | a station on the plateau | a house by the sea, in May |
+| rooms | 2, mutually audible | 4 in a chain, one one-way | 2 |
+| cast | 2 agents + you | 3 agents + you | 2 agents + you |
+| secrets | one, one holder | **two, two holders, from each other** | one, one holder |
+| language | English | English | **Portuguese** |
 
 `winterlight` is the test. Ilse has known for eleven days that the first flight out has
 slipped by two months and has not said so — not from shame but as policy, which is a
@@ -394,6 +394,56 @@ than the actor perceived that event in full**. Half-hearing it through a wall do
 count either: the degraded descriptor carries no words, so a listener in the next room
 did not catch what the subject was. One world could not have surfaced this — it needs
 somewhere to be alone, and ashgrove's two rooms are always within earshot.
+
+## The engine speaks no language of its own
+
+`vilamar` is in Portuguese, and it exists to prove that. Everything the engine can put
+inside a character's perception used to be an English constant in Python — a Portuguese
+scene got English injected into it, and two of its systems silently stopped working
+altogether:
+
+```
+Portuguese  "Ele quebrou a caixa de música da avó"  ->  ['caixa', 'passado', 'quebrou', 'sica']
+Russian     "Он разбил музыкальную шкатулку"        ->  []
+Japanese    "彼は祖母のオルゴールを壊した"              ->  []
+```
+
+That is `_significant_words`, which drives rehearsal and retrieval. `[a-z0-9']+` on a
+lowercased string is an ASCII range: `música` came back as `sica`, and Cyrillic and
+Japanese came back as nothing at all, so a memory in those languages could never be
+rehearsed or retrieved. It is `\w` and `casefold` now. CJK has no spaces to tokenize on,
+so a token there gets character bigrams instead — not segmentation, and a real tokenizer
+would be better, but it is signal rather than none.
+
+Everything else moved out of Python and into `world.yaml`:
+
+```yaml
+language: pt-PT
+phrasing:
+  degraded:
+    utterance: "vozes abafadas vindas d{location}, palavras indistintas"
+  duration: {minute: "um minuto", minutes: "{n} minutos", ...}
+  time_skip:
+    awake: "({duration} a passar, e sente-se cada um deles)"
+  client:
+    now_in: "Estás n{room}."
+  stopwords: [ainda, aqui, como, depois, ...]
+```
+
+The line that separates what an author writes from what the engine does is **enumerable
+things versus unbounded meanings**. A fact has a name, so `keywords` work in any script —
+`mentions_fact` was already language-neutral and needed no change. A *meaning* — "someone
+arrived", "I told him last week" — has no list, in any language, so asking an author for
+one is the wrong shape. Anything of that kind belongs to a model, not a keyword file.
+
+Two more lines held on purpose. **Commands stay the same everywhere** (`/go`, `/wait`) —
+a verb that changes name per world is a verb nobody can document. And the English worlds
+are byte-identical: `write_in()` returns nothing for English, so the prompts every
+measurement in this project was taken against are untouched.
+
+Defaults merge per key, so an English world needs none of this and a world that restates
+one line keeps the rest. A half-translated world is an authoring error, caught by the
+world guards rather than at load — it should fail review, not refuse to start.
 
 ## Authoring
 
@@ -561,6 +611,11 @@ The suite is the regression net *and* the clearest description of the product:
 
 ## Known rough edges
 
+* CJK retrieval is a heuristic, not segmentation. A Japanese or Chinese token gets
+  character bigrams, which finds real overlap between two lines about the same thing but
+  is nobody's idea of a tokenizer. A language with more than two plural forms (Russian
+  has three) can also only pick the least wrong `duration` template — that is a limit of
+  the template shape, not something an author can work around.
 * `Room.adjacent` values are not read. The field maps a neighbour to how well sound
   crosses that doorway, which would let an author seal one; perception uses only the
   presence of an edge and the *event's* own audibility. Until it is wired up, a one-way

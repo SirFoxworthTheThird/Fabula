@@ -15,7 +15,17 @@ import yaml
 from pydantic import BaseModel, Field
 
 from fabula.models import Character, Pressure
-from fabula.world import Fact, Room, World
+from fabula.world import (
+    CLIENT_TEMPLATES,
+    DEGRADED_TEMPLATES,
+    DURATION_TEMPLATES,
+    STOPWORDS,
+    TIME_SKIP_TEMPLATES,
+    Fact,
+    Phrasing,
+    Room,
+    World,
+)
 
 
 class Scene(BaseModel):
@@ -48,7 +58,31 @@ def load_world(world_dir: Path) -> World:
         fact_id: Fact(id=fact_id, keywords=fact_data.get("keywords", []))
         for fact_id, fact_data in (data.get("facts") or {}).items()
     }
-    return World(id=data["id"], rooms=rooms, facts=facts)
+    return World(
+        id=data["id"],
+        rooms=rooms,
+        facts=facts,
+        language=data.get("language", "en"),
+        phrasing=_phrasing(data.get("phrasing") or {}),
+    )
+
+
+def _phrasing(authored: dict) -> Phrasing:
+    """Author's wording over the built-in English.
+
+    Merged per key rather than replaced wholesale, so a world can restate
+    one line without silently losing the rest to a partial block. A world
+    in another language that leaves gaps is an authoring error, caught by
+    the world guards in the test suite rather than at load — a half
+    translated scene should fail review, not refuse to start.
+    """
+    return Phrasing(
+        degraded={**DEGRADED_TEMPLATES, **(authored.get("degraded") or {})},
+        duration={**DURATION_TEMPLATES, **(authored.get("duration") or {})},
+        time_skip={**TIME_SKIP_TEMPLATES, **(authored.get("time_skip") or {})},
+        client={**CLIENT_TEMPLATES, **(authored.get("client") or {})},
+        stopwords=frozenset(authored["stopwords"]) if authored.get("stopwords") else STOPWORDS,
+    )
 
 
 def load_pressures(world_dir: Path) -> list[Pressure]:

@@ -1,0 +1,49 @@
+# Complicações escritas à mão. O director escolhe entre estas e nunca
+# inventa nenhuma. Nenhuma delas nomeia um facto: um texto destes chega
+# ao registo como narração, e uma palavra-chave aqui deixava o narrador
+# levantar o assunto só por descrever a casa.
+
+- id: teresa_entra
+  intent: >
+    Teresa cansa-se do quintal e entra na cozinha, a limpar as mãos,
+    com ar de quem interrompeu alguma coisa.
+  weight: 0.55
+  trigger:
+    turns_elapsed: "> 4"
+    character_at:
+      teresa: quintal
+  effect:
+    kind: arrival
+    actor: teresa
+    location: cozinha
+    audibility: adjacent
+  cooldown_turns: 20
+  max_fires: 1
+
+- id: o_prego_vazio
+  intent: >
+    Há um prego na parede da cozinha onde durante trinta anos esteve uma
+    fotografia, e a tinta em volta é mais escura do que o resto.
+  weight: 0.4
+  trigger:
+    fact_unspoken: o_barco
+    for_turns: "> 8"
+  effect:
+    kind: narration
+    location: cozinha
+  cooldown_turns: 12
+  max_fires: 2
+
+- id: o_telefone
+  intent: >
+    O telefone da entrada toca duas vezes e cala-se antes que alguém
+    chegue lá.
+  weight: 0.35
+  trigger:
+    turns_elapsed: "> 10"
+  effect:
+    kind: narration
+    location: cozinha
+    audibility: building
+  cooldown_turns: 15
+  max_fires: 2

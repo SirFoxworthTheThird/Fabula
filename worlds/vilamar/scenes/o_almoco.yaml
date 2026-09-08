@@ -1,0 +1,14 @@
+id: o_almoco
+world: vilamar
+mode: sandbox
+cast:
+  - joaquim
+  - teresa
+  - ines
+starting_positions:
+  joaquim: cozinha
+  teresa: quintal
+  ines: cozinha
+start_time: 2024-05-18T13:20:00
+turn_budget: 6
+max_consecutive_agent_turns: 3
