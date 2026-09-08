@@ -192,6 +192,25 @@ class Session:
         self._last_take = take
         return take()
 
+    def close(self) -> None:
+        """Settle the scene and let go of the database.
+
+        The open turn is uncommitted on purpose — that is what makes it
+        discardable — so somebody has to say when play is over. Nothing
+        did, and the last turn of every session on a file database was
+        silently lost: eight events in the process, four on disk.
+
+        Idempotent, so a client can call it on every exit path without
+        checking which one it took.
+        """
+        self.store.commit_turn()
+
+    def __enter__(self) -> Session:
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self.close()
+
     def can_regenerate(self) -> bool:
         return self._last_take is not None
 

@@ -97,6 +97,8 @@ def playtest(
             print(format_line(projected, characters))
         print()
 
+    session.close()  # settle the last turn before reading anything back
+
     if show_beliefs:
         print("=== what each character came away believing ===")
         print("(author's view — no client may ever show this)\n")

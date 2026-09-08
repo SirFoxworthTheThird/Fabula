@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 315 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 318 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -132,7 +132,10 @@ sequence numbers the discarded one vacated, which is what lets a streaming clien
 it in place rather than showing both.
 
 The cost of a write path that no longer commits one row at a time is that a turn is only
-made permanent when the next one opens (or on close). And a re-roll is a spoiler channel:
+made permanent when the next one opens, or when the session is closed — so every client
+closes its session on the way out, and `Session` is a context manager for the purpose.
+Getting that wrong is silent and expensive: for a while it was, and the last exchange of
+every session on a file database never reached disk. And a re-roll is a spoiler channel:
 you can take a moment again until somebody confesses, and learn what the scene was holding.
 That is not an invariant-1 break — that is about characters, not you — and in a
 single-player story it is your story to spoil.

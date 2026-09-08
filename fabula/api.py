@@ -13,6 +13,7 @@ The engine knows nothing about this module. Everything here goes through
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -186,9 +187,24 @@ def create_app(
     llm: LLMClient | None = None,
     db_path: str = ":memory:",
 ) -> FastAPI:
-    app = FastAPI(title="Fabula", description="A multi-agent story engine.")
     live: dict[str, _LiveSession] = {}
     by_token: dict[str, str] = {}
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        yield
+        # The turn a session is in the middle of is uncommitted, which is
+        # what lets a player take it again. Somebody has to say when play
+        # is over, or on a file database the last exchange of every
+        # session is lost.
+        for entry in live.values():
+            entry.session.close()
+
+    app = FastAPI(
+        title="Fabula",
+        description="A multi-agent story engine.",
+        lifespan=lifespan,
+    )
     app.state.sessions = live
     app.state.sessions_by_token = by_token
 

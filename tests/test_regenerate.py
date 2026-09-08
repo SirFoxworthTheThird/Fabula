@@ -174,3 +174,54 @@ def test_a_retake_leaves_no_tombstone_in_the_log(fake_llm):
     events = session.store.get_events(session.scene.id)
     assert [e.seq for e in events] == list(range(1, len(events) + 1))
     assert not any("take 1" == e.content for e in events)  # the first roll is gone
+
+
+def test_the_last_turn_reaches_disk(tmp_path, fake_llm):
+    """The bug this feature introduced. A turn is held uncommitted so it
+    can be discarded, which means somebody has to say when play is over.
+    Nothing did: eight events in the process, four on disk, and the
+    player's last exchange gone.
+    """
+    from fabula.db import EventStore
+
+    db = str(tmp_path / "scene.sqlite")
+    with Session.open(ASHGROVE, "the_reckoning", db_path=db, llm=fake_llm) as session:
+        session.say("First.")
+        session.say("The last thing said before the process ends.")
+        in_memory = len(session.store.get_events(session.scene.id))
+
+    reopened = EventStore(db)
+    assert len(reopened.get_events("the_reckoning")) == in_memory
+
+
+def test_closing_twice_is_harmless(tmp_path, fake_llm):
+    """Clients call it on every exit path without checking which one
+    they took."""
+    session = Session.open(
+        ASHGROVE, "the_reckoning", db_path=str(tmp_path / "s.sqlite"), llm=fake_llm
+    )
+    session.say("Something.")
+
+    session.close()
+    session.close()
+
+    assert len(session.store.get_events(session.scene.id)) > 1
+
+
+def test_the_service_settles_its_sessions_on_shutdown(tmp_path, fake_llm):
+    from fastapi.testclient import TestClient
+
+    from fabula.api import create_app
+    from fabula.db import EventStore
+
+    db = str(tmp_path / "served.sqlite")
+    app = create_app(worlds_root=ASHGROVE.parent, llm=fake_llm, db_path=db)
+    with TestClient(app) as client:
+        opened = client.post(
+            "/sessions", json={"world": "ashgrove", "scene": "the_reckoning"}
+        ).json()
+        client.post(f"/sessions/{opened['session_id']}/say", json={"text": "On the record."})
+        during = len(client.get(f"/sessions/{opened['session_id']}").json()["cast"])
+    assert during  # the request cycle worked
+
+    assert EventStore(db).get_events("the_reckoning")

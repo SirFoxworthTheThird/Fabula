@@ -91,6 +91,15 @@ def run(
     print(say("you_are", name=you.name, room=world.room_name(session.here())))
     print(say("help") + "\n")
 
+    try:
+        _play(session, you, characters, say)
+    finally:
+        # However this ends — quit, end of input, Ctrl-C — the turn still
+        # open has to be settled or the last exchange never reaches disk.
+        session.close()
+
+
+def _play(session: Session, you: Character, characters, say) -> None:
     while True:
         try:
             raw = input(f"{you.name}> ")
