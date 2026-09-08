@@ -196,6 +196,23 @@ def has_ended(end_condition: dict, state: SceneState, facts: dict[str, Fact]) ->
     return evaluate_trigger(end_condition, state, facts)
 
 
+def next_scene(
+    successors: list[dict], state: SceneState, facts: dict[str, Fact]
+) -> str | None:
+    """Which scene the story goes to from here, or None if it ends.
+
+    Tried in order so an author reads the branches top to bottom, first
+    match winning; an entry with no condition is the fallback. The same
+    `evaluate_trigger` as endings and pressures, because an author should
+    not need a third language to say "if she was in the room".
+    """
+    for successor in successors:
+        condition = successor.get("when") or {}
+        if not condition or evaluate_trigger(condition, state, facts):
+            return successor.get("scene")
+    return None
+
+
 def is_eligible(pressure: Pressure, state: SceneState, facts: dict[str, Fact]) -> bool:
     fires = state.fires.get(pressure.id, [])
     if len(fires) >= pressure.max_fires:

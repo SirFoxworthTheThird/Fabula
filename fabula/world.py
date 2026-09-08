@@ -71,10 +71,17 @@ CLIENT_TEMPLATES: dict[str, str] = {
     "nothing_played": "Nothing has been played yet.",
     "again": "— again —",
     "ended": "— {scene} has reached its end. /reveal to see what you could not, or keep talking.",
+    "ended_with_next": (
+        "— {scene} has reached its end. /next to go on, /reveal to see what you "
+        "could not, or keep talking."
+    ),
+    "now_playing": "— {scene} —",
+    "no_next": "The story ends here.",
     "let_time_pass": "Let {duration} pass? [y/N] ",
     "help": (
-        "(/go <room>, /wait, /look, /again to replay the last moment, /quit. "
-        "/reveal spoils the scene when you are done. Anything else you say aloud.)"
+        "(/go <room>, /wait, /look, /again to replay the last moment, /next to go "
+        "on, /quit. /reveal spoils the scene when you are done. Anything else you "
+        "say aloud.)"
     ),
 }
 

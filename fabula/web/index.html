@@ -251,6 +251,7 @@
       <button type="button" id="look">Look around</button>
       <button type="button" id="wait">Let time pass</button>
       <button type="button" id="again">Again</button>
+      <button type="button" id="next" hidden>Go on</button>
       <button type="button" id="reveal">What I missed</button>
       <span class="label" id="rooms-label">Go to</span>
       <span id="rooms"></span>
@@ -348,7 +349,9 @@ let state = {};
 let announcedEnd = false;
 
 async function refresh() {
+  const previous = state.scene;
   state = await api.state(sessionId);
+  if (previous && previous !== state.scene) announcedEnd = false;
   announceEnd();
   el("where").textContent = state.location_name;
   el("who").innerHTML = state.present.length
@@ -370,6 +373,12 @@ async function refresh() {
     rooms.appendChild(button);
   }
 
+  // Offered once the scene has reached its end and there is somewhere for
+  // the story to go.
+  const onward = el("next");
+  onward.hidden = !(state.ended && state.next_scene);
+  onward.classList.toggle("lit", !onward.hidden);
+
   const waitButton = el("wait");
   const pending = state.pending_skip_minutes;
   waitButton.textContent = pending ? `Let ${describe(pending)} pass` : "Let time pass";
@@ -386,7 +395,9 @@ function announceEnd() {
   line.className = "line ending";
   line.textContent =
     `${state.scene.replace(/_/g, " ")} has reached its end. ` +
-    "“What I missed” shows what you could not — or keep talking.";
+    (state.next_scene
+      ? "“Go on” takes the story forward — or keep talking."
+      : "“What I missed” shows what you could not — or keep talking.");
   el("scroll").appendChild(line);
   scroll();
   el("reveal").classList.add("lit");
@@ -496,6 +507,9 @@ el("reveal").onclick = () => {
   }
 };
 el("again").onclick = () => act("regenerate");
+// A story, not a scene: the session id survives the seam, so going on is
+// an ordinary action and the transcript starts over from the retake frame.
+el("next").onclick = () => act("next");
 el("look").onclick = () => act("look");
 el("wait").onclick = async () => {
   const minutes = state.pending_skip_minutes;

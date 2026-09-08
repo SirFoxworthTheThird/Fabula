@@ -21,7 +21,7 @@ from fabula.loader import Scene, load_pressures, load_scenario
 from fabula.models import Character, Event, ProjectedEvent
 from fabula.narrator import Narrator
 from fabula.persistence import begin_scene
-from fabula.pressures import has_ended, scene_state
+from fabula.pressures import has_ended, next_scene, scene_state
 from fabula.world import OFFSTAGE, World
 
 
@@ -54,6 +54,10 @@ class Session:
         # The sequence number the open turn started at. A client showing a
         # transcript needs it on a retake: everything from here on was
         # discarded and must be dropped before the new take is rendered.
+        # Where this world was loaded from, and what it generates with —
+        # a story has to be able to open its own next scene.
+        self.world_dir: Path | None = None
+        self.llm: LLMClient | None = None
         self.turn_started_at: int = 0
         # Whether the scene had already reached its end when the open turn
         # began, and how many turns have been played. A client reporting
@@ -71,6 +75,7 @@ class Session:
         db_path: str = ":memory:",
         llm: LLMClient | None = None,
         interpret_beliefs: bool = True,
+        store: EventStore | None = None,
     ) -> Session:
         world, characters, scene = load_scenario(world_dir, scene_name)
         pressures = load_pressures(world_dir)
@@ -97,7 +102,10 @@ class Session:
             for cid in scene.may_arrive
         }
         characters = {cid: characters[cid] for cid in scene.cast}
-        store = EventStore(db_path)
+        # One store for a whole story: every scene after the first joins
+        # the one before it, which is what carries beliefs, trust and
+        # closed goals across the seam.
+        store = store or EventStore(db_path)
         llm = llm or get_default_llm()
 
         user_character = next(
@@ -126,6 +134,8 @@ class Session:
         begin_scene(store, characters)
 
         session = cls(world, characters, scene, store, director, user_character)
+        session.world_dir = world_dir
+        session.llm = llm
         # After seeding, not from the YAML: a character on their second
         # evening arrives carrying what the first one did to them, and
         # "was" has to mean when this scene started.
@@ -265,6 +275,37 @@ class Session:
             return self.pov(self.director.run_turn(arrival))
 
         return self._play(take)
+
+    def next_scene(self) -> str | None:
+        """The scene this one leads to, given what happened in it."""
+        events = self.store.get_events(self.scene.id)
+        return next_scene(
+            self.scene.next,
+            scene_state(events, self.characters, self.world),
+            self.world.facts,
+        )
+
+    def go_on(self) -> Session | None:
+        """Open the next scene of the story on the same store.
+
+        A new `Session`, because the cast, the map positions and the
+        director are all the next scene's rather than this one's — but the
+        same store, so everybody arrives carrying what the last scene did
+        to them, aged on the way in. The open turn is settled first: this
+        is a seam in the story, and the take before it is no longer one
+        the player can ask to have again.
+        """
+        following = self.next_scene()
+        if following is None:
+            return None
+        self.close()
+        return Session.open(
+            self.world_dir,
+            following,
+            llm=self.llm,
+            interpret_beliefs=self.director.interpret_beliefs,
+            store=self.store,
+        )
 
     def ended(self) -> bool:
         """Has this scene reached its declared end condition?

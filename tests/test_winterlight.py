@@ -206,6 +206,14 @@ def test_a_scene_can_start_with_everyone_out_of_earshot():
 ALL_WORLDS = sorted(p.parent for p in WORLDS.glob("*/world.yaml"))
 
 
+def _named_facts(condition: dict) -> list[str]:
+    named = []
+    for key in ("fact_spoken", "fact_unspoken"):
+        value = condition.get(key)
+        named += [value] if isinstance(value, str) else list(value or [])
+    return named
+
+
 @pytest.mark.parametrize("world_dir", ALL_WORLDS, ids=lambda p: p.name)
 def test_no_persona_names_a_secret_that_is_not_its_own(world_dir):
     """The bug this is here for: Maria's persona once named the music box
@@ -341,6 +349,17 @@ def test_every_authored_reference_resolves(world_dir):
         named = scene.end_condition.get("fact_spoken")
         for fact_id in [named] if isinstance(named, str) else (named or []):
             assert fact_id in world.facts, f"{scene.id} ends on {fact_id}"
+        # A story that leads somewhere that does not exist stops dead at
+        # the seam, and nothing says so until a player gets there.
+        scenes = {p.stem for p in (world_dir / "scenes").glob("*.yaml")}
+        for successor in scene.next:
+            following = successor.get("scene")
+            assert following in scenes, f"{scene.id} leads to {following}, which is not a scene"
+            assert following != scene.id or successor.get("when"), (
+                f"{scene.id} leads to itself unconditionally"
+            )
+            for fact_id in _named_facts(successor.get("when") or {}):
+                assert fact_id in world.facts, f"{scene.id} branches on {fact_id}"
 
 
 def test_only_the_cast_is_in_the_scene(tmp_path):

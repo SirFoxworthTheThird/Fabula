@@ -16,6 +16,9 @@ from fabula.session import Session
 
 @dataclass
 class Outcome:
+    # The story moved to another scene. Clients hold a session, so they
+    # have to be told to pick up the new one.
+    went_on: "Session | None" = None
     perceived: list[ProjectedEvent] = field(default_factory=list)
     # A note from the client to the player — never story content.
     message: str | None = None
@@ -59,6 +62,15 @@ def _dispatch(
         if not perceived:
             return Outcome(message=say("time_stays"))
         return Outcome(perceived=perceived)
+
+    if line in ("/next", "/on"):
+        following = session.go_on()
+        if following is None:
+            return Outcome(message=say("no_next"))
+        return Outcome(
+            went_on=following,
+            message=say("now_playing", scene=following.scene.id.replace("_", " ")),
+        )
 
     if line in ("/again", "/retry"):
         # A director calling "again", not an undo of the story: the take

@@ -69,11 +69,16 @@ phrasing:
     nothing_played: "Ainda não se jogou nada."
     again: "— outra vez —"
     ended: "— {scene} chegou ao fim. /reveal para veres o que não pudeste, ou continua a falar."
+    ended_with_next: >-
+      — {scene} chegou ao fim. /next para seguires, /reveal para veres o que
+      não pudeste, ou continua a falar.
+    now_playing: "— {scene} —"
+    no_next: "A história acaba aqui."
     let_time_pass: "Deixar passar {duration}? [s/N] "
     help: >-
       (/go <sítio>, /wait, /look, /again para repetir o último momento,
-      /quit. /reveal estraga a cena quando acabares. Tudo o resto dizes em
-      voz alta.)
+      /next para seguires, /quit. /reveal estraga a cena quando acabares.
+      Tudo o resto dizes em voz alta.)
 
   # Palavras demasiado comuns para dizerem que duas frases falam do
   # mesmo. A lista inglesa não filtrava nada aqui.

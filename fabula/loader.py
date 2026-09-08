@@ -47,6 +47,15 @@ class Scene(BaseModel):
     # vocabulary as a pressure trigger — one language for everything an
     # author declares about scene state. Empty means the scene just runs.
     end_condition: dict = Field(default_factory=dict)
+    # Where the story goes from here. Each entry is `{scene: <id>, when:
+    # <condition>}`, tried in order, first match winning; an entry with no
+    # `when` is the fallback. Empty means the story ends here.
+    #
+    # This is what turns a menu of scenes into a story. Information
+    # asymmetry is what makes the fiction trustworthy; it is not what
+    # anybody plays for, and until this existed the engine could play a
+    # scene and not a story.
+    next: list[dict] = Field(default_factory=list)
 
 
 def load_world(world_dir: Path) -> World:

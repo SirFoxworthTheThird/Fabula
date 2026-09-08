@@ -69,6 +69,9 @@ class SceneState(BaseModel):
     pending_skip_minutes: int | None
     # Whether the scene has reached its declared end condition.
     ended: bool
+    # The scene the story goes to from here, given what happened in this
+    # one. None means the story ends here.
+    next_scene: str | None
 
 
 class MissedOut(BaseModel):
@@ -280,6 +283,7 @@ def create_app(
             cast=list(session.scene.cast),
             pending_skip_minutes=session.pending_skip(),
             ended=session.ended(),
+            next_scene=session.next_scene(),
         )
 
     async def act(session_id: str, operation) -> list[StreamEvent]:
@@ -363,6 +367,22 @@ def create_app(
         events = to_stream_events(entry.session, perceived)
         entry.publish([Retake(from_seq=entry.session.turn_started_at), *events])
         return events
+
+    @app.post("/sessions/{session_id}/next", response_model=SceneState)
+    async def go_on(session_id: str) -> SceneState:
+        """Move the story to the scene this one leads to.
+
+        The session id is stable across the seam: a client holds a story,
+        not a scene. Everybody arrives carrying what the last scene did to
+        them, because it is the same store underneath.
+        """
+        entry = get_live(session_id)
+        following = await run_in_threadpool(lambda s: s.go_on(), entry.session)
+        if following is None:
+            raise HTTPException(status_code=409, detail="the story ends here")
+        entry.session = following
+        entry.publish([Retake(from_seq=0)])  # a new scene: the transcript starts over
+        return state_of(session_id, following)
 
     @app.post("/sessions/{session_id}/reveal", response_model=RevealOut)
     def reveal(session_id: str) -> RevealOut:

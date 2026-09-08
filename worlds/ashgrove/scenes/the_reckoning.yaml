@@ -18,3 +18,11 @@ end_condition:
   fact_spoken: music_box
 turn_budget: 6
 max_consecutive_agent_turns: 3
+
+# The same ending leads to two different mornings, and which one is
+# decided by who was standing in the room when it finally came out.
+next:
+  - scene: the_morning_after
+    when:
+      character_at: {maria: kitchen}
+  - scene: nobody_said_a_word

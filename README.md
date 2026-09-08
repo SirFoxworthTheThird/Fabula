@@ -11,8 +11,27 @@ is their own syuzhet.
 
 ## The point
 
+You play a character going through a story — not a conversation, and not a puzzle about
+who knows what. A story here is a sequence of scenes, and **what happened in one chooses
+what follows it**:
+
+```yaml
+end_condition: {fact_spoken: music_box}
+next:
+  - {scene: the_morning_after,  when: {character_at: {maria: kitchen}}}
+  - {scene: nobody_said_a_word}
+```
+
+The same confession leads to two different mornings, and which one you get depends on who
+was standing in the room. Everyone crosses that seam carrying what the last scene did to
+them: what they came to believe, whose word they stopped taking, the thing they were
+trying to do that is no longer worth doing.
+
+## What holds it up
+
 Existing character-chat apps ask a model nicely not to reveal things. Fabula makes the
-revelation impossible.
+revelation impossible. That is the foundation rather than the product — it is what makes
+the fiction trustworthy, not what anybody plays for.
 
 If Tomás says something in the kitchen while Maria is in the study, Maria does not know
 it — not because a prompt discouraged it, but because the engine cannot give it to her.
@@ -33,7 +52,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 339 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 350 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -326,6 +345,19 @@ skips, off-screen intentions), `pressures.py`, `persistence.py`, `summaries.py`,
 
 Model calls are spent on bids only for ambiguous candidates; obvious ones resolve by
 heuristic.
+
+## Stories
+
+A scene declares where the story goes from it. Entries are tried in order, first match
+winning; one without a `when` is the fallback, and an empty list ends the story. The
+conditions are the same `evaluate_trigger` as endings and pressures — an author should
+not need a third language to say *"if she was in the room"*.
+
+`/next` in the terminal, **Go on** in the browser, `POST /sessions/{id}/next` on the
+wire. The session id survives the seam, because a client holds a story rather than a
+scene. Underneath it is one database for the whole run, which is what makes the durable
+state — beliefs, trust that moved, goals that closed — finally have somewhere to land.
+Going on settles the turn that was open: a seam is not a take you can ask to have again.
 
 ## Three worlds
 

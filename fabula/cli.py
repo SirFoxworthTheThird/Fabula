@@ -92,7 +92,7 @@ def run(
     print(say("help") + "\n")
 
     try:
-        _play(session, you, characters, say)
+        session = _play(session, you, characters, say) or session
     finally:
         # However this ends — quit, end of input, Ctrl-C — the turn still
         # open has to be settled or the last exchange never reaches disk.
@@ -101,22 +101,34 @@ def run(
 
 def _play(session: Session, you: Character, characters, say) -> None:
     while True:
+        # `session` is rebound when the story goes on, so everything below
+        # reads it fresh rather than the one the loop started with.
+        world = session.world
+        say = world.phrasing.say
+        you = session.user_character
+        characters = session.characters
         try:
             raw = input(f"{you.name}> ")
         except EOFError:
             print()
-            break
+            return session
         outcome = run_command(session, raw, consent=_consent_asker(session))
         if outcome.quit:
-            break
+            return session
         if outcome.replaced:
             print(f"  {say('again')}")
         if outcome.message:
             # A reveal is a block, not a note; do not indent it into a line.
             print(outcome.message if "\n" in outcome.message else f"  {outcome.message}")
         _show(_without_own_echo(outcome.perceived, you), characters)
+        if outcome.went_on is not None:
+            session = outcome.went_on
+            print(say("you_are", name=session.user_character.name,
+                      room=session.world.room_name(session.here())) + "\n")
+            continue
         if outcome.ended:
-            print("\n  " + say("ended", scene=session.scene.id) + "\n")
+            key = "ended_with_next" if session.next_scene() else "ended"
+            print("\n  " + say(key, scene=session.scene.id) + "\n")
         elif outcome.message or outcome.perceived:
             print()
 

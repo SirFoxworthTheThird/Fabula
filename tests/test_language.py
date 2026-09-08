@@ -12,6 +12,7 @@ turns on is not: those have names, and the author knows them. So facts
 stay authored keywords, and everything else moves out of Python or is
 made script-agnostic.
 """
+import re
 from pathlib import Path
 
 import pytest
@@ -264,6 +265,11 @@ def test_no_english_client_line_survives_in_another_language(world_dir):
         return
 
     for key, default in CLIENT_TEMPLATES.items():
+        # A template whose only content is punctuation and placeholders —
+        # "— {scene} —" — reads the same in every language and is not
+        # evidence of anything left untranslated.
+        if not any(ch.isalpha() for ch in re.sub(r"\{[^}]*\}", "", default)):
+            continue
         assert world.phrasing.client.get(key) != default, f"client.{key} is still English"
 
 

@@ -1,0 +1,13 @@
+# And where it goes when it came out with only Elena there to hear it.
+# Tomás got away with it for one more night, which is its own weight.
+id: nobody_said_a_word
+world: ashgrove
+mode: sandbox
+cast: [tomas, maria, elena]
+starting_positions:
+  tomas: kitchen
+  maria: kitchen
+  elena: kitchen
+start_time: 2024-01-02T08:10:00
+turn_budget: 6
+max_consecutive_agent_turns: 3
