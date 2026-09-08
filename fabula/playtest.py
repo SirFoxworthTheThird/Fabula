@@ -21,6 +21,7 @@ from fabula.commands import run_command
 from fabula.env import load_env
 from fabula.llm import LiteLLMClient, LLMClient, get_default_llm
 from fabula.models import Character, ProjectedEvent
+from fabula.concurrency import DEFAULT_WORKERS
 from fabula.session import Session
 
 # Presses on the secret, leaves the room, lets the world move without the
@@ -64,11 +65,12 @@ def playtest(
     llm: LLMClient | None = None,
     api_base: str | None = None,
     interpret_beliefs: bool = True,
+    workers: int = DEFAULT_WORKERS,
 ) -> None:
     if llm is None:
         llm = LiteLLMClient(model=model, api_base=api_base) if model else get_default_llm()
     session = Session.open(
-        world_dir, scene_name, llm=llm, interpret_beliefs=interpret_beliefs
+        world_dir, scene_name, llm=llm, interpret_beliefs=interpret_beliefs, workers=workers
     )
     you = session.user_character
     characters = session.characters
@@ -140,6 +142,12 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Skip the per-memory reading — most of a scene's model calls",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=DEFAULT_WORKERS,
+        help="How many model calls a turn may have in flight at once (1 = one at a time)",
+    )
     args = parser.parse_args(argv)
 
     playtest(
@@ -150,6 +158,7 @@ def main(argv: list[str] | None = None) -> None:
         show_beliefs=not args.no_beliefs,
         api_base=args.api_base,
         interpret_beliefs=not args.no_interpret,
+        workers=args.workers,
     )
 
 

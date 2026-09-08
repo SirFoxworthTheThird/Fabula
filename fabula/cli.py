@@ -13,6 +13,7 @@ from typing import Callable
 
 from fabula.chronology import describe_duration
 from fabula.commands import run_command
+from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
 from fabula.env import load_env
 from fabula.llm import LiteLLMClient
@@ -161,6 +162,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--model", default=None, help="Any model id litellm understands")
     parser.add_argument("--api-base", default=None, help="An OpenAI-compatible endpoint")
     parser.add_argument(
+        "--workers",
+        type=int,
+        default=DEFAULT_WORKERS,
+        help="How many model calls a turn may have in flight at once (1 = one at a time)",
+    )
+    parser.add_argument(
         "--no-interpret",
         action="store_true",
         help="Skip the per-memory reading — most of a scene's model calls",
@@ -170,6 +177,7 @@ def main(argv: list[str] | None = None) -> None:
     library = Library(root=args.library, worlds_root=args.worlds)
     llm = LiteLLMClient(model=args.model, api_base=args.api_base) if args.model else None
     interpret = not args.no_interpret
+    opening = {"interpret_beliefs": interpret, "workers": args.workers}
 
     if args.delete:
         # A mistyped id is a typo, not a crash: the ids are for people to
@@ -188,20 +196,19 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.resume:
         try:
-            session = library.resume(args.resume, llm=llm, interpret_beliefs=interpret)
+            session = library.resume(args.resume, llm=llm, **opening)
         except (ValueError, FileNotFoundError):
             parser.error(f"no story {args.resume} (see fabula --list)")
     elif args.db:
         # The escape hatch: a file you name, outside the library.
         session = Session.open(
-            _world_dir(args.worlds, args.world), args.scene, args.db,
-            llm=llm, interpret_beliefs=interpret,
+            _world_dir(args.worlds, args.world), args.scene, args.db, llm=llm, **opening
         )
     else:
         if not args.scene:
             parser.error("a new story needs a scene: fabula <world> <scene>")
         session = library.start(
-            args.world, args.scene, title=args.title, llm=llm, interpret_beliefs=interpret
+            args.world, args.scene, title=args.title, llm=llm, **opening
         )
 
     run(session, interpret_beliefs=interpret)

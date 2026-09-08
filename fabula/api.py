@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from fabula.env import load_env
+from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
 from fabula.llm import LiteLLMClient, LLMClient
 from fabula.models import ProjectedEvent
@@ -214,6 +215,7 @@ def create_app(
     llm: LLMClient | None = None,
     db_path: str = ":memory:",
     library_root: Path | None = None,
+    workers: int = DEFAULT_WORKERS,
 ) -> FastAPI:
     live: dict[str, _LiveSession] = {}
     by_token: dict[str, str] = {}
@@ -246,7 +248,9 @@ def create_app(
     def open_session(world_name: str, scene_name: str) -> tuple[str, Session]:
         world_dir = _world_dir(worlds_root, world_name)
         try:
-            session = Session.open(world_dir, scene_name, db_path=db_path, llm=llm)
+            session = Session.open(
+                world_dir, scene_name, db_path=db_path, llm=llm, workers=workers
+            )
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail=f"no scene named {scene_name!r}")
         except ValueError as error:
@@ -356,7 +360,9 @@ def create_app(
     @app.post("/stories", response_model=SceneState)
     def start_story(body: NewStory) -> SceneState:
         try:
-            session = library.start(body.world, body.scene, title=body.title, llm=llm)
+            session = library.start(
+                body.world, body.scene, title=body.title, llm=llm, workers=workers
+            )
         except FileNotFoundError as missing:
             raise HTTPException(status_code=404, detail=str(missing))
         return remember(session)
@@ -374,7 +380,7 @@ def create_app(
             if entry.story_id == story_id:
                 return state_of(session_id, entry.session)
         try:
-            session = library.resume(story_id, llm=llm)
+            session = library.resume(story_id, llm=llm, workers=workers)
         except (FileNotFoundError, ValueError) as missing:
             raise HTTPException(status_code=404, detail=str(missing))
         return remember(session)
@@ -566,13 +572,14 @@ def serve(
     port: int = 8000,
     model: str | None = None,
     api_base: str | None = None,
+    workers: int = DEFAULT_WORKERS,
 ) -> None:
     try:
         import uvicorn
     except ImportError:  # pragma: no cover - depends on the install
         raise SystemExit("serving needs uvicorn: pip install uvicorn")
     llm = LiteLLMClient(model=model, api_base=api_base) if model else None
-    uvicorn.run(create_app(worlds_root, llm=llm), host=host, port=port)
+    uvicorn.run(create_app(worlds_root, llm=llm, workers=workers), host=host, port=port)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -588,8 +595,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--model", default=None, help="Any model id litellm understands")
     parser.add_argument("--api-base", default=None, help="An OpenAI-compatible endpoint")
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=DEFAULT_WORKERS,
+        help="How many model calls a turn may have in flight at once (1 = one at a time)",
+    )
     args = parser.parse_args(argv)
-    serve(args.worlds, args.host, args.port, args.model, args.api_base)
+    serve(args.worlds, args.host, args.port, args.model, args.api_base, args.workers)
 
 
 if __name__ == "__main__":

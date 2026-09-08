@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Callable
 
 from fabula.chronology import derive_skip_minutes
+from fabula.concurrency import DEFAULT_WORKERS
 from fabula.db import EventStore
 from fabula.director import Director
 from fabula.llm import LLMClient, get_default_llm
@@ -84,6 +85,7 @@ class Session:
         llm: LLMClient | None = None,
         interpret_beliefs: bool = True,
         store: EventStore | None = None,
+        workers: int = DEFAULT_WORKERS,
     ) -> Session:
         world, characters, scene = load_scenario(world_dir, scene_name)
         pressures = load_pressures(world_dir)
@@ -135,6 +137,7 @@ class Session:
             store, world, characters, scene, narrator, llm, pressures,
             interpret_beliefs=interpret_beliefs,
             waiting=waiting,
+            workers=workers,
         )
 
         # Characters are durable: with a real db path they arrive carrying
@@ -344,6 +347,7 @@ class Session:
             llm=self.llm,
             interpret_beliefs=self.director.interpret_beliefs,
             store=self.store,
+            workers=self.director.workers,
         )
 
     def items_here(self) -> list[Item]:

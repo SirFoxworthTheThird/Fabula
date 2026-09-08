@@ -22,6 +22,7 @@ from typing import Callable, Literal
 from fabula.agents import generate_utterance
 from fabula.bidding import get_bid, prefilter_candidates
 from fabula.classify import classify
+from fabula.concurrency import DEFAULT_WORKERS, in_parallel
 from fabula.chronology import (
     LARGE_SKIP_MINUTES,
     derive_skip_minutes,
@@ -31,14 +32,19 @@ from fabula.chronology import (
 from fabula.db import EventStore
 from fabula.loader import Scene
 from fabula.memory import ContextBuilder, form_belief, location_at_seq, record_rehearsals
-from fabula.interpret import INTERPRETATION_WINDOW, interpret
+from fabula.interpret import (
+    INTERPRETATION_WINDOW,
+    keep_interpretation,
+    propose_interpretation,
+)
 from fabula.persistence import (
     begin_scene,
     close_reached_goals,
     encode_belief,
     witnessed_withholding,
+    worth_keeping,
 )
-from fabula.models import Bid, Character, Event, Intention, Pressure
+from fabula.models import Belief, Bid, Character, Event, Intention, Pressure, ProjectedEvent
 from fabula.narrator import NARRATOR_ID, Narrator
 from fabula.pressures import scene_state, select_pressure
 from fabula.world import World, resolve_perception
@@ -126,6 +132,7 @@ class Director:
         interpret_beliefs: bool = True,
         waiting: dict[str, Character] | None = None,
         classify_reports: bool = True,
+        workers: int = DEFAULT_WORKERS,
     ):
         self.store = store
         self.world = world
@@ -140,6 +147,10 @@ class Director:
         # Reading a line for what it reports costs a model call, but only
         # for a line that names one of the world's facts — almost none do.
         self.classify_reports = classify_reports
+        # How many of the independent calls in a turn — the bids, the
+        # readings — may be in flight at once. Somebody else's endpoint
+        # is on the other end of them; 1 is the old sequential engine.
+        self.workers = workers
         self.pressures = pressures or []
         # Written for this world, not in the room when it opened. An
         # authored pressure may bring one on; nothing else can, and the
@@ -201,15 +212,26 @@ class Director:
             all_events = self.store.get_events(self.scene.id)
             candidates = prefilter_candidates(last_event, self.characters, all_events, self.world)
 
-            bids: list[Bid] = []
-            for character in candidates:
+            # Every bid, the narrator's included, goes out at once.
+            # Nobody's bid can see anybody else's — that is what makes
+            # these separate agents — so making them queue was pure
+            # waiting, and the fuller the room the longer it got.
+            def bid_for(character: Character) -> Callable[[], Bid]:
                 location = location_at_seq(
                     character.id, character.location_id, all_events, last_event.seq + 1
                 )
                 level = resolve_perception(last_event, character.id, location, self.world)
-                bids.append(get_bid(character, last_event, level, all_events, self.contexts, self.llm))
+                return lambda: get_bid(
+                    character, last_event, level, all_events, self.contexts, self.llm
+                )
 
-            narrator_bid = self.narrator.bid(last_event, all_events, self.world)
+            asked = in_parallel(
+                [bid_for(character) for character in candidates]
+                + [lambda: self.narrator.bid(last_event, all_events, self.world)],
+                self.workers,
+            )
+            bids: list[Bid] = asked[:-1]
+            narrator_bid = asked[-1]
             pressure_choice = select_pressure(
                 self.pressures,
                 scene_state(all_events, self.characters, self.world),
@@ -584,6 +606,10 @@ class Director:
             return
         appended = all_events[-1].seq
 
+        # First, what each character took in, worked out before anything
+        # is written down: who perceived the new event at all, and what
+        # they would remember of it.
+        taking_in: list[tuple[Character, list[ProjectedEvent], Belief | None]] = []
         for character in self.characters.values():
             projected = self.contexts.project(character, all_events)
             record_rehearsals(
@@ -597,27 +623,55 @@ class Director:
                 # withheld beat charging them four times over while the
                 # others talk in another room.
                 continue
+            taking_in.append(
+                (character, projected, form_belief(character, projected[-1]))
+            )
 
-            newest = projected[-1]
-            # The run-up is what makes the moment readable: "he said
-            # nothing" means one thing after small talk and another after
-            # being asked where the music box went. Their perceived lines
-            # only, so the reading cannot see further than they did.
-            window = projected[-INTERPRETATION_WINDOW:]
+        def reading_for(
+            character: Character, projected: list[ProjectedEvent], belief: Belief | None
+        ) -> Callable[[], str | None]:
+            """What this character privately made of it — or None for a
+            moment nobody is going to be asked to read."""
             # Not for the player. Nothing reads their memory back into a
             # prompt — they are holding it — so writing down what they
             # privately think would be the engine deciding their inner
             # life, and paying a model call to do it.
             reader = None if character.is_user or not self.interpret_beliefs else self.llm
-            encode_belief(
-                self.store,
-                character,
-                form_belief(character, newest),
-                interpret=lambda: interpret(
-                    character, window, self.world, self.store, reader
-                ),
+            # And never for a moment about to be discarded: paying to
+            # read something below the memory floor is money spent on
+            # the weather.
+            if reader is None or not worth_keeping(belief):
+                return lambda: None
+            # The run-up is what makes the moment readable: "he said
+            # nothing" means one thing after small talk and another after
+            # being asked where the music box went. Their perceived lines
+            # only, so the reading cannot see further than they did.
+            window = projected[-INTERPRETATION_WINDOW:]
+            return lambda: propose_interpretation(
+                character, window, self.world, self.store, reader
             )
 
+        # One private reading each, and no character's reading can see
+        # another's, so they go out together rather than one after the
+        # next — this is the loop that costs a call per remembered moment
+        # per character, and it was the whole cast waiting in a queue.
+        readings = in_parallel(
+            [reading_for(*entry) for entry in taking_in], self.workers
+        )
+
+        # Then the writing, back on this thread and in cast order: a turn
+        # stays one unit of work, and a parallel turn leaves the store in
+        # exactly the state a sequential one would.
+        for (character, projected, belief), reading in zip(taking_in, readings):
+            if reading is not None:
+                keep_interpretation(
+                    self.store, character, projected[-INTERPRETATION_WINDOW:], reading
+                )
+            encode_belief(
+                self.store, character, belief, interpret=lambda kept=reading: kept or ""
+            )
+
+            newest = projected[-1]
             actor_id = newest.event.actor_id
             if actor_id and actor_id != character.id:
                 self.store.bump_interaction(character.id, actor_id)

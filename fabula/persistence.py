@@ -32,6 +32,16 @@ WITHHOLD_TRUST_FLOOR = 0.1
 WITHHOLD_TRUST_MOVE = 0.2
 
 
+def worth_keeping(belief: Belief | None) -> bool:
+    """Whether a moment cleared the floor to be remembered at all.
+
+    Exposed so a caller can tell *before* paying a model call to read it:
+    the reading of a moment about to be discarded is money spent on the
+    weather.
+    """
+    return belief is not None and belief.salience >= BELIEF_SALIENCE_FLOOR
+
+
 def encode_belief(
     store: EventStore,
     character: Character,
@@ -48,7 +58,7 @@ def encode_belief(
     only then — reading a moment costs a model call, and paying for one
     on something about to be discarded is money spent on the weather.
     """
-    if belief is None or belief.salience < BELIEF_SALIENCE_FLOOR:
+    if not worth_keeping(belief):
         return False
     if interpret is not None:
         belief.interpretation = interpret()

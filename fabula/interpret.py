@@ -80,20 +80,47 @@ def interpret(
     """
     if llm is None or not window:
         return ""
+    return keep_interpretation(
+        store, character, window, propose_interpretation(character, window, world, store, llm)
+    )
 
-    key = span_key(character.id, window)
-    stored = store.get_interpretation(character.id, key)
+
+def propose_interpretation(
+    character: Character,
+    window: list[ProjectedEvent],
+    world: World,
+    store: EventStore,
+    llm: LLMClient | None,
+) -> str:
+    """The reading itself: the cache lookup, the model call, and the
+    check on what came back.
+
+    Split out from `interpret` because this half only *reads* — which is
+    what lets a whole cast's readings go out at once, on worker threads,
+    while everything that changes durable state stays on the turn's own
+    thread and in cast order.
+    """
+    if llm is None or not window:
+        return ""
+
+    stored = store.get_interpretation(character.id, span_key(character.id, window))
     if stored is not None:
         return stored
 
     text = _read(character, window, llm, world.language).strip()
     if not text or invented_fact(text, window, character, world, store):
-        # Store the refusal too, so a bad reading is not paid for twice.
-        store.put_interpretation(character.id, key, "")
         return ""
-
-    store.put_interpretation(character.id, key, text)
     return text
+
+
+def keep_interpretation(
+    store: EventStore, character: Character, window: list[ProjectedEvent], reading: str
+) -> str:
+    """Remember a reading — including a refusal, so a bad one is not paid
+    for twice. Writing a cached reading back over itself is a no-op."""
+    if window:
+        store.put_interpretation(character.id, span_key(character.id, window), reading)
+    return reading
 
 
 def _read(

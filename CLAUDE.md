@@ -59,11 +59,16 @@ ashgrove    (2 agents, 3 player lines) -> 33 model calls
 winterlight (4 agents, 3 player lines) -> 51 model calls
 ```
 
-and every one of them is made **sequentially** today — the bid loop and the memory loop
-both iterate the cast one at a time. Fifty-one round trips in series is a long wait
-between typing a line and reading the reply, whoever is serving them. Bids and
-interpretations are independent per character and could go out together; that is the
-cheapest large win available and nothing has been done about it.
+The bids and the readings now go out together rather than one at a time, which at 300 ms
+a round trip takes `winterlight` from 15.3s to 9.4s for those three lines, and the win
+grows with the number of people in the room with you. What is left is the part that
+cannot be parallel: a character has to hear the last line before deciding to answer it,
+so the replies are a queue by nature.
+
+The next thing available here is deferring the readings to the end of a turn instead of
+issuing them after each event — in-scene beliefs are only read back by the reveal and by
+the guard on a reading itself, so a turn's readings could be one batch rather than eight.
+That one changes when a belief becomes durable within a turn, so it is not free.
 
 The rule to carry: a feature that adds a per-character or per-moment model call is
 spending somebody's money and somebody's patience. Decide how it will be paid for while

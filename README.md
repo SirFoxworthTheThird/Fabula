@@ -52,7 +52,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 405 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 413 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -240,6 +240,37 @@ Readings are also the bulk of a scene's model calls — one per remembered momen
 character. The player's are skipped (nothing reads their memory back, and writing down
 what they privately think is the engine deciding their inner life), and `--no-interpret`
 turns off the rest. On the sample scene that is 23 calls → 15 → 5.
+
+### What a turn costs in waiting
+
+A turn is mostly waiting. Every character in earshot bids, every character reads back the
+moment they just perceived, the winner speaks — each of those a round trip to whichever
+model you pointed it at. They used to be made one at a time, so a turn cost the *sum* of
+every round trip in it and the wait grew with the size of the cast: the fuller the room,
+the slower it got to speak in, which is the wrong way round.
+
+Bids are independent by construction — nobody's bid can see anybody else's, which is what
+makes these separate agents rather than one model with a cast list — and so are the
+private readings. Those two batches now go out together. At 300 ms a round trip, three
+player lines:
+
+| scene | calls | one at a time | together | |
+|---|---|---|---|---|
+| `ashgrove/the_dinner` (2 agents, split rooms) | 16 | 4.8s | 3.9s | 1.2× |
+| `ashgrove/the_reckoning` (2 agents, one room) | 36 | 10.8s | 7.6s | 1.4× |
+| `winterlight/the_manifest` (4 agents, one room) | 51 | 15.3s | 9.4s | 1.6× |
+
+The win scales with how many characters are in the room with you, which is the case that
+was worst. What is left is the part that cannot be parallel: each character has to hear
+the last line before deciding to answer it, so the replies themselves are a queue.
+
+`--workers N` sets how many calls a turn may have in flight (default 8; `--workers 1` is
+the old engine exactly, and is what a single-slot local server or a tight rate limit
+wants). Only the model call runs in a worker — every durable write happens afterwards on
+the turn's own thread, in cast order, so a parallel turn tells the same story as a
+sequential one and can still be thrown away whole by `/again`. There is a test that plays
+the same scene both ways and compares every event, belief and relationship, and another
+that fails if anything writes to the store from a worker thread.
 
 ### Point it at your own model
 
