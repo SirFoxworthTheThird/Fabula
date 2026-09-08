@@ -142,6 +142,39 @@ Elena> Tomás, you've been strange all evening.
 `the_reckoning` is the same three people with nowhere to hide — one room, and an ending
 the director escalates toward. Swap the scene name to play it.
 
+### Play as somebody of your own
+
+Everything in a world is authored, which is right for the parts a story turns on and
+wrong for the one person you are: being handed Rook, or Elena, is being handed somebody
+else's character to wear. So the last thing between picking a story and playing it is who
+you are in it — skippable in one click, because sometimes you just want to start.
+
+```bash
+fabula ardenhall arrival --as "Wren Halloway" --look "A tall girl in a coat two sizes too big."
+```
+
+Two fields, and each has to reach the fiction or it is decoration:
+
+* **The name** replaces the authored one *everywhere the author wrote it* — the other
+  characters' personas, their notes about you, the pressures, the room descriptions. A
+  name only the interface uses is worse than none, because then the Director's own
+  description still says he read Rook's file on Tuesday. It is a substitution over
+  authored text before it is parsed, so it can rename and nothing else: the ids
+  underneath (`rook:` in a relationship map) are untouched, and a bare first name later
+  in the same prose becomes the new first name. A name that could reshape the YAML it
+  goes into — quotes, colons, brackets — is refused with the reason; any script is fine,
+  and an apostrophe is quietly typeset as `’` so it cannot close a quoted scalar.
+
+* **How you come across** becomes the first thing the room perceives about you: an
+  ordinary event in your own room, filtered like any other, so the people standing there
+  can react to it and the people elsewhere never see it. Which is why it is asked for as
+  what *anyone can see* — a private truth put here would be handed to everybody in
+  earshot, which is the one thing this engine exists not to do. A line that names one of
+  the world's own facts is refused rather than quietly dropped: it would hand a secret to
+  the room before a word was spoken.
+
+Both are kept with the story, so resuming it is still your character.
+
 ### Your stories
 
 A story is saved the moment you start it, and it is yours: one SQLite file, in
@@ -945,7 +978,7 @@ it never enters the stream.
 | `GET /catalogue` | worlds and their scenes, with the ones a story starts from marked |
 | `GET`/`PUT /settings` | which model answers — never a credential, in either direction |
 | `GET /stories` | your saved stories, most recently played first |
-| `POST /stories` | start one, and save it → the same state as `POST /sessions` |
+| `POST /stories` | start one (optionally `character: {name, look}`) → the same state as `POST /sessions` |
 | `POST /stories/{id}/resume` | pick one back up, on the scene it was left on |
 | `DELETE /stories/{id}` | delete one |
 | `POST /sessions` | open a scene → session id, your character, location |

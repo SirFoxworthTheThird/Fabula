@@ -130,7 +130,12 @@ CREATE TABLE IF NOT EXISTS story (
     scene TEXT NOT NULL,
     created_at TEXT NOT NULL,
     played_at TEXT NOT NULL,
-    turns INTEGER NOT NULL DEFAULT 0
+    turns INTEGER NOT NULL DEFAULT 0,
+    -- Who the player said they were. Kept with the story rather than
+    -- with the world, because it is theirs and it has to come back when
+    -- they pick the story up again.
+    character_name TEXT NOT NULL DEFAULT '',
+    character_look TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS rehearsals (
@@ -213,6 +218,14 @@ class EventStore:
             self.conn.execute(
                 "ALTER TABLE beliefs ADD COLUMN interpretation TEXT NOT NULL DEFAULT ''"
             )
+        story = {
+            row["name"] for row in self.conn.execute("PRAGMA table_info(story)").fetchall()
+        }
+        for column in ("character_name", "character_look"):
+            if column not in story:
+                self.conn.execute(
+                    f"ALTER TABLE story ADD COLUMN {column} TEXT NOT NULL DEFAULT ''"
+                )
 
     def close(self) -> None:
         with self._lock:
@@ -259,6 +272,16 @@ class EventStore:
                 "SELECT * FROM events WHERE scene_id = ? ORDER BY seq ASC", (scene_id,)
             ).fetchall()
             return [_row_to_event(r) for r in rows]
+
+    def any_events(self) -> bool:
+        """Has anything at all happened in this story yet?
+
+        Per story rather than per scene: it is how the engine knows this
+        is the very beginning, which is the one moment a player's own
+        character gets introduced.
+        """
+        with self._lock:
+            return self.conn.execute("SELECT 1 FROM events LIMIT 1").fetchone() is not None
 
     def add_belief(self, belief: Belief) -> None:
         with self._lock:
@@ -459,16 +482,25 @@ class EventStore:
             row = self.conn.execute("SELECT * FROM story WHERE only_row = 1").fetchone()
             return dict(row) if row else None
 
-    def start_story(self, story_id: str, title: str, world: str, scene: str) -> None:
+    def start_story(
+        self,
+        story_id: str,
+        title: str,
+        world: str,
+        scene: str,
+        character_name: str = "",
+        character_look: str = "",
+    ) -> None:
         # Full precision: two stories started or played in the same
         # second are ordered by when they happened, not by filename.
         now = datetime.now().isoformat()
         with self._lock:
             self.conn.execute(
                 """INSERT OR IGNORE INTO story
-                   (only_row, story_id, title, world, scene, created_at, played_at, turns)
-                   VALUES (1, ?, ?, ?, ?, ?, ?, 0)""",
-                (story_id, title, world, scene, now, now),
+                   (only_row, story_id, title, world, scene, created_at, played_at, turns,
+                    character_name, character_look)
+                   VALUES (1, ?, ?, ?, ?, ?, ?, 0, ?, ?)""",
+                (story_id, title, world, scene, now, now, character_name, character_look),
             )
             self._commit()
 

@@ -15,6 +15,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from fabula.models import Character, Pressure
+from fabula.player import Player, rename
 from fabula.world import (
     CLIENT_TEMPLATES,
     DEGRADED_TEMPLATES,
@@ -68,8 +69,8 @@ class Scene(BaseModel):
         return self.title or self.id.replace("_", " ")
 
 
-def load_world(world_dir: Path) -> World:
-    data = yaml.safe_load((world_dir / "world.yaml").read_text(encoding="utf-8"))
+def load_world(world_dir: Path, called: tuple[str, str] | None = None) -> World:
+    data = _read(world_dir / "world.yaml", called)
     rooms = {
         room_id: Room(
             id=room_id,
@@ -118,36 +119,73 @@ def _phrasing(authored: dict) -> Phrasing:
     )
 
 
-def load_pressures(world_dir: Path) -> list[Pressure]:
+def _read(path: Path, called: tuple[str, str] | None = None) -> dict | list | None:
+    """Authored YAML, with the player's character called what they called
+    them.
+
+    The substitution happens on the text, before it is parsed, because a
+    name the author wrote is in prose the author wrote — personas, notes,
+    pressure intents, room descriptions — and walking the parsed objects
+    would mean knowing every field that might hold one. It can only
+    rename: it adds nothing and removes nothing.
+    """
+    text = path.read_text(encoding="utf-8")
+    if called:
+        text = rename(text, *called)
+    return yaml.safe_load(text)
+
+
+def player_name(world_dir: Path) -> str:
+    """What the author called the character the player is given."""
+    for path in sorted((world_dir / "characters").glob("*.yaml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if data.get("is_user"):
+            return data.get("name", "")
+    return ""
+
+
+def load_pressures(world_dir: Path, called: tuple[str, str] | None = None) -> list[Pressure]:
     path = world_dir / "pressures.yaml"
     if not path.exists():
         return []
-    return [Pressure(**entry) for entry in (yaml.safe_load(path.read_text(encoding="utf-8")) or [])]
+    return [Pressure(**entry) for entry in (_read(path, called) or [])]
 
 
-def load_characters(world_dir: Path) -> dict[str, Character]:
+def load_characters(
+    world_dir: Path, called: tuple[str, str] | None = None
+) -> dict[str, Character]:
     characters: dict[str, Character] = {}
     char_dir = world_dir / "characters"
     for path in sorted(char_dir.glob("*.yaml")):
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        character = Character(**data)
+        character = Character(**_read(path, called))
         characters[character.id] = character
     return characters
 
 
-def load_scene(world_dir: Path, scene_name: str) -> Scene:
+def load_scene(world_dir: Path, scene_name: str, called: tuple[str, str] | None = None) -> Scene:
     path = world_dir / "scenes" / f"{scene_name}.yaml"
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return Scene(**data)
+    return Scene(**_read(path, called))
 
 
-def load_scenario(world_dir: Path, scene_name: str) -> tuple[World, dict[str, Character], Scene]:
+def load_scenario(
+    world_dir: Path, scene_name: str, player: Player | None = None
+) -> tuple[World, dict[str, Character], Scene]:
     """Load a world, its characters, and one named scene, applying the
     scene's starting-position overrides on top of each character's
-    default `location_id`."""
-    world = load_world(world_dir)
-    characters = load_characters(world_dir)
-    scene = load_scene(world_dir, scene_name)
+    default `location_id`.
+
+    A player who named their own character renames the authored one
+    everywhere the author wrote it, so nobody in the room calls them
+    something the screen does not.
+    """
+    called = None
+    if player and player.called:
+        authored = player_name(world_dir)
+        if authored:
+            called = (authored, player.called)
+    world = load_world(world_dir, called)
+    characters = load_characters(world_dir, called)
+    scene = load_scene(world_dir, scene_name, called)
 
     for character_id, location_id in scene.starting_positions.items():
         if character_id in characters:

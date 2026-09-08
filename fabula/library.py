@@ -22,6 +22,7 @@ from uuid import uuid4
 
 from fabula.db import EventStore
 from fabula.llm import LLMClient
+from fabula.player import Player
 from fabula.session import Session
 
 DEFAULT_ROOT = Path.home() / ".fabula" / "stories"
@@ -35,6 +36,8 @@ class StoryCard:
     title: str
     world: str
     scene: str
+    # Who the player is in it, when it is somebody they made.
+    character: str
     created_at: datetime
     played_at: datetime
     turns: int
@@ -85,6 +88,7 @@ class Library:
                         title=row["title"],
                         world=row["world"],
                         scene=row["scene"],
+                        character=row["character_name"],
                         created_at=datetime.fromisoformat(row["created_at"]),
                         played_at=datetime.fromisoformat(row["played_at"]),
                         turns=row["turns"],
@@ -99,6 +103,7 @@ class Library:
         scene: str,
         title: str | None = None,
         llm: LLMClient | None = None,
+        player: Player | None = None,
         **kwargs,
     ) -> Session:
         """Begin a story and put it in the library."""
@@ -108,7 +113,7 @@ class Library:
         store = EventStore(str(path))
         try:
             session = Session.open(
-                self.worlds_root / world, scene, llm=llm, store=store, **kwargs
+                self.worlds_root / world, scene, llm=llm, store=store, player=player, **kwargs
             )
             # Named after the scene it begins in, in the author's words —
             # "The dinner" rather than "Ashgrove — the_dinner". Written
@@ -116,6 +121,8 @@ class Library:
             store.start_story(
                 story_id, title or session.scene.name or default_title(world, scene),
                 world, scene,
+                character_name=(player.called if player else ""),
+                character_look=(player.look.strip() if player else ""),
             )
             return session
         except Exception:
@@ -141,8 +148,16 @@ class Library:
         if row is None:
             store.close()
             raise ValueError(f"{path} is not a story")
+        # The same person they made when they started it. The look is not
+        # replayed — it was said once, at the beginning — but the name
+        # goes back through every line of authored prose.
         return Session.open(
-            self.worlds_root / row["world"], row["scene"], llm=llm, store=store, **kwargs
+            self.worlds_root / row["world"],
+            row["scene"],
+            llm=llm,
+            store=store,
+            player=Player(name=row["character_name"], look=row["character_look"]),
+            **kwargs,
         )
 
     def delete(self, story_id: str) -> bool:

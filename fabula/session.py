@@ -18,7 +18,8 @@ from fabula.db import EventStore
 from fabula.director import Director
 from fabula.llm import LLMClient, get_default_llm
 from fabula.memory import co_present
-from fabula.loader import Scene, load_pressures, load_scenario
+from fabula.loader import Scene, load_pressures, load_scenario, player_name
+from fabula.player import Player
 from fabula.models import Character, Event, ProjectedEvent
 from fabula.narrator import Narrator
 from fabula.persistence import begin_scene
@@ -86,9 +87,15 @@ class Session:
         interpret_beliefs: bool = True,
         store: EventStore | None = None,
         workers: int = DEFAULT_WORKERS,
+        player: Player | None = None,
     ) -> Session:
-        world, characters, scene = load_scenario(world_dir, scene_name)
-        pressures = load_pressures(world_dir)
+        world, characters, scene = load_scenario(world_dir, scene_name, player)
+        called = None
+        if player and player.called:
+            authored = player_name(world_dir)
+            if authored:
+                called = (authored, player.called)
+        pressures = load_pressures(world_dir, called)
 
         # Only the cast is in the scene. Everything downstream — bidding,
         # presence, projection, the reveal — walks this dict, so a
@@ -167,7 +174,16 @@ class Session:
         # The scene says its first line before the player has to. A story
         # that opens on a bare prompt is a text box: the room has a name
         # and nothing in it until somebody thinks to type /look.
+        began = not store.any_events()
         opening = session.director.establish(user_character.location_id)
+        # Who the player said they were, once, at the start of the story
+        # and never again. An ordinary event in their own room, so the
+        # people standing there perceive it and the people elsewhere
+        # never do — which is why it is asked for as what anyone can see.
+        if began and player and player.look.strip():
+            opening = session.director.introduce(
+                user_character.location_id, player.look.strip()
+            ) or opening
         # And then whoever is standing there gets to speak first if they
         # want to. Arriving somewhere and having to talk to the air to
         # find out you are not alone is the wrong way round: a story

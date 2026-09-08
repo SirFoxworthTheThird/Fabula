@@ -417,6 +417,23 @@ class Director:
             self.build_event("narration", None, where, content)
         )
 
+    def introduce(self, where: str, look: str) -> Event | None:
+        """What the room can see of the player, in the player's own words.
+
+        An ordinary event, so it is filtered like one: the people in the
+        room perceive it and the people elsewhere never do. It is not
+        world truth and nothing checks it against any — the same as
+        anything anybody says about themselves — but it is *perceivable*,
+        which is what makes it something the room can answer.
+
+        A description that names one of the world's own facts is refused:
+        it would hand a secret to everybody standing there before a word
+        was spoken, and could end an arc on its first beat.
+        """
+        if not look.strip() or invents_a_fact(look, self.world):
+            return None
+        return self.store.append_event(self.build_event("narration", None, where, look.strip()))
+
     def current_location(self, character: Character) -> str:
         """Where a character is now, replayed from their arrivals in the
         log rather than read off the scene's starting snapshot."""

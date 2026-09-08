@@ -28,7 +28,9 @@ from starlette.concurrency import run_in_threadpool
 from fabula.env import load_env
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
-from fabula.loader import catalogue
+from fabula.discovery import invents_a_fact
+from fabula.loader import catalogue, load_world
+from fabula.player import Player
 from fabula.settings import DEFAULT_SETTINGS, Settings, describe
 from fabula.llm import (
     LiteLLMClient,
@@ -122,15 +124,29 @@ class StoryOut(BaseModel):
     title: str
     world: str
     scene: str
+    character: str = ""
     created_at: datetime
     played_at: datetime
     turns: int
+
+
+class NewCharacter(BaseModel):
+    """Who the player is playing, when it is somebody they made."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = ""
+    # Asked for as what anyone can see, because it becomes something the
+    # room perceives — a private truth put here would be handed to
+    # everybody standing there.
+    look: str = ""
 
 
 class NewStory(BaseModel):
     world: str
     scene: str
     title: str | None = None
+    character: NewCharacter | None = None
 
 
 class NewSettings(BaseModel):
@@ -401,6 +417,7 @@ def create_app(
         return StoryOut(
             id=card.id,
             title=card.title,
+            character=card.character,
             world=card.world,
             scene=open_here.scene.id if open_here else card.scene,
             created_at=card.created_at,
@@ -415,8 +432,33 @@ def create_app(
 
     @app.post("/stories", response_model=SceneState)
     def start_story(body: NewStory) -> SceneState:
+        player = Player(
+            name=(body.character.name if body.character else ""),
+            look=(body.character.look if body.character else ""),
+        )
+        complaint = player.complaint()
+        if complaint:
+            raise HTTPException(status_code=400, detail=complaint)
+        if player.look.strip():
+            # A description naming one of the world's own facts would hand
+            # a secret to everybody in the room before a word was spoken.
+            # Said plainly here rather than quietly dropped: it is the
+            # player's sentence, and they should know it did not land.
+            try:
+                world = load_world(_world_dir(worlds_root, body.world))
+            except Exception:
+                world = None
+            named = world and invents_a_fact(player.look, world)
+            if named:
+                raise HTTPException(
+                    status_code=400,
+                    detail="that mentions something the story turns on — "
+                           "say it in the scene rather than before it",
+                )
         try:
-            session = library.start(body.world, body.scene, title=body.title, **opening())
+            session = library.start(
+                body.world, body.scene, title=body.title, player=player, **opening()
+            )
         except FileNotFoundError as missing:
             raise HTTPException(status_code=404, detail=str(missing))
         except ModelUnavailable as failure:

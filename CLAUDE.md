@@ -94,3 +94,9 @@ Everything: worlds, rooms, facts, characters, pressures, scenes, items — all h
 YAML. That is right for the parts a story turns on and wrong as a way to *start* one. The
 audience for this app does not write YAML. Any plan that ends with "and then the author
 writes the file" has not finished.
+
+The first dent in that: **the character you play is yours.** A name and a line about how
+you come across, chosen where you pick the story, with the name substituted through every
+piece of authored prose that used the old one and the line becoming something the room
+actually perceives. Everyone *else* is still somebody the author wrote — a cast you can
+name yourself, or a story you thought of, is still ahead.

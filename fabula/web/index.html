@@ -141,6 +141,55 @@
   }
   .cards { display: grid; gap: 10px; }
 
+  /* Who you are, asked once, where you chose the story. Under the card
+     rather than over the page: you are still looking at the thing you
+     picked. */
+  .who-form {
+    border: 1px solid var(--accent-dim);
+    border-top: 0;
+    border-radius: 0 0 10px 10px;
+    background: var(--ground-lift);
+    padding: 14px 18px 16px;
+    margin: -4px 0 10px;
+  }
+  .who-form .field {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 9px;
+    flex-wrap: wrap;
+  }
+  .who-form label {
+    font-family: var(--sans);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    width: 4.5rem;
+    flex: none;
+  }
+  .who-form input {
+    flex: 1;
+    min-width: 12rem;
+    background: var(--ground);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 15px;
+    padding: 8px 11px;
+  }
+  .who-form input:focus { outline: none; border-color: var(--accent-dim); }
+  .who-form .go { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .who-form .hint {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin: 0 0 12px;
+    line-height: 1.5;
+  }
+  .card.chosen { border-color: var(--accent-dim); border-radius: 10px 10px 0 0; }
+
   .more {
     font-family: var(--sans);
     font-size: 12px;
@@ -415,8 +464,11 @@
   }
   .bar { max-width: var(--measure); margin: 0 auto; }
 
-  form { display: flex; gap: 10px; }
-  input[type=text] {
+  /* The composer, and only the composer: a bare `form` rule here reached
+     into the who-are-you form on the shelf and laid its labels out in a
+     row. */
+  #say-form { display: flex; gap: 10px; }
+  #say-form input[type=text] {
     flex: 1;
     min-width: 0;
     background: var(--ground);
@@ -618,7 +670,7 @@ const api = {
       body: JSON.stringify(chosen),
     }),
   stories: () => ask("/stories"),
-  startStory: (world, scene) => send("/stories", {world, scene}),
+  startStory: (world, scene, character) => send("/stories", {world, scene, character}),
   resumeStory: id => send(`/stories/${id}/resume`),
   dropStory: id => ask(`/stories/${id}`, {method: "DELETE"}),
   state: id => ask(`/sessions/${id}`),
@@ -1004,6 +1056,7 @@ async function showStories() {
     const turns = `${story.turns} turn${story.turns === 1 ? "" : "s"}`;
     const where = named(story.world, story.scene);
     const meta = [{text: where.world, strong: true}];
+    if (story.character) meta.push({text: `as ${story.character}`});
     // Where the story got to, said only when that is somewhere other
     // than what the card is already called.
     if (where.scene && where.scene !== story.title) meta.push({text: where.scene});
@@ -1069,9 +1122,95 @@ function sceneCard(world, scene) {
   const meta = [];
   if (scene.you) meta.push({text: `you are ${scene.you}`, strong: true});
   if (scene.with.length) meta.push({text: `with ${scene.with.join(", ")}`});
+  const holder = document.createElement("div");
   const button = card(scene.title, scene.premise, meta);
-  button.onclick = () => enter(api.startStory(world.id, scene.id));
-  return button;
+  button.onclick = () => askWho(holder, button, world, scene);
+  holder.appendChild(button);
+  return holder;
+}
+
+// Everything in a world is authored, and that is right for the parts a
+// story turns on. It is wrong for the one person the player is: being
+// handed Rook, or Elena, is being handed somebody else's character to
+// wear. So the last thing between picking a story and playing it is who
+// you are in it — and it is skippable in one click, because sometimes
+// you just want to start.
+function askWho(holder, button, world, scene) {
+  if (holder.querySelector(".who-form")) return closeWho(holder, button);
+  for (const open of document.querySelectorAll(".who-form")) {
+    closeWho(open.parentElement, open.parentElement.querySelector(".card"));
+  }
+  button.classList.add("chosen");
+
+  const form = document.createElement("form");
+  form.className = "who-form";
+  const hint = block(form, "p", "", "hint");
+  hint.textContent = scene.you
+    ? `Play as somebody of your own, or leave it and be ${scene.you}.`
+    : "Play as somebody of your own.";
+
+  const name = field(form, "Name", "who you are", scene.you || "");
+  const look = field(
+    form, "Anyone can see", "one line — what the room notices about you", ""
+  );
+
+  const go = document.createElement("div");
+  go.className = "go";
+  const begin = document.createElement("button");
+  begin.className = "primary";
+  begin.type = "submit";
+  begin.textContent = "Begin";
+  const back = document.createElement("button");
+  back.type = "button";
+  back.textContent = "Cancel";
+  back.onclick = () => closeWho(holder, button);
+  const notice = document.createElement("span");
+  notice.className = "notice";
+  go.append(begin, back, notice);
+  form.appendChild(go);
+
+  form.onsubmit = async event => {
+    event.preventDefault();
+    begin.disabled = true;
+    notice.classList.remove("bad");
+    notice.textContent = "";
+    const character = {name: name.value.trim(), look: look.value.trim()};
+    try {
+      const opened = await api.startStory(world.id, scene.id, character);
+      await enter(Promise.resolve(opened));
+    } catch (failure) {
+      // The story was not started, so this is a correction rather than
+      // an error: they are still standing where they were.
+      notice.textContent = failure.message;
+      notice.classList.add("bad");
+      begin.disabled = false;
+    }
+  };
+
+  holder.appendChild(form);
+  name.focus();
+}
+
+function closeWho(holder, button) {
+  const form = holder && holder.querySelector(".who-form");
+  if (form) form.remove();
+  if (button) button.classList.remove("chosen");
+}
+
+function field(form, label, placeholder, value) {
+  const row = document.createElement("div");
+  row.className = "field";
+  const tag = document.createElement("label");
+  tag.textContent = label;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = placeholder;
+  input.value = value;
+  input.autocomplete = "off";
+  tag.htmlFor = input.id = `who-${label.replace(/\W+/g, "-").toLowerCase()}`;
+  row.append(tag, input);
+  form.appendChild(row);
+  return input;
 }
 
 // Which model answers is the player's choice — the whole pitch is that

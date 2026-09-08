@@ -16,6 +16,7 @@ from fabula.commands import run_command
 from fabula.api import serve
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
+from fabula.player import Player
 from fabula.settings import DEFAULT_SETTINGS, Settings
 from fabula.env import load_env
 from fabula.llm import LiteLLMClient, ModelUnavailable, missing_credentials
@@ -84,7 +85,8 @@ def show_library(library: Library) -> None:
     for card in stories:
         played = card.played_at.strftime("%d %b %H:%M")
         turns = "unplayed" if card.unplayed else f"{card.turns} turn{'s' * (card.turns != 1)}"
-        print(f"  {card.id}  {card.title:<34} {card.scene:<22} {turns:>9}   {played}")
+        title = f"{card.title} (as {card.character})" if card.character else card.title
+        print(f"  {card.id}  {title:<40} {card.scene:<20} {turns:>9}   {played}")
     print("\nResume one:  fabula --resume <id>")
 
 
@@ -173,6 +175,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--resume", metavar="ID", help="Pick a story back up")
     parser.add_argument("--delete", metavar="ID", help="Delete a story and stop")
     parser.add_argument("--title", default=None, help="Name a new story")
+    parser.add_argument(
+        "--as", dest="played_as", default=None, metavar="NAME",
+        help="Play as somebody of your own rather than the authored character",
+    )
+    parser.add_argument(
+        "--look", default=None, metavar="LINE",
+        help="One line the room can see about you, at the start of the story",
+    )
     parser.add_argument(
         "--db",
         default=None,
@@ -279,8 +289,12 @@ def main(argv: list[str] | None = None) -> None:
     else:
         if not args.scene:
             parser.error("a new story needs a scene: fabula <world> <scene>")
+        player = Player(name=args.played_as or "", look=args.look or "")
+        complaint = player.complaint()
+        if complaint:
+            parser.error(complaint)
         session = library.start(
-            args.world, args.scene, title=args.title, llm=llm, **opening
+            args.world, args.scene, title=args.title, llm=llm, player=player, **opening
         )
 
     run(session, interpret_beliefs=interpret)
