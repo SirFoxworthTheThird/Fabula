@@ -10,6 +10,9 @@ cast:
   - yusuf
   - nadia
   - ana
+# Written for this world, not in the room when it opens.
+may_arrive:
+  - petra
 starting_positions:
   ilse: radio        # two rooms from the bunkroom: out of earshot entirely
   yusuf: generator   # a room you can hear into and not out of

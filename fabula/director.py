@@ -31,7 +31,7 @@ from fabula.db import EventStore
 from fabula.loader import Scene
 from fabula.memory import ContextBuilder, form_belief, location_at_seq, record_rehearsals
 from fabula.interpret import INTERPRETATION_WINDOW, interpret
-from fabula.persistence import encode_belief, witnessed_withholding
+from fabula.persistence import begin_scene, encode_belief, witnessed_withholding
 from fabula.models import Bid, Character, Event, Pressure
 from fabula.narrator import NARRATOR_ID, Narrator
 from fabula.pressures import scene_state, select_pressure
@@ -118,6 +118,7 @@ class Director:
         llm=None,
         pressures: list[Pressure] | None = None,
         interpret_beliefs: bool = True,
+        waiting: dict[str, Character] | None = None,
     ):
         self.store = store
         self.world = world
@@ -130,6 +131,11 @@ class Director:
         # off costs the annotations and nothing that was provable.
         self.interpret_beliefs = interpret_beliefs
         self.pressures = pressures or []
+        # Written for this world, not in the room when it opened. An
+        # authored pressure may bring one on; nothing else can, and the
+        # narrator least of all — it writes prose, and a person who
+        # arrives has to arrive as an event.
+        self.waiting = waiting or {}
         self.contexts = ContextBuilder(world, characters, scene.id, store, llm)
 
     def build_event(
@@ -410,15 +416,37 @@ class Director:
         firing would be the same class of bug as an unlogged utterance."""
         effect = pressure.effect
         location_id = effect["location"]
+        actor_id = effect.get("actor")
+        if effect["kind"] == "arrival" and actor_id in self.waiting:
+            self.admit(actor_id)
         content = self.narrator.render_pressure(pressure, location_id, self.world)
         return self.build_event(
             effect["kind"],
-            effect.get("actor"),
+            actor_id,
             location_id,
             content,
             audibility=effect.get("audibility", "room"),
             metadata={"pressure_id": pressure.id},
         )
+
+    def admit(self, character_id: str) -> Character:
+        """Bring somebody who was waiting off-stage into the scene.
+
+        Only ever called for an arrival, which is what makes their memory
+        answer itself: `location_at_seq` replays their own arrivals from
+        wherever they started, and they started nowhere reachable — so
+        everything before the event that brings them in resolves to "none"
+        and they walk in knowing only what they walk in on. No backfill,
+        no decision about what they might have overheard, and nothing to
+        get wrong.
+        """
+        character = self.waiting.pop(character_id)
+        # In place: the session, the context builder and this object all
+        # hold the same dict, and somebody who joined only the director's
+        # copy would bid without ever being seen to be in the room.
+        self.characters[character_id] = character
+        begin_scene(self.store, self.characters)
+        return character
 
     def _absorb(self) -> None:
         """After each append, let every character take in what they just

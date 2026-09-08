@@ -80,3 +80,21 @@
     location: mess
   cooldown_turns: 12
   max_fires: 2
+
+- id: petra_comes_in_off_the_line
+  intent: >
+    The porch door bangs and somebody comes in stamping the cold off,
+    still in outdoor layers, having driven in from the far hut without
+    telling anyone she was coming.
+  weight: 0.65
+  trigger:
+    turns_elapsed: "> 8"
+    character_not_at:
+      petra: mess
+  effect:
+    kind: arrival
+    actor: petra
+    location: mess
+    audibility: building
+  cooldown_turns: 30
+  max_fires: 1

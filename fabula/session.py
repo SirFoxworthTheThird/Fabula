@@ -22,7 +22,7 @@ from fabula.models import Character, Event, ProjectedEvent
 from fabula.narrator import Narrator
 from fabula.persistence import begin_scene
 from fabula.pressures import has_ended, scene_state
-from fabula.world import World
+from fabula.world import OFFSTAGE, World
 
 
 class Session:
@@ -81,9 +81,21 @@ class Session:
         # turns in every scene the world had. `cast` was decorative until
         # this line: a list you write and the engine ignores is worse
         # than no list at all.
-        missing = [cid for cid in scene.cast if cid not in characters]
+        missing = [cid for cid in scene.cast + scene.may_arrive if cid not in characters]
         if missing:
-            raise ValueError(f"scene {scene.id} casts unknown character(s): {missing}")
+            raise ValueError(f"scene {scene.id} names unknown character(s): {missing}")
+        overlap = sorted(set(scene.cast) & set(scene.may_arrive))
+        if overlap:
+            raise ValueError(f"scene {scene.id} both casts and awaits: {overlap}")
+
+        # Whoever may still walk in waits off-stage, which is not a room:
+        # unreachable in both directions, so until their arrival they
+        # perceive nothing and nobody perceives them — through the
+        # ordinary perception path, with no special case in it.
+        waiting = {
+            cid: characters[cid].model_copy(update={"location_id": OFFSTAGE})
+            for cid in scene.may_arrive
+        }
         characters = {cid: characters[cid] for cid in scene.cast}
         store = EventStore(db_path)
         llm = llm or get_default_llm()
@@ -106,6 +118,7 @@ class Session:
         director = Director(
             store, world, characters, scene, narrator, llm, pressures,
             interpret_beliefs=interpret_beliefs,
+            waiting=waiting,
         )
 
         # Characters are durable: with a real db path they arrive carrying

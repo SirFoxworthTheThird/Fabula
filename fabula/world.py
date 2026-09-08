@@ -95,6 +95,17 @@ class Phrasing(BaseModel):
         return template.format(**fields)
 
 
+# Where a character waits before they walk into a scene.
+#
+# Deliberately not a room. `distance` breadth-first-searches from the
+# listener's room, so an id that is in no `rooms` map is unreachable in
+# both directions and every perception question about it answers "none"
+# through the ordinary path — no special case in the code the leak tests
+# depend on. Someone standing here perceives nothing and is perceived by
+# nobody, which is exactly what being off-stage means.
+OFFSTAGE = "(off-stage)"
+
+
 class Room(BaseModel):
     id: str
     name: str

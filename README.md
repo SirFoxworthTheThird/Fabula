@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 279 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 290 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -333,7 +333,7 @@ until a second one arrives. So there are two, deliberately unalike:
 |---|---|---|---|
 | | a house after a funeral | a station on the plateau | a house by the sea, in May |
 | rooms | 2, mutually audible | 4 in a chain, one one-way | 2 |
-| cast | 2 agents + you | 3 agents + you | 2 agents + you |
+| cast | 2 agents + you | 3 agents + you, **and one who may walk in** | 2 agents + you |
 | secrets | one, one holder | **two, two holders, from each other** | one, one holder |
 | language | English | English | **Portuguese** |
 
@@ -508,6 +508,48 @@ What tonight changed:
   Maria trusts Tomás less than at the start (0.50 → 0.42)
 ```
 
+### Somebody who was not in the room when it opened
+
+A scene's `cast` is who is there at the start. `may_arrive` is who might turn up:
+
+```yaml
+cast: [ilse, yusuf, nadia, ana]
+may_arrive: [petra]          # written for this world, not in the room yet
+```
+
+An authored `arrival` pressure brings them on. Nothing else can — and the narrator least
+of all, because it writes prose, while a person who arrives has to arrive as an *event*
+with an actor id, and only the director assigns those. A character the narrator invents
+stays a ghost in a sentence: it cannot speak, act, be perceived as an actor, or hold a
+belief.
+
+The part worth knowing is what makes their memory right. **Nothing backfills it.** They
+wait *off-stage*, which is deliberately not a room — `distance` breadth-first-searches
+from the listener's room, so an id in no `rooms` map is unreachable in both directions:
+
+```
+offstage -> kitchen: -1        kitchen -> offstage: -1
+```
+
+Every moment before their arrival therefore resolves to "none" through the ordinary
+perception path, with no special case in the code the leak tests depend on. They walk in
+knowing only what they walk in on, and there is no decision to get wrong about what they
+might have overheard. From the arrival event onward they bid, perceive, remember and are
+seen exactly like anybody else.
+
+```
+the secret is said in the mess, while she is still out on the line
+    what she perceives from off-stage: []
+she arrives
+    [full] The porch door bangs.
+    [full] You picked a night for it.
+    her context names the flight: False
+```
+
+Both halves are guarded across every world on disk: an `arrival` pressure whose actor is
+neither cast nor awaited fails review, as does a scene that awaits somebody it has
+already cast.
+
 Pressures are a trigger plus an intent, never a script. The director chooses among
 *authored* pressures and the narrator renders the chosen one; it can never invent a
 complication, because a director allowed to improvise produces generic beats — a knock,
@@ -620,14 +662,15 @@ The suite is the regression net *and* the clearest description of the product:
   crosses that doorway, which would let an author seal one; perception uses only the
   presence of an edge and the *event's* own audibility. Until it is wired up, a one-way
   edge is how you make a room you cannot hear out of.
-* **A character the narrator invents is a ghost.** It is told to introduce no people who
-  have not appeared, and a small model ignores that — the `winterlight` run produced an
-  interrogator and an elderly man who are not on the station. They stay in prose and
-  cannot become anything more, because an event needs an `actor_id` the director assigns
-  from the cast, so an invented person cannot speak, act, be perceived as an actor, or
-  hold a belief. It is a quality bug rather than a leak, and nothing promotes them.
-  Bringing somebody genuinely new into a scene wants an authored latent cast and a
-  pressure that fetches them, which does not exist yet.
+* **A character the narrator invents is still a ghost, and stays one.** It is told to
+  introduce no people who have not appeared, and a small model ignores that — the
+  `winterlight` run produced an interrogator and an elderly man who are not on the
+  station. Nothing promotes them: an invented person cannot speak, act, be perceived as
+  an actor, or hold a belief, because all of that needs an `actor_id` the director
+  assigns. It is a quality bug rather than a leak. Bringing somebody genuinely new in is
+  `may_arrive` plus an authored pressure — a person the author wrote, at a moment the
+  director chose. Deciding to introduce somebody the author never wrote would be a
+  director-level classification, which does not exist yet.
 * Prompt adherence is still the soft spot, and playing `winterlight` on a 1.5B model made
   that vivid: Yusuf recited his own persona aloud three times ("I fix the transfer valve.
   It's been a quarter turn open"), and the narrator invented an interrogator and an

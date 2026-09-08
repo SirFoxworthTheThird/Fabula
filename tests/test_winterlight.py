@@ -308,6 +308,18 @@ def test_every_authored_reference_resolves(world_dir):
         _, _, scene = load_scenario(world_dir, scene_file.stem)
         for cid in scene.cast:
             assert cid in characters, f"{scene.id} casts {cid}"
+        for cid in scene.may_arrive:
+            assert cid in characters, f"{scene.id} awaits {cid}"
+        assert not set(scene.cast) & set(scene.may_arrive), scene.id
+        # An arrival pressure naming somebody outside the room can only
+        # fire if the scene said they might turn up; otherwise it appends
+        # an event with an actor nobody in the scene has ever heard of.
+        for pressure in load_pressures(world_dir):
+            actor = pressure.effect.get("actor")
+            if pressure.effect.get("kind") == "arrival" and actor not in scene.cast:
+                assert actor in scene.may_arrive, (
+                    f"{scene.id}: {pressure.id} lands {actor}, who is neither cast nor awaited"
+                )
         for cid, room in scene.starting_positions.items():
             assert cid in characters and room in world.rooms, scene.id
         named = scene.end_condition.get("fact_spoken")

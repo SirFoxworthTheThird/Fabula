@@ -9,6 +9,9 @@ cast:
   - yusuf
   - nadia
   - ana
+# Written for this world, not in the room when it opens.
+may_arrive:
+  - petra
 starting_positions:
   ilse: mess
   yusuf: mess

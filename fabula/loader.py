@@ -33,6 +33,11 @@ class Scene(BaseModel):
     world: str
     mode: Literal["arc", "sandbox"] = "sandbox"
     cast: list[str]
+    # Characters written for this world who are not in the room when it
+    # opens, and who an authored pressure may bring on. Declared rather
+    # than inferred from the pressures, so a typo in a pressure's actor
+    # cannot quietly conjure somebody.
+    may_arrive: list[str] = Field(default_factory=list)
     starting_positions: dict[str, str] = Field(default_factory=dict)
     start_time: datetime = datetime(2024, 1, 1, 19, 0, 0)
     turn_budget: int = 8
