@@ -68,9 +68,9 @@
 
 - id: the_date_on_the_board
   intent: >
-    Somebody has counted down the days to the first flight in the corner
-    of the whiteboard since March, and the number is small enough now to
-    read from across the room.
+    Somebody has been counting the days down in the corner of the
+    whiteboard since March, and the number is small enough now to read
+    from across the room.
   weight: 0.45
   trigger:
     fact_unspoken: the_flight

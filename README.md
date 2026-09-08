@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 228 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 231 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -344,6 +344,32 @@ with the one that would have caught an early ashgrove bug, where Maria's persona
 the music box in the same breath as saying she did not know about it. Authored prose is
 the one place a leak can be written by hand, because it never passes through a projection.
 
+### Then playing it found the real one
+
+Running `winterlight` on a local 1.5B model, the arc **ended itself**. Nobody had
+confessed anything. A pressure whose intent read *"counted down the days to the first
+flight"* produced narration carrying that phrase, and the scene's `fact_spoken` condition
+matched it. The guard above covered room descriptions and not pressure intents; it now
+covers both, and intention descriptions too.
+
+Chasing that turned up a live bug in **ashgrove**, which had been there since the arc
+scene shipped:
+
+```python
+# Tomás's authored off-screen intention:
+"takes the music box down and checks the seam where he glued it"
+```
+
+He performs that alone, off-screen, by design. It names the fact in its own action text —
+so checking the glue in an empty kitchen satisfied `fact_spoken: music_box` and ended
+`the_reckoning` with nobody in the room and nothing said.
+
+A word in the log is not a subject in the room. `fact_spoken` now means **somebody other
+than the actor perceived that event in full**. Half-hearing it through a wall does not
+count either: the degraded descriptor carries no words, so a listener in the next room
+did not catch what the subject was. One world could not have surfaced this — it needs
+somewhere to be alone, and ashgrove's two rooms are always within earshot.
+
 ## Authoring
 
 Everything authored is plain YAML on disk — diffable, shareable, legible to a coding
@@ -514,9 +540,11 @@ The suite is the regression net *and* the clearest description of the product:
   crosses that doorway, which would let an author seal one; perception uses only the
   presence of an edge and the *event's* own audibility. Until it is wired up, a one-way
   edge is how you make a room you cannot hear out of.
-* A fact counts as **spoken** when it appears anywhere in the log, not when anyone
-  perceived it. A secret confessed to an empty room still ends an arc that waits on it.
-  Only reachable in a world where somebody can be alone, which is why it surfaced here.
+* Prompt adherence is still the soft spot, and playing `winterlight` on a 1.5B model made
+  that vivid: Yusuf recited his own persona aloud three times ("I fix the transfer valve.
+  It's been a quarter turn open"), and the narrator invented an interrogator and an
+  elderly man who are not on the station. Nothing structural gave way — see below — but
+  every prompt-level rule here is worth exactly what the model makes of it.
 * Prompt adherence is the soft spot. Structural rules hold regardless of model (the
   narrator cannot narrate the player, because it does not bid), but the ones that live in
   prompts — invent no props, never speak for a character, don't raise what you guard —

@@ -48,7 +48,7 @@ relationships:
     note: The only one here who says what she thinks without arranging it first.
 intentions:
   - id: count_the_drums
-    description: counts the reserve drums along the far wall and writes the number down
+    description: counts the drums along the far wall and writes the number down
     location_id: generator
     ready_after_minutes: 35
   - id: check_her_own_book

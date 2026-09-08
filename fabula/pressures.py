@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 from fabula.memory import location_at_seq
 from fabula.models import Character, Event, Pressure
-from fabula.world import Fact, mentions_fact
+from fabula.world import Fact, World, mentions_fact, resolve_perception
 
 ARC_RAMP_TURNS = 30          # how quickly arc mode escalates toward its end
 SANDBOX_LULL_THRESHOLD = 0.4  # sandbox only pushes when the scene has gone quiet
@@ -36,9 +36,15 @@ class SceneState:
     turn_count: int
     locations: dict[str, str]
     fires: dict[str, list[int]] = field(default_factory=dict)
+    # Needed to answer "did anyone actually hear that?", which is what
+    # separates a subject being raised from a word appearing in the log.
+    characters: dict[str, Character] = field(default_factory=dict)
+    world: World | None = None
 
 
-def scene_state(events: list[Event], characters: dict[str, Character]) -> SceneState:
+def scene_state(
+    events: list[Event], characters: dict[str, Character], world: World | None = None
+) -> SceneState:
     turn_count = events[-1].seq if events else 0
     locations = {
         character_id: location_at_seq(
@@ -51,12 +57,46 @@ def scene_state(events: list[Event], characters: dict[str, Character]) -> SceneS
         pressure_id = event.metadata.get("pressure_id")
         if pressure_id:
             fires.setdefault(pressure_id, []).append(event.seq)
-    return SceneState(events=events, turn_count=turn_count, locations=locations, fires=fires)
+    return SceneState(
+        events=events,
+        turn_count=turn_count,
+        locations=locations,
+        fires=fires,
+        characters=characters,
+        world=world,
+    )
 
 
-def _first_spoken_seq(fact: Fact, events: list[Event]) -> int | None:
-    for event in events:
-        if mentions_fact(fact, event.content):
+def _anyone_heard(event: Event, state: SceneState) -> bool:
+    """Did anyone but the actor perceive this event in full?
+
+    Full only. The degraded descriptor carries no words — "muffled voices
+    from the kitchen" — so someone through a wall did not hear what the
+    subject was.
+    """
+    if state.world is None:
+        return True  # no topology to judge with; fall back to the log
+    for character_id, character in state.characters.items():
+        if character_id == event.actor_id:
+            continue
+        where = location_at_seq(character_id, character.location_id, state.events, event.seq)
+        if resolve_perception(event, character_id, where, state.world) == "full":
+            return True
+    return False
+
+
+def _first_spoken_seq(fact: Fact, state: SceneState) -> int | None:
+    """When was this fact actually raised in front of somebody?
+
+    Not merely "appears somewhere in the log". An event nobody perceived
+    did not put the subject in the room, and the difference is not
+    academic: Tomás's authored off-screen intention names the music box
+    in its own action text, so checking the glue alone in an empty
+    kitchen used to satisfy `fact_spoken` and end an arc that was waiting
+    for someone to say it out loud. Found by playing it.
+    """
+    for event in state.events:
+        if mentions_fact(fact, event.content) and _anyone_heard(event, state):
             return event.seq
     return None
 
@@ -102,7 +142,7 @@ def evaluate_trigger(trigger: dict, state: SceneState, facts: dict[str, Fact]) -
         unspoken = _named_facts(trigger["fact_unspoken"], facts)
         if unspoken is None:
             return False
-        if any(_first_spoken_seq(fact, state.events) is not None for fact in unspoken):
+        if any(_first_spoken_seq(fact, state) is not None for fact in unspoken):
             return False
         if for_turns is not None and not _compare(state.turn_count, for_turns):
             return False
@@ -114,7 +154,7 @@ def evaluate_trigger(trigger: dict, state: SceneState, facts: dict[str, Fact]) -
         spoken = _named_facts(trigger["fact_spoken"], facts)
         if spoken is None:
             return False
-        seqs = [_first_spoken_seq(fact, state.events) for fact in spoken]
+        seqs = [_first_spoken_seq(fact, state) for fact in spoken]
         if any(seq is None for seq in seqs):
             return False
         if for_turns is not None and not _compare(state.turn_count - max(seqs), for_turns):

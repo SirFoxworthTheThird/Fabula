@@ -62,7 +62,7 @@ def test_the_reckoning_puts_the_whole_cast_in_one_room(fake_llm):
 
 def test_has_ended_is_false_without_a_condition(dinner):
     events = dinner.store.get_events(dinner.scene.id)
-    state = scene_state(events, dinner.characters)
+    state = scene_state(events, dinner.characters, dinner.world)
 
     assert has_ended({}, state, dinner.world.facts) is False
 
@@ -132,3 +132,49 @@ def test_the_scene_state_carries_the_ending_over_http(fake_llm):
         state = client.get(f"/sessions/{opened['session_id']}").json()
 
         assert state["ended"] is True
+
+
+def test_a_fact_nobody_heard_was_not_raised(fake_llm):
+    """Found by playing it. Tomás's authored off-screen intention names
+    the music box in its own action text, so checking the glue alone in
+    an empty kitchen satisfied `fact_spoken` and ended an arc that was
+    waiting for somebody to say it out loud.
+
+    A word in the log is not a subject in the room.
+    """
+    session = Session.open(ASHGROVE, "the_reckoning", llm=fake_llm)
+    for other in ("maria", "elena"):
+        session.store.append_event(
+            session.director.build_event("arrival", other, "study", f"{other} goes through.")
+        )
+
+    speak(session, "tomas", "takes the music box down and checks the seam where he glued it")
+
+    assert session.ended() is False
+
+
+def test_the_same_words_end_it_once_somebody_is_there_to_hear(fake_llm):
+    session = Session.open(ASHGROVE, "the_reckoning", llm=fake_llm)
+
+    speak(session, "tomas", SECRET)  # Maria and Elena are at the table
+
+    assert session.ended() is True
+
+
+def test_half_hearing_it_through_a_wall_is_not_hearing_it(fake_llm):
+    """The degraded descriptor carries no words — "muffled voices from
+    the kitchen" — so somebody through a wall did not catch the subject.
+    """
+    session = Session.open(ASHGROVE, "the_reckoning", llm=fake_llm)
+    for other in ("maria", "elena"):
+        session.store.append_event(
+            session.director.build_event("arrival", other, "study", f"{other} goes through.")
+        )
+
+    session.store.append_event(
+        session.director.build_event(
+            "utterance", "tomas", "kitchen", SECRET, audibility="adjacent"
+        )
+    )
+
+    assert session.ended() is False

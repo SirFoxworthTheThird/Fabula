@@ -36,7 +36,9 @@ relationships:
     note: The youngest. The one person he might actually tell.
 intentions:
   - id: check_the_glue
-    description: takes the music box down and checks the seam where he glued it
+    description: >
+      takes something down from the mantel and checks the seam where he
+      glued it
     location_id: kitchen
     ready_after_minutes: 20
     private: true

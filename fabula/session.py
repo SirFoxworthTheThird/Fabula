@@ -170,7 +170,7 @@ class Session:
         events = self.store.get_events(self.scene.id)
         return has_ended(
             self.scene.end_condition,
-            scene_state(events, self.characters),
+            scene_state(events, self.characters, self.world),
             self.world.facts,
         )
 

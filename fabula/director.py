@@ -190,7 +190,7 @@ class Director:
             narrator_bid = self.narrator.bid(last_event, all_events, self.world)
             pressure_choice = select_pressure(
                 self.pressures,
-                scene_state(all_events, self.characters),
+                scene_state(all_events, self.characters, self.world),
                 self.world.facts,
                 self.scene.mode,
                 max((b.desire for b in bids), default=0.0),

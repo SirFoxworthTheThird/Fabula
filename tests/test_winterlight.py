@@ -224,17 +224,40 @@ def test_no_persona_names_a_secret_that_is_not_its_own(world_dir):
 
 
 @pytest.mark.parametrize("world_dir", ALL_WORLDS, ids=lambda p: p.name)
-def test_no_room_description_names_a_fact(world_dir):
-    """A room description reaches the log as narration, and `mentions_fact`
-    reads event content — so a keyword in a description lets the narrator
-    raise the subject just by describing the room, firing pressures and
-    ending arcs that nobody actually spoke about.
+def test_no_authored_text_names_a_fact(world_dir):
+    """Three kinds of authored prose end up in the log as event content:
+    a room description the narrator is given to describe a place, a
+    pressure's intent that it is given to render, and an intention's
+    description, which is materialised as the action itself.
+
+    A fact keyword in any of them lets the subject be raised by scenery.
+    Keyword matching is deterministic and cannot tell a confession from a
+    neutral mention, so the cost lands on the author: authored text must
+    evoke a fact without naming it.
+
+    The first version of this test checked only room descriptions. A
+    played scene then ended its own arc, because a pressure intent read
+    "counted down the days to the first flight" and the narration it
+    produced satisfied the scene's `fact_spoken` condition — nobody had
+    said anything.
     """
+    from fabula.loader import load_pressures
+
     world = load_world(world_dir)
 
+    def names(text):
+        return [f for f in world.facts if mentions_fact(world.facts[f], text)]
+
     for room_id, room in world.rooms.items():
-        named = [f for f in world.facts if mentions_fact(world.facts[f], room.description)]
-        assert not named, f"{world.id}/{room_id} description names {named}"
+        assert not names(room.description), f"room {room_id}: {names(room.description)}"
+
+    for pressure in load_pressures(world_dir):
+        assert not names(pressure.intent), f"pressure {pressure.id}: {names(pressure.intent)}"
+
+    for character in load_characters(world_dir).values():
+        for intention in character.intentions:
+            named = names(intention.description)
+            assert not named, f"intention {character.id}/{intention.id}: {named}"
 
 
 @pytest.mark.parametrize("world_dir", ALL_WORLDS, ids=lambda p: p.name)
