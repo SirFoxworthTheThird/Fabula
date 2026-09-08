@@ -30,6 +30,7 @@ from fabula.chronology import (
 from fabula.db import EventStore
 from fabula.loader import Scene
 from fabula.memory import ContextBuilder, form_belief, location_at_seq, record_rehearsals
+from fabula.interpret import INTERPRETATION_WINDOW, interpret
 from fabula.persistence import encode_belief, witnessed_withholding
 from fabula.models import Bid, Character, Event, Pressure
 from fabula.narrator import NARRATOR_ID, Narrator
@@ -116,6 +117,7 @@ class Director:
         narrator: Narrator,
         llm=None,
         pressures: list[Pressure] | None = None,
+        interpret_beliefs: bool = True,
     ):
         self.store = store
         self.world = world
@@ -123,6 +125,10 @@ class Director:
         self.scene = scene
         self.narrator = narrator
         self.llm = llm
+        # Reading each remembered moment is one model call per character
+        # per moment, and it dominates the bill for a scene. Turning it
+        # off costs the annotations and nothing that was provable.
+        self.interpret_beliefs = interpret_beliefs
         self.pressures = pressures or []
         self.contexts = ContextBuilder(world, characters, scene.id, store, llm)
 
@@ -433,7 +439,24 @@ class Director:
                 continue
 
             newest = projected[-1]
-            encode_belief(self.store, character, form_belief(character, newest))
+            # The run-up is what makes the moment readable: "he said
+            # nothing" means one thing after small talk and another after
+            # being asked where the music box went. Their perceived lines
+            # only, so the reading cannot see further than they did.
+            window = projected[-INTERPRETATION_WINDOW:]
+            # Not for the player. Nothing reads their memory back into a
+            # prompt — they are holding it — so writing down what they
+            # privately think would be the engine deciding their inner
+            # life, and paying a model call to do it.
+            reader = None if character.is_user or not self.interpret_beliefs else self.llm
+            encode_belief(
+                self.store,
+                character,
+                form_belief(character, newest),
+                interpret=lambda: interpret(
+                    character, window, self.world, self.store, reader
+                ),
+            )
 
             actor_id = newest.event.actor_id
             if actor_id and actor_id != character.id:

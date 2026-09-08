@@ -62,10 +62,13 @@ def playtest(
     show_beliefs: bool = True,
     llm: LLMClient | None = None,
     api_base: str | None = None,
+    interpret_beliefs: bool = True,
 ) -> None:
     if llm is None:
         llm = LiteLLMClient(model=model, api_base=api_base) if model else get_default_llm()
-    session = Session.open(world_dir, scene_name, llm=llm)
+    session = Session.open(
+        world_dir, scene_name, llm=llm, interpret_beliefs=interpret_beliefs
+    )
     you = session.user_character
     characters = session.characters
 
@@ -106,6 +109,11 @@ def playtest(
             for belief in beliefs[:8]:
                 confidence = "sure" if belief.confidence >= 1.0 else "unsure"
                 print(f"    [{belief.salience:.2f} {confidence:>6}] {belief.content}")
+                if belief.interpretation:
+                    # What they made of it, under what they perceived —
+                    # the most useful thing on this page when you are
+                    # deciding whether a character is reading the room.
+                    print(f"    {'':>15} → {belief.interpretation}")
             print()
 
 
@@ -120,6 +128,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--model", default=None, help="Any model id litellm understands")
     parser.add_argument("--api-base", default=None, help="An OpenAI-compatible endpoint")
     parser.add_argument("--no-beliefs", action="store_true", help="Transcript only")
+    parser.add_argument(
+        "--no-interpret",
+        action="store_true",
+        help="Skip the per-memory reading — most of a scene's model calls",
+    )
     args = parser.parse_args(argv)
 
     playtest(
@@ -129,6 +142,7 @@ def main(argv: list[str] | None = None) -> None:
         model=args.model,
         show_beliefs=not args.no_beliefs,
         api_base=args.api_base,
+        interpret_beliefs=not args.no_interpret,
     )
 
 

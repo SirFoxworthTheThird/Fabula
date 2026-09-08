@@ -12,6 +12,8 @@ here is a pure function of a belief and its own salience.
 """
 from __future__ import annotations
 
+from typing import Callable
+
 from fabula.db import EventStore
 from fabula.models import Belief, Character, Goal, ProjectedEvent, Relationship
 
@@ -28,15 +30,26 @@ WITHHOLD_TRUST_FLOOR = 0.1
 WITHHOLD_TRUST_MOVE = 0.2
 
 
-def encode_belief(store: EventStore, character: Character, belief: Belief | None) -> bool:
+def encode_belief(
+    store: EventStore,
+    character: Character,
+    belief: Belief | None,
+    interpret: Callable[[], str] | None = None,
+) -> bool:
     """Store a belief if it was salient enough to be worth keeping.
 
     Not every perceived moment becomes a memory; the store would fill
     with the weather. What passes the floor is decided by the character's
     own salience bias, so two characters keep different things.
+
+    `interpret` is called only once a belief has cleared the floor, and
+    only then — reading a moment costs a model call, and paying for one
+    on something about to be discarded is money spent on the weather.
     """
     if belief is None or belief.salience < BELIEF_SALIENCE_FLOOR:
         return False
+    if interpret is not None:
+        belief.interpretation = interpret()
     store.add_belief(belief)
     return True
 

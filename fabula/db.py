@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS beliefs (
     character_id TEXT NOT NULL,
     subject_id TEXT NOT NULL,
     content TEXT NOT NULL,
+    interpretation TEXT NOT NULL DEFAULT '',
     confidence REAL NOT NULL,
     source_event_id INTEGER,
     formed_at TEXT NOT NULL,
@@ -93,6 +94,17 @@ CREATE TABLE IF NOT EXISTS summaries (
     PRIMARY KEY (character_id, scene_id, span_key)
 );
 
+-- Derived and keyed the same way a summary is: a hash of the exact
+-- perceived lines it was read from. The same run-up always resolves to
+-- the same reading, so a character's memory of a moment is written once
+-- and never drifts underneath them.
+CREATE TABLE IF NOT EXISTS interpretations (
+    character_id TEXT NOT NULL,
+    span_key TEXT NOT NULL,
+    text TEXT NOT NULL,
+    PRIMARY KEY (character_id, span_key)
+);
+
 CREATE TABLE IF NOT EXISTS rehearsals (
     character_id TEXT NOT NULL,
     event_id INTEGER NOT NULL,
@@ -108,7 +120,24 @@ class EventStore:
         self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """Bring a database written by an older build up to date.
+
+        `CREATE TABLE IF NOT EXISTS` does nothing to a table that already
+        exists, so a scene file from before interpretations were added
+        would otherwise fail on the first read. Characters are meant to
+        be durable across runs; that has to survive an upgrade too.
+        """
+        columns = {
+            row["name"] for row in self.conn.execute("PRAGMA table_info(beliefs)").fetchall()
+        }
+        if "interpretation" not in columns:
+            self.conn.execute(
+                "ALTER TABLE beliefs ADD COLUMN interpretation TEXT NOT NULL DEFAULT ''"
+            )
 
     def close(self) -> None:
         with self._lock:
@@ -161,13 +190,14 @@ class EventStore:
             # moment twice would let a memory quietly gain weight on replay.
             self.conn.execute(
                 """INSERT OR IGNORE INTO beliefs
-                   (character_id, subject_id, content, confidence, source_event_id,
-                    formed_at, last_rehearsed, salience)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (character_id, subject_id, content, interpretation, confidence,
+                    source_event_id, formed_at, last_rehearsed, salience)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     belief.character_id,
                     belief.subject_id,
                     belief.content,
+                    belief.interpretation,
                     belief.confidence,
                     belief.source_event_id,
                     belief.formed_at.isoformat(),
@@ -182,20 +212,7 @@ class EventStore:
             rows = self.conn.execute(
                 "SELECT * FROM beliefs WHERE character_id = ?", (character_id,)
             ).fetchall()
-            return [
-                Belief(
-                    id=r["id"],
-                    character_id=r["character_id"],
-                    subject_id=r["subject_id"],
-                    content=r["content"],
-                    confidence=r["confidence"],
-                    source_event_id=r["source_event_id"],
-                    formed_at=datetime.fromisoformat(r["formed_at"]),
-                    last_rehearsed=datetime.fromisoformat(r["last_rehearsed"]),
-                    salience=r["salience"],
-                )
-                for r in rows
-            ]
+            return [_row_to_belief(r) for r in rows]
 
 
     def set_belief_salience(self, belief_id: int, salience: float) -> None:
@@ -295,6 +312,51 @@ class EventStore:
             )
             self.conn.commit()
 
+    def get_beliefs_from_other_scenes(
+        self, character_id: str, scene_id: str, limit: int = 5
+    ) -> list[Belief]:
+        """What this character carries in from before tonight, most
+        salient first.
+
+        Joined to the source event to find its scene, so a belief is
+        "from before" by where it was formed rather than by when it was
+        written. Every row was encoded from this character's own
+        projection, which is what makes reading them back safe.
+        """
+        with self._lock:
+            rows = self.conn.execute(
+                """SELECT b.* FROM beliefs b
+                   JOIN events e ON e.id = b.source_event_id
+                   WHERE b.character_id = ? AND e.scene_id != ?
+                   ORDER BY b.salience DESC, b.id DESC
+                   LIMIT ?""",
+                (character_id, scene_id, limit),
+            ).fetchall()
+            return [_row_to_belief(r) for r in rows]
+
+    def get_interpretation(self, character_id: str, span_key: str) -> str | None:
+        """The stored reading, or None if this span has never been read.
+
+        An empty string is a real answer — a reading that failed its
+        guard — so absence and refusal are deliberately distinguishable.
+        """
+        with self._lock:
+            row = self.conn.execute(
+                """SELECT text FROM interpretations
+                   WHERE character_id = ? AND span_key = ?""",
+                (character_id, span_key),
+            ).fetchone()
+            return row["text"] if row else None
+
+    def put_interpretation(self, character_id: str, span_key: str, text: str) -> None:
+        with self._lock:
+            self.conn.execute(
+                """INSERT OR IGNORE INTO interpretations (character_id, span_key, text)
+                   VALUES (?, ?, ?)""",
+                (character_id, span_key, text),
+            )
+            self.conn.commit()
+
     def get_rehearsals(self, character_id: str) -> dict[int, int]:
         """event_id -> seq of the most recent event that re-mentioned it."""
         with self._lock:
@@ -314,6 +376,21 @@ class EventStore:
                 (character_id, event_id, seq),
             )
             self.conn.commit()
+
+
+def _row_to_belief(row: sqlite3.Row) -> Belief:
+    return Belief(
+        id=row["id"],
+        character_id=row["character_id"],
+        subject_id=row["subject_id"],
+        content=row["content"],
+        interpretation=row["interpretation"],
+        confidence=row["confidence"],
+        source_event_id=row["source_event_id"],
+        formed_at=datetime.fromisoformat(row["formed_at"]),
+        last_rehearsed=datetime.fromisoformat(row["last_rehearsed"]),
+        salience=row["salience"],
+    )
 
 
 def _row_to_event(row: sqlite3.Row) -> Event:

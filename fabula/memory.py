@@ -329,8 +329,12 @@ def assemble_context(
     """Render a projection into the text a model call sees. Only
     `perceived_content` is ever read — never `event.content` — so a
     degraded or absent event has no path to leaking its true content."""
+    carried = _carried_in(character, scene_id, store)
     if not projected:
-        return "(nothing has happened yet)"
+        # Nothing has happened yet in *this* scene, which is not the same
+        # as an empty head: a character walking in from last week arrives
+        # already believing things.
+        return f"{carried}\n(nothing has happened yet)" if carried else "(nothing has happened yet)"
 
     rehearsals = store.get_rehearsals(character.id)
     tiered = assign_tiers(character, projected, rehearsals)
@@ -340,7 +344,37 @@ def assemble_context(
         tiered[index] = tiered[index].model_copy(update={"tier": "verbatim", "exempt": True})
 
     tiered = _fit_to_budget(tiered, budget)
-    return _render(character, tiered, scene_id, store, llm)
+    body = _render(character, tiered, scene_id, store, llm)
+    return f"{carried}\n{body}" if carried else body
+
+
+def _carried_in(character: Character, scene_id: str, store: EventStore) -> str:
+    """What this character walks in already believing.
+
+    Every line here was encoded from their own projection in an earlier
+    scene, which is what makes it safe to read back: a memory Maria never
+    formed cannot appear, and one she formed from half-hearing something
+    says what she half-heard.
+
+    The echo comes first and the reading is appended to it, never
+    substituted for it. A reading is the softest thing in the engine —
+    written by a model, and only as good as the model — so letting it
+    stand in place of what was perceived would let a weak one quietly
+    delete a memory instead of colouring it.
+    """
+    remembered = store.get_beliefs_from_other_scenes(character.id, scene_id)
+    if not remembered:
+        return ""
+    # Two moments can leave the same trace; a character does not believe
+    # it twice as hard for having thought it twice.
+    seen: dict[str, str] = {}
+    for belief in remembered:
+        seen.setdefault(belief.content, belief.interpretation)
+    lines = "\n".join(
+        f"- {content}" + (f" (you took it as: {reading})" if reading else "")
+        for content, reading in seen.items()
+    )
+    return f"What you already believed, coming into this:\n{lines}\n"
 
 
 class ContextBuilder:

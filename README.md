@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 179 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 198 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -126,6 +126,44 @@ It is the one part of the engine that deliberately steps outside a point of view
 is why it lives in its own module rather than on `Session` (where everything is POV with
 no exceptions), is only ever produced on request, and is read-only — looking behind the
 curtain appends nothing, so you can look and keep playing.
+
+### Memory
+
+A belief used to be an echo — the perceived line, stored verbatim. Nobody remembers a
+conversation as a transcript; they remember what they took it to mean, and two people in
+the same room take it to mean different things. So a belief now carries both halves:
+
+```
+[0.50   sure] Tomás, you have been quiet all evening.
+                → Tomás thinks his sister has noticed and is working up to asking.
+```
+
+`content` is the verbatim projection — the half the leak tests assert against, and the
+half that survives with no model at all. `interpretation` is the reading, written from
+that character's own perceived lines and nothing else. Three things keep the softest
+component in the engine from being its weakest point:
+
+* It is built from `perceived_content`, exactly like a summary, so it cannot reintroduce
+  what the projection excluded or blurred.
+* It is **checked before it is stored**. A reading that names a world fact the character
+  has no business knowing is thrown away and the belief keeps its echo — keyword
+  matching against authored facts, never a model judging a model. A memory is durable and
+  crosses scenes, so a hallucination here would not be a bad line; it would be a false
+  memory a character carries for good.
+* It is **additive, never substituted**. In context the echo comes first and the reading
+  is appended to it. Letting a reading stand in place of what was perceived would let a
+  weak model quietly delete a memory instead of colouring it — which is exactly what
+  happened the first time this was built the other way.
+
+What a character carries in from earlier scenes is now read back into their context,
+which is what makes durability visible in play at all. Everything in that block was
+encoded from their own projection, so a memory Maria never formed cannot appear, and one
+she formed from half-hearing something says what she half-heard.
+
+Readings are also the bulk of a scene's model calls — one per remembered moment per
+character. The player's are skipped (nothing reads their memory back, and writing down
+what they privately think is the engine deciding their inner life), and `--no-interpret`
+turns off the rest. On the sample scene that is 23 calls → 15 → 5.
 
 ### Point it at your own model
 

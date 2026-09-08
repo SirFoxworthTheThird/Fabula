@@ -54,6 +54,7 @@ class Session:
         scene_name: str,
         db_path: str = ":memory:",
         llm: LLMClient | None = None,
+        interpret_beliefs: bool = True,
     ) -> Session:
         world, characters, scene = load_scenario(world_dir, scene_name)
         pressures = load_pressures(world_dir)
@@ -75,7 +76,10 @@ class Session:
         narrator = Narrator(
             llm, protagonist=user_character.name, protagonist_id=user_character.id
         )
-        director = Director(store, world, characters, scene, narrator, llm, pressures)
+        director = Director(
+            store, world, characters, scene, narrator, llm, pressures,
+            interpret_beliefs=interpret_beliefs,
+        )
 
         # Characters are durable: with a real db path they arrive carrying
         # what they already believe, aged by the time between scenes.

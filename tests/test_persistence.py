@@ -232,3 +232,42 @@ def test_relationship_state_includes_the_users_character(scenario, store):
 def test_belief_floor_is_what_gates_encoding(scenario, store):
     _world, characters, _scene = scenario
     assert 0.0 < BELIEF_SALIENCE_FLOOR < 1.0
+
+
+def test_a_database_from_an_older_build_still_opens(tmp_path):
+    """Characters are meant to be durable across runs, which has to
+    survive an upgrade too. `CREATE TABLE IF NOT EXISTS` does nothing to
+    a table that already exists, so a scene file written before beliefs
+    carried a reading would fail on its first read without a migration.
+    """
+    import sqlite3
+
+    from fabula.db import EventStore
+
+    path = tmp_path / "before.sqlite"
+    old = sqlite3.connect(path)
+    old.executescript(
+        """CREATE TABLE beliefs (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               character_id TEXT NOT NULL,
+               subject_id TEXT NOT NULL,
+               content TEXT NOT NULL,
+               confidence REAL NOT NULL,
+               source_event_id INTEGER,
+               formed_at TEXT NOT NULL,
+               last_rehearsed TEXT NOT NULL,
+               salience REAL NOT NULL);
+           INSERT INTO beliefs
+               (character_id, subject_id, content, confidence, source_event_id,
+                formed_at, last_rehearsed, salience)
+           VALUES ('tomas', 'maria', 'She keeps looking at the shelf.', 1.0, NULL,
+                   '2024-01-01T19:00:00', '2024-01-01T19:00:00', 0.8);"""
+    )
+    old.commit()
+    old.close()
+
+    store = EventStore(str(path))
+    carried = store.get_beliefs("tomas")
+
+    assert [b.content for b in carried] == ["She keeps looking at the shelf."]
+    assert carried[0].interpretation == ""  # nothing invented for it

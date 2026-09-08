@@ -66,9 +66,12 @@ def run(
     db_path: str = ":memory:",
     model: str | None = None,
     api_base: str | None = None,
+    interpret_beliefs: bool = True,
 ) -> None:
     llm = LiteLLMClient(model=model, api_base=api_base) if model else None
-    session = Session.open(world_dir, scene_name, db_path, llm=llm)
+    session = Session.open(
+        world_dir, scene_name, db_path, llm=llm, interpret_beliefs=interpret_beliefs
+    )
     world, characters = session.world, session.characters
     you = session.user_character
 
@@ -108,8 +111,20 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--db", default=":memory:", help="SQLite file path (default: in-memory)")
     parser.add_argument("--model", default=None, help="Any model id litellm understands")
     parser.add_argument("--api-base", default=None, help="An OpenAI-compatible endpoint")
+    parser.add_argument(
+        "--no-interpret",
+        action="store_true",
+        help="Skip the per-memory reading — most of a scene's model calls",
+    )
     args = parser.parse_args(argv)
-    run(args.world_dir, args.scene, args.db, args.model, args.api_base)
+    run(
+        args.world_dir,
+        args.scene,
+        args.db,
+        args.model,
+        args.api_base,
+        interpret_beliefs=not args.no_interpret,
+    )
 
 
 if __name__ == "__main__":

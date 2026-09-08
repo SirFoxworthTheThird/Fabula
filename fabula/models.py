@@ -83,7 +83,15 @@ class Belief(BaseModel):
     id: int | None = None
     character_id: str
     subject_id: str
+    # What they perceived, in the words the projection gave them. This is
+    # the provable half: it is a copy of `ProjectedEvent.perceived_content`
+    # and nothing else, which is what the leak tests assert against.
     content: str
+    # What they made of it, in their own words — written by a model from
+    # this character's projection alone, and empty whenever there was no
+    # model or the interpretation failed its guard. Additive on purpose:
+    # a memory that exists only as an interpretation could not be checked.
+    interpretation: str = ""
     confidence: float
     source_event_id: int | None
     formed_at: datetime
