@@ -96,6 +96,13 @@ def _first_spoken_seq(fact: Fact, state: SceneState) -> int | None:
     for someone to say it out loud. Found by playing it.
     """
     for event in state.events:
+        if event.metadata.get("transmission"):
+            # Somebody reporting that they told a person off-screen, once,
+            # in private. The subject reached one pair of ears in the past
+            # tense; it is not the same as it being said in the room, and
+            # an arc waiting for somebody to say it out loud is still
+            # waiting.
+            continue
         if mentions_fact(fact, event.content) and _anyone_heard(event, state):
             return event.seq
     return None

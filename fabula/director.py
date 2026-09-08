@@ -21,6 +21,7 @@ from typing import Callable, Literal
 
 from fabula.agents import generate_utterance
 from fabula.bidding import get_bid, prefilter_candidates
+from fabula.classify import classify
 from fabula.chronology import (
     LARGE_SKIP_MINUTES,
     derive_skip_minutes,
@@ -124,6 +125,7 @@ class Director:
         pressures: list[Pressure] | None = None,
         interpret_beliefs: bool = True,
         waiting: dict[str, Character] | None = None,
+        classify_reports: bool = True,
     ):
         self.store = store
         self.world = world
@@ -135,6 +137,9 @@ class Director:
         # per moment, and it dominates the bill for a scene. Turning it
         # off costs the annotations and nothing that was provable.
         self.interpret_beliefs = interpret_beliefs
+        # Reading a line for what it reports costs a model call, but only
+        # for a line that names one of the world's facts — almost none do.
+        self.classify_reports = classify_reports
         self.pressures = pressures or []
         # Written for this world, not in the room when it opened. An
         # authored pressure may bring one on; nothing else can, and the
@@ -153,15 +158,17 @@ class Director:
         metadata: dict | None = None,
         story_time: datetime | None = None,
         detail_level: str = "full",
+        addressed_to: list[str] | None = None,
     ) -> Event:
         all_events = self.store.get_events(self.scene.id)
         if story_time is None:
             story_time = all_events[-1].story_time if all_events else self.scene.start_time
-        addressed_to = (
-            detect_addressed_to(content, self.characters, exclude_id=actor_id)
-            if kind in ("utterance", "action")
-            else []
-        )
+        if addressed_to is None:
+            addressed_to = (
+                detect_addressed_to(content, self.characters, exclude_id=actor_id)
+                if kind in ("utterance", "action")
+                else []
+            )
         return Event(
             scene_id=self.scene.id,
             seq=self.store.next_seq(self.scene.id),
@@ -183,6 +190,10 @@ class Director:
         stored_user_event = self.store.append_event(user_event)
         self._absorb()
         events_this_turn = [stored_user_event]
+        reported = self.record_transmission(stored_user_event)
+        if reported is not None:
+            events_this_turn.append(reported)
+            self._absorb()
         last_event = stored_user_event
         consecutive_agent_turns = 0
 
@@ -248,6 +259,12 @@ class Director:
             last_event = self.store.append_event(new_event)
             events_this_turn.append(last_event)
             self._absorb()
+            # Anybody can report having told somebody something, not only
+            # the player.
+            reported = self.record_transmission(last_event)
+            if reported is not None:
+                events_this_turn.append(reported)
+                self._absorb()
             consecutive_agent_turns += 1
 
             if self._addresses_user(last_event):
@@ -473,6 +490,64 @@ class Director:
             content,
             audibility=effect.get("audibility", "room"),
             metadata=metadata,
+        )
+
+    def record_transmission(self, event: Event) -> Event | None:
+        """If this line reports having told somebody something, log that
+        telling as the perception it describes.
+
+        A private beat, placed where the recipient is and addressed to
+        them, so the existing perception rules do all the work: they get
+        it in full, nobody else gets it at all, and the speaker knows
+        what they themselves said. From there it is an ordinary perceived
+        event — it becomes a belief, it shows in the reveal, and the turn
+        it landed in can be taken again.
+
+        Its story time is *now*, not backdated. The log records when
+        something entered the story, and a timestamp running backwards
+        would walk the clock in every client for no gain; the content and
+        the metadata say it happened before tonight.
+        """
+        speaker = self.characters.get(event.actor_id)
+        if speaker is None:
+            return None
+        all_events = self.store.get_events(self.scene.id)
+        reachable = {**self.characters, **self.waiting}
+        told = classify(
+            event,
+            speaker,
+            reachable,
+            self.world,
+            # Everything they had perceived *before* this line. Their own
+            # utterance is in their projection the moment it is appended,
+            # so including it would let anybody bootstrap knowledge by
+            # asserting it: "I already told Maria about the music box"
+            # would make the music box theirs to pass on.
+            [
+                perceived
+                for perceived in self.contexts.project(speaker, all_events)
+                if perceived.event.seq < event.seq
+            ],
+            self.store,
+            self.llm if self.classify_reports else None,
+        )
+        if told is None:
+            return None
+
+        recipient = reachable[told.recipient_id]
+        subject = self.world.facts[told.fact_id].keywords[0]
+        return self.store.append_event(
+            self.build_event(
+                "action",
+                speaker.id,
+                self.current_location(recipient),
+                self.world.phrasing.transmission.format(
+                    speaker=speaker.name, recipient=recipient.name, subject=subject
+                ),
+                audibility="private",
+                addressed_to=[recipient.id],
+                metadata={"transmission": told.fact_id},
+            )
         )
 
     def admit(self, character_id: str) -> Character:

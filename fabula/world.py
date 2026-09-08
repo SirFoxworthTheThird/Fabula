@@ -31,6 +31,11 @@ DURATION_TEMPLATES: dict[str, str] = {
     "hours": "{n} hours",
 }
 
+# A telling the engine reconstructs from a line that reported it. This
+# lands in somebody's perception, so like everything else that does, the
+# words are the author's.
+TRANSMISSION_TEMPLATE = "{speaker} told {recipient} about {subject}, before tonight."
+
 TIME_SKIP_TEMPLATES: dict[str, str] = {
     "awake": "({duration} pass, and you feel every one of them)",
     "asleep": "(a gap — you surface to find {duration} gone, unfelt)",
@@ -86,6 +91,7 @@ class Phrasing(BaseModel):
     degraded: dict[str, str] = Field(default_factory=lambda: dict(DEGRADED_TEMPLATES))
     duration: dict[str, str] = Field(default_factory=lambda: dict(DURATION_TEMPLATES))
     time_skip: dict[str, str] = Field(default_factory=lambda: dict(TIME_SKIP_TEMPLATES))
+    transmission: str = TRANSMISSION_TEMPLATE
     stopwords: frozenset[str] = STOPWORDS
     client: dict[str, str] = Field(default_factory=lambda: dict(CLIENT_TEMPLATES))
 

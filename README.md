@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 318 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 339 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -568,6 +568,50 @@ What tonight changed:
   Maria trusts Tomás less than at the start (0.50 → 0.42)
 ```
 
+### A line that reports something rather than only adding to it
+
+"She knows. I already told her about the music box." That is not just
+dialogue — it is a claim that a perception happened off-screen, and if the engine
+ignores it, Maria walks in later ignorant of something the scene established.
+
+Keyword lists cannot catch this. A *thing* has a name, so `mentions_fact` works in any
+language; a *meaning* does not, and asking an author to enumerate the ways of saying "I
+told him" is asking them to enumerate a language. So it is a model's judgement — and the
+**director's**, not the narrator's, because the director's output is narrow and checkable
+where prose is not.
+
+**The model proposes, the engine disposes.** The classifier returns a structure, never
+text:
+
+```json
+{"reports_telling": true, "to": "maria", "fact": "music_box"}
+```
+
+and nothing is trusted until every field survives:
+
+* `from` is whoever actually spoke the line — it is never read from the answer at all
+* `fact` must be an id the author wrote; a fact cannot be invented here
+* `to` must be a character in the scene or waiting to enter it
+* **the speaker must already have known it**, from their projection *before* this line —
+  otherwise anybody bootstraps knowledge by asserting it, and a player says "everyone
+  already knows my secret" and the scene dissolves
+
+A hallucinated classification fails one of those and becomes a no-op. What it produces is
+a private beat placed where the recipient is and addressed to them, so the existing
+perception rules do the work: they get it in full, nobody else gets it at all, and from
+there it is an ordinary perceived event — it becomes a belief, it shows in the reveal, and
+the turn it landed in can be taken again.
+
+The cheap gate is the mechanism that already works: only a line naming one of the world's
+facts is classified at all, so almost every line skips the model call. And a reported
+telling does not count as the fact being *said out loud* — one pair of ears in the past
+tense is not the room, and an arc waiting for somebody to say it is still waiting.
+
+Stated plainly: a misclassification grants somebody knowledge nobody on screen conveyed.
+The backdated beat makes that formally a perception, so invariant 1 holds on paper, but it
+was created on a model's say-so. Three things bound it — you can only pass on what you
+know, nothing is hidden, and the turn can be taken again.
+
 ### Somebody who was not in the room when it opened
 
 A scene's `cast` is who is there at the start. `may_arrive` is who might turn up:
@@ -713,6 +757,13 @@ The suite is the regression net *and* the clearest description of the product:
 
 ## Known rough edges
 
+* The classifier only reconstructs a telling to somebody the author wrote. "I told my
+  brother" — where no brother exists in the world — is refused rather than conjuring one.
+  Introducing a character nobody wrote is the same director-level shape and is not built.
+* The line the classifier is most likely to get wrong is wanting-to-tell versus
+  having-told, and it is the one with a consequence. There is a test pinning it, but a
+  test with a scripted answer proves the plumbing, not the judgement — that needs
+  measuring on a real model.
 * Nothing wakes a sleeper on noise. Waking is an authored moment — an intention that
   comes due, or a pressure — so a shout next to somebody who has turned in does not rouse
   them. That would want an audibility threshold on the perception path, and it is a

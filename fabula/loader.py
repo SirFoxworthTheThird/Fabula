@@ -21,6 +21,7 @@ from fabula.world import (
     DURATION_TEMPLATES,
     STOPWORDS,
     TIME_SKIP_TEMPLATES,
+    TRANSMISSION_TEMPLATE,
     Fact,
     Phrasing,
     Room,
@@ -85,6 +86,7 @@ def _phrasing(authored: dict) -> Phrasing:
         degraded={**DEGRADED_TEMPLATES, **(authored.get("degraded") or {})},
         duration={**DURATION_TEMPLATES, **(authored.get("duration") or {})},
         time_skip={**TIME_SKIP_TEMPLATES, **(authored.get("time_skip") or {})},
+        transmission=authored.get("transmission") or TRANSMISSION_TEMPLATE,
         client={**CLIENT_TEMPLATES, **(authored.get("client") or {})},
         stopwords=frozenset(authored["stopwords"]) if authored.get("stopwords") else STOPWORDS,
     )

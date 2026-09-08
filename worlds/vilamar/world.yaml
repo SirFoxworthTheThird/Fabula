@@ -52,6 +52,8 @@ phrasing:
   time_skip:
     awake: "({duration} a passar, e sente-se cada um deles)"
     asleep: "(um vazio — acorda e faltam {duration}, que não sentiu)"
+  transmission: "{speaker} já tinha contado a {recipient} sobre {subject}, antes desta noite."
+
   # O que o cliente diz pela sua própria voz. Não é texto da história,
   # mas lê-se no mesmo fôlego — "You are in o quintal" é o mesmo erro,
   # uma camada mais acima. Os comandos (/go, /wait) ficam em inglês de
