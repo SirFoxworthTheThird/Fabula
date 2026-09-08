@@ -1,0 +1,25 @@
+# None of these names a fact: authored prose reaches the log as
+# narration, and a keyword here would let the narrator raise the subject
+# just by describing the afternoon.
+
+- id: the_bell
+  intent: >
+    A bell goes somewhere above the staircase, twice, and the noise of
+    the hall changes shape around it.
+  weight: 0.45
+  trigger: {turns_elapsed: "> 5"}
+  effect: {kind: narration, location: hall, audibility: building}
+  cooldown_turns: 14
+  max_fires: 2
+
+- id: vance_checks_the_drawer
+  intent: >
+    The Director opens the left-hand drawer of the desk, looks at what is
+    in it without taking it out, and closes it again.
+  weight: 0.5
+  trigger:
+    fact_unspoken: the_seventh_file
+    for_turns: "> 6"
+  effect: {kind: narration, location: office}
+  cooldown_turns: 12
+  max_fires: 2

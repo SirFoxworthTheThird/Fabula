@@ -1,0 +1,17 @@
+# Over when the placement is finally said. Where it goes next depends on
+# whether Rook got the Director anywhere near the other thing.
+id: the_interview
+world: ardenhall
+mode: arc
+cast: [vance, rook]
+starting_positions: {vance: office, rook: office}
+start_time: 2024-09-02T11:40:00
+end_condition:
+  fact_spoken: your_placement
+turn_budget: 6
+max_consecutive_agent_turns: 3
+next:
+  - scene: what_marlow_sent
+    when:
+      fact_spoken: the_seventh_file
+  - scene: first_night

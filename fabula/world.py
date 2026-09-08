@@ -155,6 +155,10 @@ class World(BaseModel):
     # language rather than defaulting to the language of the prompts.
     language: str = "en"
     phrasing: Phrasing = Field(default_factory=Phrasing)
+    # May the map grow as the player walks into places the author did not
+    # write? Off by default: a two-room house has no corridors to find,
+    # and a world that never opts in behaves exactly as it always did.
+    discover_rooms: bool = False
 
     def distance(self, from_room: str, to_room: str) -> int:
         """BFS distance in rooms. 0 = same room, 1 = adjacent, etc."""
@@ -182,6 +186,47 @@ class World(BaseModel):
     def room_name(self, room_id: str) -> str:
         room = self.rooms.get(room_id)
         return room.name if room else room_id
+
+
+def find_room(world: World, wanted: str) -> str | None:
+    """Resolve what somebody typed to a room id.
+
+    By id first, then by folded name, then by a name that contains it —
+    so "library", "the library" and "Library" are one place. Folding is
+    the same accent-stripping used elsewhere, and the containment step is
+    what lets a language put its article on the front or the back without
+    the engine knowing which.
+    """
+    if wanted in world.rooms:
+        return wanted
+    target = _fold(wanted).strip()
+    if not target:
+        return None
+    for room_id, room in world.rooms.items():
+        if _fold(room.name).strip() == target:
+            return room_id
+    for room_id, room in world.rooms.items():
+        if target in _fold(room.name):
+            return room_id
+    return None
+
+
+def connect(world: World, new_room: Room, from_room_id: str) -> Room:
+    """Put a newly discovered room on the map, joined to exactly one
+    place: the one it was reached from.
+
+    The edge is the engine's to decide, never a model's — it is the only
+    part of a room that carries any perception weight, and a model that
+    joined the library to the headmaster's office would be a leak rather
+    than a bad sentence. Symmetric, because a doorway is: you hear the
+    corridor you stepped out of and it hears you. A one-way edge stays
+    something an author does on purpose, not something discovery does by
+    accident.
+    """
+    new_room.adjacent = {from_room_id: "adjacent"}
+    world.rooms[new_room.id] = new_room
+    world.rooms[from_room_id].adjacent[new_room.id] = "adjacent"
+    return new_room
 
 
 def write_in(language: str) -> str:

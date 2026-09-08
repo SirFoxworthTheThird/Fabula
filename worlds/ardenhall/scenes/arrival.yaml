@@ -1,0 +1,12 @@
+id: arrival
+world: ardenhall
+mode: arc
+cast: [vance, rook]
+starting_positions: {vance: office, rook: hall}
+start_time: 2024-09-02T11:15:00
+end_condition:
+  character_at: {rook: office}
+turn_budget: 6
+max_consecutive_agent_turns: 3
+next:
+  - scene: the_interview

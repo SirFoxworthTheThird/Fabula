@@ -105,6 +105,19 @@ CREATE TABLE IF NOT EXISTS interpretations (
     PRIMARY KEY (character_id, span_key)
 );
 
+-- Rooms the player walked into that the author did not write. Kept per
+-- world rather than per scene: a corridor found on the first evening is
+-- still there on the second, which is the whole reason to store it
+-- rather than regenerate it.
+CREATE TABLE IF NOT EXISTS discovered_rooms (
+    world_id TEXT NOT NULL,
+    room_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    reached_from TEXT NOT NULL,
+    PRIMARY KEY (world_id, room_id)
+);
+
 CREATE TABLE IF NOT EXISTS rehearsals (
     character_id TEXT NOT NULL,
     event_id INTEGER NOT NULL,
@@ -399,6 +412,27 @@ class EventStore:
                 """INSERT OR IGNORE INTO interpretations (character_id, span_key, text)
                    VALUES (?, ?, ?)""",
                 (character_id, span_key, text),
+            )
+            self._commit()
+
+    def get_discovered_rooms(self, world_id: str) -> list[dict]:
+        with self._lock:
+            rows = self.conn.execute(
+                """SELECT room_id, name, description, reached_from
+                   FROM discovered_rooms WHERE world_id = ? ORDER BY rowid""",
+                (world_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def add_discovered_room(
+        self, world_id: str, room_id: str, name: str, description: str, reached_from: str
+    ) -> None:
+        with self._lock:
+            self.conn.execute(
+                """INSERT OR IGNORE INTO discovered_rooms
+                   (world_id, room_id, name, description, reached_from)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (world_id, room_id, name, description, reached_from),
             )
             self._commit()
 

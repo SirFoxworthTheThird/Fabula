@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from fabula.llm import LLMClient
 from fabula.models import Bid, Character, Event, Pressure
-from fabula.world import World, write_in
+from fabula.world import Room, World, write_in
 
 NARRATOR_ID = "__narrator__"
 
@@ -172,6 +172,30 @@ class Narrator:
         return self.llm.complete(
             system=system, prompt=prompt, key=f"materialize:{summary_event.id}"
         )
+
+    def furnish(self, name: str, reached_from: Room, world: World) -> str:
+        """Write what a newly discovered place is like.
+
+        Grounding rather than narration: this is stored as the room's
+        description and read later by `describe_place`, which is what
+        stops the narrator improvising different furniture every time
+        somebody walks in. It is checked before it is kept — a
+        description naming one of the world's facts is thrown away.
+        """
+        system = (
+            "You furnish a place in an interactive story. Two sentences, no more: "
+            "what is in it, the light, the sound, what it feels like to stand in. "
+            "Ordinary and specific. Introduce no people and no event — nothing is "
+            "happening here yet, and nobody is in it."
+            + write_in(world.language)
+        )
+        prompt = (
+            f"The place: {name}\n"
+            f"Reached from: {reached_from.name}"
+            + (f" — {reached_from.description.strip()}" if reached_from.description else "")
+            + "\n\nDescribe it."
+        )
+        return self.llm.complete(system=system, prompt=prompt, key=f"furnish:{name}")
 
     def describe_place(self, location_id: str, world: World) -> str:
         """The room itself, for when the player has just walked into it.

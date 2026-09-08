@@ -52,7 +52,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 350 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 374 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -359,18 +359,19 @@ scene. Underneath it is one database for the whole run, which is what makes the 
 state — beliefs, trust that moved, goals that closed — finally have somewhere to land.
 Going on settles the turn that was open: a seam is not a take you can ask to have again.
 
-## Three worlds
+## Four worlds
 
 Everything here was built against one world, and code fitted to one shape looks general
 until a second one arrives. So there are two, deliberately unalike:
 
-| | **ashgrove** | **winterlight** | **vilamar** |
-|---|---|---|---|
-| | a house after a funeral | a station on the plateau | a house by the sea, in May |
-| rooms | 2, mutually audible | 4 in a chain, one one-way | 2 |
-| cast | 2 agents + you | 3 agents + you, **and one who may walk in** | 2 agents + you |
-| secrets | one, one holder | **two, two holders, from each other** | one, one holder |
-| language | English | English | **Portuguese** |
+| | **ashgrove** | **winterlight** | **vilamar** | **ardenhall** |
+|---|---|---|---|---|
+| | a house after a funeral | a station on the plateau | a house by the sea | a school, on the first day |
+| rooms | 2, mutually audible | 4 in a chain, one one-way | 2 | 2 authored, **the rest found** |
+| cast | 2 agents + you | 3 agents + you, **and one who may walk in** | 2 agents + you | 1 agent + you |
+| secrets | one, one holder | **two, two holders, from each other** | one, one holder | one he keeps from you |
+| language | English | English | **Portuguese** | English |
+| story | — | — | — | **four scenes, branching** |
 
 `winterlight` is the test. Ilse has known for eleven days that the first flight out has
 slipped by two months and has not said so — not from shame but as policy, which is a
@@ -643,6 +644,33 @@ Stated plainly: a misclassification grants somebody knowledge nobody on screen c
 The backdated beat makes that formally a perception, so invariant 1 holds on paper, but it
 was created on a model's say-so. Three things bound it — you can only pass on what you
 know, nothing is hidden, and the turn can be taken again.
+
+### Rooms the author did not write
+
+A school has corridors. Nobody wants to write them all, and a story that answers *"there
+is no library to go to"* is answering with its own scaffolding. So a world can let the map
+grow:
+
+```yaml
+discover_rooms: true
+```
+
+Then `/go the library` makes one. What keeps that safe is that almost nothing about a room
+carries weight — **except its adjacency, and the engine decides that**. A found place hangs
+off exactly the room it was reached from, by one symmetric edge, so it behaves like any
+other doorway: you hear the hall you stepped out of, and it hears you. A model choosing
+edges could join the library to the headmaster's office, which would be a leak rather than
+a bad sentence.
+
+So the model writes a name and two lines of description — prose, checked the way every
+other generated line is. A description naming one of the world's facts is thrown away and
+the room stands bare, because a description reaches the log as narration and would let the
+narrator raise the subject just by describing the place.
+
+Found rooms are stored per world, so a corridor found in the first scene is still there in
+the fourth, joined to the same place. Two things follow honestly: the map is a **tree**,
+not a map — you can always go back the way you came, and two found wings never join up —
+and matching is by name, so "library", "the library" and "The Library" are one place.
 
 ### Somebody who was not in the room when it opened
 

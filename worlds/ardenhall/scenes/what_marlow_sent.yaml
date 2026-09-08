@@ -1,0 +1,9 @@
+# Rook got it out of him. Now they both know, and neither has decided
+# what that means.
+id: what_marlow_sent
+world: ardenhall
+mode: sandbox
+cast: [vance, rook]
+starting_positions: {vance: office, rook: office}
+start_time: 2024-09-02T12:05:00
+turn_budget: 6

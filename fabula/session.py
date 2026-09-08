@@ -22,7 +22,9 @@ from fabula.models import Character, Event, ProjectedEvent
 from fabula.narrator import Narrator
 from fabula.persistence import begin_scene
 from fabula.pressures import has_ended, next_scene, scene_state
-from fabula.world import OFFSTAGE, World
+from fabula.discovery import discover
+from fabula.discovery import restore as discovery_restore
+from fabula.world import OFFSTAGE, World, find_room
 
 
 class Session:
@@ -131,6 +133,9 @@ class Session:
 
         # Characters are durable: with a real db path they arrive carrying
         # what they already believe, aged by the time between scenes.
+        # Anywhere found on an earlier visit is on the map again before
+        # anybody stands in it.
+        discovery_restore(world, store)
         begin_scene(store, characters)
 
         session = cls(world, characters, scene, store, director, user_character)
@@ -259,9 +264,19 @@ class Session:
         return self._play(take)
 
     def move(self, room_id: str) -> list[ProjectedEvent]:
-        if room_id not in self.world.rooms:
-            raise ValueError(f"there is no room {room_id!r} in this world")
         here = self.here()
+        found = find_room(self.world, room_id)
+        if found is None:
+            # Not a place the author wrote. In a world that allows it, the
+            # map grows: a school has corridors, and answering "there is
+            # no library to go to" is answering with the scaffolding.
+            room = discover(
+                self.world, room_id, here, self.store, self.director.narrator
+            )
+            if room is None:
+                raise ValueError(f"there is no room {room_id!r} in this world")
+            found = room.id
+        room_id = found
         if room_id == here:
             return []
         def take() -> list[ProjectedEvent]:

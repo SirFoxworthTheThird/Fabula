@@ -1,0 +1,41 @@
+# A school, which is the case the other three worlds do not cover: an
+# author cannot write every corridor, and a story that answers "there is
+# no library to go to" is answering with its own scaffolding.
+#
+# So the spine is authored and the rest is found. What the story turns on
+# is named; everything that turns on nothing is furniture.
+id: ardenhall
+language: en
+discover_rooms: true
+
+rooms:
+  hall:
+    name: the entrance hall
+    description: >
+      Black-and-white flags to the ceiling, a staircase that does not go
+      where it looks like it goes, and thirty new trunks in a row along
+      the wall with their labels still on.
+    adjacent:
+      office: adjacent
+  office:
+    name: the Director's office
+    description: >
+      A desk kept clear on purpose, a window onto the quad, and more
+      chairs than anyone has ever needed at once.
+    adjacent:
+      hall: adjacent
+
+facts:
+  # The placement is spoken when a house is *named*. "Which house are you
+  # in?" is a question, not an answer, and a keyword loose enough to match
+  # it would end the scene on somebody asking.
+  your_placement:
+    keywords:
+      - Ashe House
+      - Corvin House
+      - Thane House
+  the_seventh_file:
+    keywords:
+      - the seventh file
+      - the sealed file
+      - what happened at Marlow

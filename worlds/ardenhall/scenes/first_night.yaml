@@ -1,0 +1,8 @@
+# Placed, and none the wiser. The file is still in the drawer.
+id: first_night
+world: ardenhall
+mode: sandbox
+cast: [vance, rook]
+starting_positions: {vance: office, rook: hall}
+start_time: 2024-09-02T21:30:00
+turn_budget: 6

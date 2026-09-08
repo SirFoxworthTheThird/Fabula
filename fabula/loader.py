@@ -78,6 +78,7 @@ def load_world(world_dir: Path) -> World:
         rooms=rooms,
         facts=facts,
         language=data.get("language", "en"),
+        discover_rooms=bool(data.get("discover_rooms", False)),
         phrasing=_phrasing(data.get("phrasing") or {}),
     )
 
