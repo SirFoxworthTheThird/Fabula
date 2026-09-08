@@ -11,8 +11,9 @@ Two things make it different from the rest of that shelf:
    each with its own private knowledge, memory and reasons to speak. That is what makes
    a character able to be genuinely wrong, genuinely surprised, and genuinely unable to
    use something they never heard.
-2. **It runs locally.** Your machine, your model, your data. No account, no per-message
-   billing, nothing leaving the box unless you point it at a hosted endpoint yourself.
+2. **The application runs locally.** Your machine, your stories, your file on disk. No
+   account and no service in the middle. Which model answers is your choice — hosted,
+   an aggregator, or something you run yourself — and the key is yours.
 
 Everything else is in service of those two.
 
@@ -40,23 +41,41 @@ the rest followed it. That is a sample of one genre pretending to be a sample of
 form. A heist, a romance, a horror scene and a comedy make different demands — of
 pacing, of who speaks when, of what a "secret" even is — and none of them has been tried.
 
-## What "local" costs
+## What "local" means, and what it costs
 
-This is a hard engineering constraint, not a deployment note. A turn costs one model call
-per agent that bids, plus the narrator, plus one per remembered moment per character:
+**The application is local, not the models.** It runs on your machine — a package you
+install and a service you start — and it keeps your stories in a SQLite file you own.
+No account, no SaaS in the middle, nothing leaving the box that you did not point it at.
+Which model answers is entirely your choice: a hosted endpoint, an aggregator, your own
+llama server. `--model`, `--api-base`, and a key from the environment.
+
+So model cost and latency are the *user's* bill and the *user's* wait, not a hardware
+ceiling — which makes them an engineering problem rather than a disqualifier. They are
+still real. A turn costs one model call per agent that bids, plus the narrator, plus one
+per remembered moment per character:
 
 ```
-ashgrove   (2 agents, 3 player lines) -> 33 model calls
+ashgrove    (2 agents, 3 player lines) -> 33 model calls
 winterlight (4 agents, 3 player lines) -> 51 model calls
 ```
 
-On a hosted frontier model that is a rounding error. On a 7B running on somebody's own
-GPU at a few seconds a call, fifty-one calls is minutes of silence between one line and
-the next — which is not a roleplay app, whatever the transcript looks like afterwards.
+and every one of them is made **sequentially** today — the bid loop and the memory loop
+both iterate the cast one at a time. Fifty-one round trips in series is a long wait
+between typing a line and reading the reply, whoever is serving them. Bids and
+interpretations are independent per character and could go out together; that is the
+cheapest large win available and nothing has been done about it.
 
-Every feature that adds a per-character or per-moment model call is spending the same
-budget. `--no-interpret` exists for this reason and is a symptom, not a fix: the cost
-model needs to be part of the design of each feature rather than a flag bolted on after.
+The rule to carry: a feature that adds a per-character or per-moment model call is
+spending somebody's money and somebody's patience. Decide how it will be paid for while
+designing it, not afterwards. `--no-interpret` is a symptom of not having done that.
+
+What being a local *application* does demand, and what is missing:
+
+* **Install and run without a toolchain.** Today it is `pip install -e .` and a CLI —
+  a developer's product, not a roleplay app's.
+* **A library of your stories.** Scene state survives with `--db`, but there is no
+  notion of saved stories to browse, resume, or delete. Sessions live in memory and the
+  service forgets them on restart.
 
 ## What is authored, and the problem with that
 
