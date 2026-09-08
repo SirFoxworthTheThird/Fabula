@@ -218,6 +218,24 @@
     color: var(--ink);
   }
   #start .scene small { display: block; color: var(--ink-faint); font-family: var(--sans); font-size: 12px; }
+  #start h2 {
+    font-family: var(--sans);
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 26px 0 10px;
+    font-weight: 600;
+  }
+  .story { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  .story .scene { flex: 1; margin-bottom: 0; }
+  .story .drop {
+    font-family: var(--sans);
+    font-size: 12px;
+    padding: 8px 10px;
+    color: var(--ink-faint);
+  }
+  .story .drop:hover:not(:disabled) { color: #d98b8b; border-color: #6b3a3a; }
   .hidden { display: none !important; }
   .notice { color: var(--ink-faint); font-family: var(--sans); font-size: 12px; margin-top: 8px; min-height: 1.2em; }
 </style>
@@ -227,6 +245,9 @@
 <section id="start">
   <h1>Fabula</h1>
   <p>Every character knows only what they perceived. So do you.</p>
+  <h2 id="yours-heading" hidden>Your stories</h2>
+  <div id="yours"></div>
+  <h2 id="new-heading">Start something</h2>
   <div id="scenes"></div>
   <div class="notice" id="start-notice"></div>
 </section>
@@ -267,6 +288,15 @@
 // render by mistake.
 const api = {
   worlds: () => fetch("/worlds").then(r => r.json()),
+  stories: () => fetch("/stories").then(r => r.json()),
+  startStory: (world, scene) =>
+    fetch("/stories", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({world, scene}),
+    }).then(r => r.json()),
+  resumeStory: id => fetch(`/stories/${id}/resume`, {method: "POST"}).then(r => r.json()),
+  dropStory: id => fetch(`/stories/${id}`, {method: "DELETE"}),
   open: (world, scene) =>
     fetch("/sessions", {
       method: "POST",
@@ -354,9 +384,16 @@ async function refresh() {
   if (previous && previous !== state.scene) announcedEnd = false;
   announceEnd();
   el("where").textContent = state.location_name;
-  el("who").innerHTML = state.present.length
-    ? "with " + state.present.map(p => `<em>${p.name}</em>`).join(", ")
-    : "alone";
+  // A name can be one the narrator invented mid-scene, so it is model
+  // output: put it in the page as text, not as markup.
+  const who = el("who");
+  who.textContent = state.present.length ? "with " : "alone";
+  state.present.forEach((person, i) => {
+    if (i) who.appendChild(document.createTextNode(", "));
+    const name = document.createElement("em");
+    name.textContent = person.name;
+    who.appendChild(name);
+  });
   el("clock").textContent = new Date(state.story_time).toLocaleTimeString([], {
     hour: "numeric", minute: "2-digit",
   });
@@ -429,8 +466,7 @@ function listen() {
   stream.onerror = () => { el("notice").textContent = "Reconnecting…"; };
 }
 
-async function begin(world, scene) {
-  const opened = await api.open(world, scene);
+async function enter(opened) {
   if (opened.detail) { el("start-notice").textContent = opened.detail; return; }
   sessionId = opened.session_id;
   el("start").classList.add("hidden");
@@ -519,6 +555,47 @@ el("wait").onclick = async () => {
   await act("wait", {consent: true});
 };
 
+// Your stories live on this machine, so the first thing the app shows is
+// what is already yours — not a menu of things to begin.
+async function showLibrary() {
+  const stories = await api.stories();
+  const list = el("yours");
+  list.textContent = "";
+  el("yours-heading").hidden = stories.length === 0;
+  for (const story of stories) {
+    const row = document.createElement("div");
+    row.className = "story";
+    const open = document.createElement("button");
+    open.className = "scene";
+    const when = new Date(story.played_at).toLocaleString([], {
+      day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
+    });
+    const turns = `${story.turns} turn${story.turns === 1 ? "" : "s"}`;
+    const progress = story.turns ? `${turns} · ${when}` : "not started";
+    // Titles are the player's own words, and a story file can arrive
+    // from somebody else's machine — so they are set as text, never
+    // interpolated into markup.
+    const line = document.createElement("small");
+    line.textContent = `${story.scene.replace(/_/g, " ")} — ${progress}`;
+    open.textContent = story.title;
+    open.appendChild(line);
+    open.onclick = async () => enter(await api.resumeStory(story.id));
+    const drop = document.createElement("button");
+    drop.className = "drop";
+    drop.textContent = "Delete";
+    drop.title = `Delete ${story.title}`;
+    drop.onclick = async () => {
+      if (!confirm(`Delete “${story.title}”? This cannot be undone.`)) return;
+      await api.dropStory(story.id);
+      showLibrary();
+    };
+    row.append(open, drop);
+    list.appendChild(row);
+  }
+}
+
+showLibrary();
+
 api.worlds().then(worlds => {
   const list = el("scenes");
   const entries = Object.entries(worlds);
@@ -531,7 +608,7 @@ api.worlds().then(worlds => {
       const button = document.createElement("button");
       button.className = "scene";
       button.innerHTML = `${scene.replace(/_/g, " ")}<small>${world}</small>`;
-      button.onclick = () => begin(world, scene);
+      button.onclick = async () => enter(await api.startStory(world, scene));
       list.appendChild(button);
     }
   }

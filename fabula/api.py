@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from fabula.env import load_env
+from fabula.library import DEFAULT_ROOT, Library
 from fabula.llm import LiteLLMClient, LLMClient
 from fabula.models import ProjectedEvent
 from fabula.openai_shim import add_openai_shim
@@ -105,6 +106,24 @@ class RevealOut(BaseModel):
     text: str
 
 
+class StoryOut(BaseModel):
+    """A story in the library, as a card to show without opening it."""
+
+    id: str
+    title: str
+    world: str
+    scene: str
+    created_at: datetime
+    played_at: datetime
+    turns: int
+
+
+class NewStory(BaseModel):
+    world: str
+    scene: str
+    title: str | None = None
+
+
 class NewSession(BaseModel):
     world: str
     scene: str
@@ -132,6 +151,11 @@ class _LiveSession:
     def __init__(self, session: Session):
         self.session = session
         self.subscribers: list[asyncio.Queue[StreamEvent]] = []
+
+    @property
+    def story_id(self) -> str | None:
+        saved = self.session.store.get_story()
+        return saved["story_id"] if saved else None
 
     def publish(self, events: list) -> None:
         for queue in self.subscribers:
@@ -189,6 +213,7 @@ def create_app(
     worlds_root: Path = Path("worlds"),
     llm: LLMClient | None = None,
     db_path: str = ":memory:",
+    library_root: Path | None = None,
 ) -> FastAPI:
     live: dict[str, _LiveSession] = {}
     by_token: dict[str, str] = {}
@@ -208,8 +233,10 @@ def create_app(
         description="A multi-agent story engine.",
         lifespan=lifespan,
     )
+    library = Library(root=library_root or DEFAULT_ROOT, worlds_root=worlds_root)
     app.state.sessions = live
     app.state.sessions_by_token = by_token
+    app.state.library = library
 
     def get_live(session_id: str) -> _LiveSession:
         if session_id not in live:
@@ -224,9 +251,17 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"no scene named {scene_name!r}")
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error))
+        return _remember(session)
+
+    def _remember(session: Session) -> tuple[str, Session]:
         session_id = uuid.uuid4().hex
         live[session_id] = _LiveSession(session)
         return session_id, session
+
+    def remember(session: Session) -> SceneState:
+        """Hold a session open for a client and describe it back."""
+        session_id, session = _remember(session)
+        return state_of(session_id, session)
 
     def scene_tokens() -> list[str]:
         if not worlds_root.is_dir():
@@ -294,6 +329,72 @@ def create_app(
         events = to_stream_events(entry.session, perceived)
         entry.publish(events)
         return events
+
+    def _card(card) -> StoryOut:
+        # A story open here has a turn still uncommitted — that is what
+        # makes the last take discardable — so the file on disk is one
+        # turn behind what the player can see. The live session is the
+        # newer truth, and reading a card must not contradict the screen.
+        open_here = next(
+            (entry.session for entry in live.values() if entry.story_id == card.id), None
+        )
+        return StoryOut(
+            id=card.id,
+            title=card.title,
+            world=card.world,
+            scene=open_here.scene.id if open_here else card.scene,
+            created_at=card.created_at,
+            played_at=card.played_at,
+            turns=open_here.turns_played if open_here else card.turns,
+        )
+
+    @app.get("/stories", response_model=list[StoryOut])
+    def stories() -> list[StoryOut]:
+        """Everything on this machine, most recently played first."""
+        return [_card(card) for card in library.list()]
+
+    @app.post("/stories", response_model=SceneState)
+    def start_story(body: NewStory) -> SceneState:
+        try:
+            session = library.start(body.world, body.scene, title=body.title, llm=llm)
+        except FileNotFoundError as missing:
+            raise HTTPException(status_code=404, detail=str(missing))
+        return remember(session)
+
+    @app.post("/stories/{story_id}/resume", response_model=SceneState)
+    def resume_story(story_id: str) -> SceneState:
+        """Pick a story up where it was left, on the scene it was left on.
+
+        A story already open here is handed back rather than opened
+        again: a second connection to a file whose turn is still open
+        would sit waiting on its write lock, and two sessions over one
+        story would disagree about what had happened in it.
+        """
+        for session_id, entry in live.items():
+            if entry.story_id == story_id:
+                return state_of(session_id, entry.session)
+        try:
+            session = library.resume(story_id, llm=llm)
+        except (FileNotFoundError, ValueError) as missing:
+            raise HTTPException(status_code=404, detail=str(missing))
+        return remember(session)
+
+    @app.delete("/stories/{story_id}")
+    def delete_story(story_id: str) -> dict:
+        """Delete a story, and let go of it if it is open.
+
+        Otherwise the session outlives the file it was reading from, and
+        the next resume hands back a story the player just deleted.
+        """
+        for session_id in [sid for sid, entry in live.items() if entry.story_id == story_id]:
+            live.pop(session_id).session.store.close()
+        try:
+            gone = library.delete(story_id)
+        except ValueError as bad:
+            raise HTTPException(status_code=400, detail=str(bad))
+        if not gone:
+            raise HTTPException(status_code=404, detail=f"no story {story_id}")
+        return {"deleted": story_id}
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def client() -> str:

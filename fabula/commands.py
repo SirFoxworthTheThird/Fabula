@@ -33,13 +33,13 @@ class Outcome:
 def run_command(
     session: Session, line: str, consent: Callable[[int], bool] | None = None
 ) -> Outcome:
-    played = session.turns_played
+    played = session.takes_played
     outcome = _dispatch(session, line, consent)
     # Report the ending on the action that caused it, once — and only for
     # an action that actually played a turn. The comparison is against the
     # state that turn started from, which the session records, because a
     # retake rewinds and so it cannot be measured before dispatch.
-    if session.turns_played != played:
+    if session.takes_played != played:
         outcome.ended = not session.ended_at_turn_start and session.ended()
     return outcome
 

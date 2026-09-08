@@ -52,7 +52,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 386 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 405 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -111,11 +111,40 @@ Elena> Tomás, you've been strange all evening.
 /quit
 ```
 
-Pass `--db scene.sqlite` to keep a scene on disk. Characters are durable: run it again
-against the same file and they arrive remembering the last one.
-
 `the_reckoning` is the same three people with nowhere to hide — one room, and an ending
 the director escalates toward. Swap the scene name to play it.
+
+### Your stories
+
+A story is saved the moment you start it, and it is yours: one SQLite file, in
+`~/.fabula/stories`, with no account anywhere near it.
+
+```bash
+fabula                              # what you have, most recently played first
+fabula --resume a521c8c057dc        # pick one back up
+fabula --delete a521c8c057dc
+fabula ardenhall arrival --title "Tuesday"
+```
+
+```
+Your stories  (/home/you/.fabula/stories)
+
+  a521c8c057dc  Tuesday        the_interview     7 turns   08 Sep 17:49
+  8062050d24f6  Ashgrove — the dinner   the_dinner    unplayed   08 Sep 16:12
+```
+
+Resuming lands on the scene the story was *left* on, not the one it began on — a story
+that ran on into `the_interview` is picked up there, with everybody holding what they
+held when it was put down. The turn count is the story's, not the take's: `/again`
+rewinds it along with everything else.
+
+The file is the whole story. Copy it to another machine and the story goes with it,
+characters and grudges and all; `rm` is a supported way to delete one. The library is
+just the directory they sit in — each file describes itself, so there is no index to
+rebuild and nothing to fall out of sync. `--library ~/elsewhere` points at another one.
+
+`--db scene.sqlite` still plays against a file you name, outside the library, which is
+what the tests and the playtest harness use.
 
 ### Playtest a scene
 
@@ -293,9 +322,10 @@ what this command is for.
 fabula-serve --worlds worlds        # then open http://127.0.0.1:8000
 ```
 
-The web client renders *your character's projection*. Dialogue is attributed; things you
-half-hear are dimmed behind an `unclear` tag and deliberately left unattributed, because
-your character does not know who that was.
+It opens on your stories rather than on a menu of things to begin — resume one, delete
+one, or start something new underneath. Then it renders *your character's projection*.
+Dialogue is attributed; things you half-hear are dimmed behind an `unclear` tag and
+deliberately left unattributed, because your character does not know who that was.
 
 ## Invariants
 
@@ -804,6 +834,10 @@ it never enters the stream.
 |---|---|
 | `GET /` | the web client |
 | `GET /worlds` | worlds and their scenes |
+| `GET /stories` | your saved stories, most recently played first |
+| `POST /stories` | start one, and save it → the same state as `POST /sessions` |
+| `POST /stories/{id}/resume` | pick one back up, on the scene it was left on |
+| `DELETE /stories/{id}` | delete one |
 | `POST /sessions` | open a scene → session id, your character, location |
 | `GET /sessions/{id}` | location, who is present, story time, pending skip |
 | `GET /sessions/{id}/events` | the scene as your character experienced it |
@@ -901,8 +935,14 @@ The suite is the regression net *and* the clearest description of the product:
   a witnessed refusal to answer. Moving either from the *content* of what is said needs a
   model deciding whether someone was being sincere, and a wrong call there quietly
   rewrites a character's inner life — which is the correction invariant 2 forbids.
-* Sessions live in memory, so restarting the service drops them. Scene state survives if
-  you point sessions at a database file.
+* Sessions live in memory, so restarting the service drops them — but a story does not:
+  it is on disk from the moment it starts, and `POST /stories/{id}/resume` opens a new
+  session on it. What is lost across a restart is the open turn (the one `/again` could
+  have taken back), not the story.
+* A story open in the service is one turn ahead of its own file, because the turn in
+  progress is deliberately uncommitted — that is what makes it discardable. `GET /stories`
+  overlays what the live session knows, so a card never contradicts the screen; a second
+  process reading the same directory would see the older state.
 
 ## License
 

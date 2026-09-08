@@ -67,7 +67,13 @@ class Session:
         # started from — which a retake rewinds to, so it cannot be
         # measured before the command runs.
         self.ended_at_turn_start: bool = False
+        # How far the story got, and how many takes were played. They
+        # differ on a retake: the turn is played again, so the story is
+        # no further on, but a take did happen and a caller asking "did
+        # that command play a turn" must still be told yes.
         self.turns_played: int = 0
+        self.takes_played: int = 0
+        self._turns_before_take: int = 0
 
     @classmethod
     def open(
@@ -141,6 +147,10 @@ class Session:
         session = cls(world, characters, scene, store, director, user_character)
         session.world_dir = world_dir
         session.llm = llm
+        # A resumed story carries on counting rather than starting again.
+        saved = store.get_story()
+        if saved:
+            session.turns_played = saved["turns"]
         # After seeding, not from the YAML: a character on their second
         # evening arrives carrying what the first one did to them, and
         # "was" has to mean when this scene started.
@@ -203,8 +213,13 @@ class Session:
         self.store.begin_turn()
         self.turn_started_at = self.store.next_seq(self.scene.id)
         self.ended_at_turn_start = self.ended()
+        self._turns_before_take = self.turns_played
         self.turns_played += 1
+        self.takes_played += 1
         self._last_take = take
+        # Inside the turn, so a take that is thrown away does not leave
+        # the library claiming it happened.
+        self.store.touch_story(self.scene.id, self.turns_played)
         return take()
 
     def close(self) -> None:
@@ -248,6 +263,11 @@ class Session:
             raise ValueError("nothing has been played yet")
         take = self._last_take
         self.store.rollback_turn()
+        # A retake is the same turn played again, not a second one. The
+        # rollback puts the saved count back on disk; without this the
+        # session's own counter would carry on climbing and the next
+        # turn would write the inflated number over it.
+        self.turns_played = self._turns_before_take
         return self._play(take)
 
     def say(self, text: str) -> list[ProjectedEvent]:
@@ -314,6 +334,10 @@ class Session:
         if following is None:
             return None
         self.close()
+        # Crossing the seam is itself progress worth saving: a player who
+        # finishes a scene and stops must be resumed into the scene they
+        # reached, not handed back the one they just played out.
+        self.store.touch_story(following, self.turns_played)
         return Session.open(
             self.world_dir,
             following,

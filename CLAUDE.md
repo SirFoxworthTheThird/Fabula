@@ -73,9 +73,9 @@ What being a local *application* does demand, and what is missing:
 
 * **Install and run without a toolchain.** Today it is `pip install -e .` and a CLI —
   a developer's product, not a roleplay app's.
-* **A library of your stories.** Scene state survives with `--db`, but there is no
-  notion of saved stories to browse, resume, or delete. Sessions live in memory and the
-  service forgets them on restart.
+* ~~**A library of your stories.**~~ Done: one SQLite file per story in
+  `~/.fabula/stories`, listed, resumed and deleted from the CLI, the API and the web
+  start screen. Sessions still live in memory, but a story no longer depends on one.
 
 ## What is authored, and the problem with that
 

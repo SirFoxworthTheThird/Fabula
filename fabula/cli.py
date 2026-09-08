@@ -13,6 +13,7 @@ from typing import Callable
 
 from fabula.chronology import describe_duration
 from fabula.commands import run_command
+from fabula.library import DEFAULT_ROOT, Library
 from fabula.env import load_env
 from fabula.llm import LiteLLMClient
 from fabula.models import Character, ProjectedEvent
@@ -71,18 +72,23 @@ def _consent_asker(session: Session) -> Callable[[int], bool]:
     return ask
 
 
+def show_library(library: Library) -> None:
+    stories = library.list()
+    if not stories:
+        print("No stories yet. Start one:  fabula <world> <scene>")
+        return
+    print(f"Your stories  ({library.root})\n")
+    for card in stories:
+        played = card.played_at.strftime("%d %b %H:%M")
+        turns = "unplayed" if card.unplayed else f"{card.turns} turn{'s' * (card.turns != 1)}"
+        print(f"  {card.id}  {card.title:<34} {card.scene:<22} {turns:>9}   {played}")
+    print("\nResume one:  fabula --resume <id>")
+
+
 def run(
-    world_dir: Path,
-    scene_name: str,
-    db_path: str = ":memory:",
-    model: str | None = None,
-    api_base: str | None = None,
+    session: Session,
     interpret_beliefs: bool = True,
 ) -> None:
-    llm = LiteLLMClient(model=model, api_base=api_base) if model else None
-    session = Session.open(
-        world_dir, scene_name, db_path, llm=llm, interpret_beliefs=interpret_beliefs
-    )
     world, characters = session.world, session.characters
     you = session.user_character
 
@@ -138,10 +144,20 @@ def main(argv: list[str] | None = None) -> None:
     # everything below. Only in an entry point: importing a library
     # should never mutate the process environment.
     load_env()
-    parser = argparse.ArgumentParser(prog="fabula", description="Run a Fabula scene from YAML.")
-    parser.add_argument("world_dir", type=Path, help="Path to worlds/<name>/")
-    parser.add_argument("scene", help="Scene name (file stem under scenes/)")
-    parser.add_argument("--db", default=":memory:", help="SQLite file path (default: in-memory)")
+    parser = argparse.ArgumentParser(prog="fabula", description="Play a story.")
+    parser.add_argument("world", nargs="?", help="A directory under --worlds, or a path to one")
+    parser.add_argument("scene", nargs="?", help="Scene name (file stem under scenes/)")
+    parser.add_argument("--worlds", type=Path, default=Path("worlds"), help="Where worlds live")
+    parser.add_argument("--library", type=Path, default=DEFAULT_ROOT, help="Where your stories live")
+    parser.add_argument("--list", action="store_true", help="List your stories and stop")
+    parser.add_argument("--resume", metavar="ID", help="Pick a story back up")
+    parser.add_argument("--delete", metavar="ID", help="Delete a story and stop")
+    parser.add_argument("--title", default=None, help="Name a new story")
+    parser.add_argument(
+        "--db",
+        default=None,
+        help="Play against a database file directly, outside the library",
+    )
     parser.add_argument("--model", default=None, help="Any model id litellm understands")
     parser.add_argument("--api-base", default=None, help="An OpenAI-compatible endpoint")
     parser.add_argument(
@@ -150,14 +166,51 @@ def main(argv: list[str] | None = None) -> None:
         help="Skip the per-memory reading — most of a scene's model calls",
     )
     args = parser.parse_args(argv)
-    run(
-        args.world_dir,
-        args.scene,
-        args.db,
-        args.model,
-        args.api_base,
-        interpret_beliefs=not args.no_interpret,
-    )
+
+    library = Library(root=args.library, worlds_root=args.worlds)
+    llm = LiteLLMClient(model=args.model, api_base=args.api_base) if args.model else None
+    interpret = not args.no_interpret
+
+    if args.delete:
+        # A mistyped id is a typo, not a crash: the ids are for people to
+        # copy off a listing by hand.
+        try:
+            gone = library.delete(args.delete)
+        except ValueError:
+            parser.error(f"not a story id: {args.delete} (see fabula --list)")
+        print("Deleted." if gone else f"No story {args.delete}.")
+        return
+    # With nothing to play, show what there is — the same thing a person
+    # opening the app wants to see.
+    if args.list or not (args.resume or args.world):
+        show_library(library)
+        return
+
+    if args.resume:
+        try:
+            session = library.resume(args.resume, llm=llm, interpret_beliefs=interpret)
+        except (ValueError, FileNotFoundError):
+            parser.error(f"no story {args.resume} (see fabula --list)")
+    elif args.db:
+        # The escape hatch: a file you name, outside the library.
+        session = Session.open(
+            _world_dir(args.worlds, args.world), args.scene, args.db,
+            llm=llm, interpret_beliefs=interpret,
+        )
+    else:
+        if not args.scene:
+            parser.error("a new story needs a scene: fabula <world> <scene>")
+        session = library.start(
+            args.world, args.scene, title=args.title, llm=llm, interpret_beliefs=interpret
+        )
+
+    run(session, interpret_beliefs=interpret)
+
+
+def _world_dir(worlds_root: Path, world: str) -> Path:
+    """A world is a name under the worlds root, or a path to one."""
+    named = worlds_root / world
+    return named if named.is_dir() else Path(world)
 
 
 if __name__ == "__main__":

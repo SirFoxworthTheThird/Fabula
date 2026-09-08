@@ -118,6 +118,21 @@ CREATE TABLE IF NOT EXISTS discovered_rooms (
     PRIMARY KEY (world_id, room_id)
 );
 
+-- One row, describing the story this file holds. Kept inside the file
+-- rather than in a separate index, so a library is a directory you can
+-- browse, back up, copy between machines and delete with `rm` — and
+-- there is no second place to fall out of sync with.
+CREATE TABLE IF NOT EXISTS story (
+    only_row INTEGER PRIMARY KEY CHECK (only_row = 1),
+    story_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    world TEXT NOT NULL,
+    scene TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    played_at TEXT NOT NULL,
+    turns INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS rehearsals (
     character_id TEXT NOT NULL,
     event_id INTEGER NOT NULL,
@@ -130,7 +145,10 @@ CREATE TABLE IF NOT EXISTS rehearsals (
 class EventStore:
     def __init__(self, path: str = ":memory:"):
         self._lock = threading.RLock()
-        self.conn = sqlite3.connect(path, check_same_thread=False)
+        # A turn is an open transaction, which holds a write lock. Another
+        # holder of the same file should wait for it rather than fail on
+        # the spot — a story mid-turn is a normal thing to walk into.
+        self.conn = sqlite3.connect(path, check_same_thread=False, timeout=5.0)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
         self._migrate()
@@ -433,6 +451,38 @@ class EventStore:
                    (world_id, room_id, name, description, reached_from)
                    VALUES (?, ?, ?, ?, ?)""",
                 (world_id, room_id, name, description, reached_from),
+            )
+            self._commit()
+
+    def get_story(self) -> dict | None:
+        with self._lock:
+            row = self.conn.execute("SELECT * FROM story WHERE only_row = 1").fetchone()
+            return dict(row) if row else None
+
+    def start_story(self, story_id: str, title: str, world: str, scene: str) -> None:
+        # Full precision: two stories started or played in the same
+        # second are ordered by when they happened, not by filename.
+        now = datetime.now().isoformat()
+        with self._lock:
+            self.conn.execute(
+                """INSERT OR IGNORE INTO story
+                   (only_row, story_id, title, world, scene, created_at, played_at, turns)
+                   VALUES (1, ?, ?, ?, ?, ?, ?, 0)""",
+                (story_id, title, world, scene, now, now),
+            )
+            self._commit()
+
+    def touch_story(self, scene: str, turns: int) -> None:
+        """Where the story is now and how far it has got.
+
+        Written inside the turn like everything else, so a take that is
+        thrown away does not leave the library claiming it happened.
+        """
+        with self._lock:
+            self.conn.execute(
+                """UPDATE story SET scene = ?, turns = ?, played_at = ?
+                   WHERE only_row = 1""",
+                (scene, turns, datetime.now().isoformat()),
             )
             self._commit()
 
