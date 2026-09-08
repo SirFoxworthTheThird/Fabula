@@ -52,7 +52,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 374 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 386 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -372,6 +372,7 @@ until a second one arrives. So there are two, deliberately unalike:
 | secrets | one, one holder | **two, two holders, from each other** | one, one holder | one he keeps from you |
 | language | English | English | **Portuguese** | English |
 | story | — | — | — | **four scenes, branching** |
+| items | — | — | — | **two, one of them about you** |
 
 `winterlight` is the test. Ilse has known for eleven days that the first flight out has
 slipped by two months and has not said so — not from shame but as policy, which is a
@@ -644,6 +645,46 @@ Stated plainly: a misclassification grants somebody knowledge nobody on screen c
 The backdated beat makes that formally a perception, so invariant 1 holds on paper, but it
 was created on a model's say-so. Three things bound it — you can only pass on what you
 know, nothing is hidden, and the turn can be taken again.
+
+### Things that carry a fact
+
+The only kind of object worth modelling here. A mug is scenery and belongs in a room
+description; a key that opens a door is an adventure game and a different product. A
+letter, a logbook, a sealed file is a **second channel for the asymmetry the engine
+already turns on**:
+
+```yaml
+items:
+  the_sealed_file:
+    name: the grey folder on the desk
+    location_id: office
+    reveals: the_seventh_file
+    text: >
+      Marlow Academy — incident report, 4 June. Two paragraphs are struck
+      through in a different hand... Your name is in the margin, twice, circled.
+```
+
+`/read grey folder`, and it becomes **two** events, because reading is two things: the
+room sees you open it, and what it says is private and addressed to you.
+
+```
+rook   saw the act: True   read the contents: True
+vance  saw the act: True   read the contents: False
+```
+
+Both were standing in the same room. Nothing new was needed for that — a private event
+addressed to one person is what the perception rules already do.
+
+One consequence falls out rather than being built: **reading is not saying.** A fact
+counts as spoken when somebody *other than the actor* hears it in full, and the private
+half of a read has no perceiver but its own reader. So an arc waiting for somebody to say
+it out loud is still waiting, and you can know something you have not admitted.
+
+Items are authored, necessarily — what they carry is a fact, and a fact is exactly the
+thing an author names. Two guards hold across every world: an item pointing at a room or
+a fact that does not exist, and an item whose **name** contains a fact keyword. That
+second one matters because the name goes into the public beat, so a badly named object
+would count as saying the thing out loud just by being picked up.
 
 ### Rooms the author did not write
 

@@ -23,6 +23,7 @@ from fabula.world import (
     TIME_SKIP_TEMPLATES,
     TRANSMISSION_TEMPLATE,
     Fact,
+    Item,
     Phrasing,
     Room,
     World,
@@ -79,6 +80,10 @@ def load_world(world_dir: Path) -> World:
         facts=facts,
         language=data.get("language", "en"),
         discover_rooms=bool(data.get("discover_rooms", False)),
+        items={
+            item_id: Item(id=item_id, **item_data)
+            for item_id, item_data in (data.get("items") or {}).items()
+        },
         phrasing=_phrasing(data.get("phrasing") or {}),
     )
 

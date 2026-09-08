@@ -24,7 +24,7 @@ from fabula.persistence import begin_scene
 from fabula.pressures import has_ended, next_scene, scene_state
 from fabula.discovery import discover
 from fabula.discovery import restore as discovery_restore
-from fabula.world import OFFSTAGE, World, find_room
+from fabula.world import OFFSTAGE, Item, World, find_room
 
 
 class Session:
@@ -321,6 +321,57 @@ class Session:
             interpret_beliefs=self.director.interpret_beliefs,
             store=self.store,
         )
+
+    def items_here(self) -> list[Item]:
+        """What is in this room to be read."""
+        return self.world.items_in(self.here())
+
+    def read(self, wanted: str) -> list[ProjectedEvent]:
+        """Read something in this room.
+
+        Two events, because reading is two things. The room sees you open
+        it — an ordinary action, perceived by whoever is standing there.
+        What it says is private and addressed to you, so the same
+        perception rules that keep a conversation in one room keep the
+        contents in one pair of eyes.
+
+        It follows for free that reading a file is not the same as saying
+        what is in it: the private event's only perceiver is its own
+        actor, so nothing counts it as spoken and an arc waiting for
+        somebody to say it out loud is still waiting.
+        """
+        item = self.world.find_item(self.here(), wanted)
+        if item is None:
+            raise ValueError(f"there is no {wanted!r} here")
+
+        def take() -> list[ProjectedEvent]:
+            you = self.user_character
+            here = self.here()
+            opened = self.store.append_event(
+                self.director.build_event(
+                    "action",
+                    you.id,
+                    here,
+                    self.world.phrasing.say("opens", name=you.name, thing=item.name),
+                    metadata={"opened": item.id},
+                )
+            )
+            self.director._absorb()
+            contents = self.store.append_event(
+                self.director.build_event(
+                    "action",
+                    you.id,
+                    here,
+                    item.text.strip(),
+                    audibility="private",
+                    addressed_to=[you.id],
+                    metadata={"read": item.id},
+                )
+            )
+            self.director._absorb()
+            return self.pov([opened, contents])
+
+        return self._play(take)
 
     def ended(self) -> bool:
         """Has this scene reached its declared end condition?

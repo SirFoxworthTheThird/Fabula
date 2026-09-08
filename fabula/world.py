@@ -65,6 +65,10 @@ CLIENT_TEMPLATES: dict[str, str] = {
     "now_in": "You are in {room}.",
     "no_such_room": "There is no {room} to go to.",
     "no_answer": "No one answers.",
+    "opens": "{name} opens {thing}.",
+    "things_here": "Here: {things}.",
+    "nothing_here": "There is nothing here to read.",
+    "no_such_thing": "There is no {thing} here.",
     "nothing_changed": "Nothing here has changed since you last looked.",
     "nothing_pending": "Nothing is pending; time stays where it is.",
     "time_stays": "Time stays where it is.",
@@ -79,9 +83,9 @@ CLIENT_TEMPLATES: dict[str, str] = {
     "no_next": "The story ends here.",
     "let_time_pass": "Let {duration} pass? [y/N] ",
     "help": (
-        "(/go <room>, /wait, /look, /again to replay the last moment, /next to go "
-        "on, /quit. /reveal spoils the scene when you are done. Anything else you "
-        "say aloud.)"
+        "(/go <room>, /wait, /look, /read <thing>, /again to replay the last "
+        "moment, /next to go on, /quit. /reveal spoils the scene when you are done. "
+        "Anything else you say aloud.)"
     ),
 }
 
@@ -147,6 +151,30 @@ class Fact(BaseModel):
     keywords: list[str] = Field(default_factory=list)
 
 
+class Item(BaseModel):
+    """Something in a room that can be read, and that carries a fact.
+
+    This is the only kind of object worth modelling here. A mug is
+    scenery and belongs in a room description; a key that opens a door is
+    an adventure game and a different product. A letter, a logbook, a
+    sealed file is a **second channel for the same asymmetry the engine
+    already turns on**: whoever reads it knows, whoever does not, does
+    not, and the room can see you reading without seeing what you read.
+
+    Authored, and necessarily so — what it carries is a fact, and a fact
+    is exactly the thing an author names.
+    """
+
+    id: str
+    name: str
+    location_id: str
+    # What reading it tells you. Private to the reader.
+    text: str
+    # The fact it carries, if it carries one. Only used to check that an
+    # author has not pointed an item at something that does not exist.
+    reveals: str | None = None
+
+
 class World(BaseModel):
     id: str
     rooms: dict[str, Room]
@@ -159,6 +187,25 @@ class World(BaseModel):
     # write? Off by default: a two-room house has no corridors to find,
     # and a world that never opts in behaves exactly as it always did.
     discover_rooms: bool = False
+    items: dict[str, Item] = Field(default_factory=dict)
+
+    def items_in(self, room_id: str) -> list[Item]:
+        return [item for item in self.items.values() if item.location_id == room_id]
+
+    def find_item(self, room_id: str, wanted: str) -> Item | None:
+        """What somebody meant by what they typed, among the things here.
+
+        Same folding as rooms, so "the sealed file", "sealed file" and
+        "SEALED FILE" are one object, in any script.
+        """
+        target = _fold(wanted).strip()
+        if not target:
+            return None
+        here = self.items_in(room_id)
+        for item in here:
+            if item.id == wanted or _fold(item.name).strip() == target:
+                return item
+        return next((item for item in here if target in _fold(item.name)), None)
 
     def distance(self, from_room: str, to_room: str) -> int:
         """BFS distance in rooms. 0 = same room, 1 = adjacent, etc."""

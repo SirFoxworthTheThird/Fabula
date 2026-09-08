@@ -86,11 +86,24 @@ def _dispatch(
 
         return Outcome(message=reveal_text(session))
 
+    if line.startswith("/read "):
+        wanted = line[len("/read ") :].strip()
+        try:
+            return Outcome(perceived=session.read(wanted))
+        except ValueError:
+            return Outcome(message=say("no_such_thing", thing=wanted))
+
     if line == "/look":
         perceived = session.look()
-        if not perceived:
-            return Outcome(message=say("nothing_changed"))
-        return Outcome(perceived=perceived)
+        here = session.items_here()
+        # Looking around says what there is to read: an item nobody can
+        # find is an item that may as well not be authored.
+        note = (
+            say("things_here", things=", ".join(item.name for item in here))
+            if here
+            else (None if perceived else say("nothing_changed"))
+        )
+        return Outcome(perceived=perceived, message=note)
 
     if line.startswith("/go "):
         destination = line[len("/go ") :].strip()

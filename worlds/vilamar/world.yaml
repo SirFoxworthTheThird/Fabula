@@ -63,6 +63,10 @@ phrasing:
     now_in: "Estás n{room}."
     no_such_room: "Não há nenhum sítio chamado {room}."
     no_answer: "Ninguém responde."
+    opens: "{name} abre {thing}."
+    things_here: "Aqui: {things}."
+    nothing_here: "Não há aqui nada para ler."
+    no_such_thing: "Não há aqui nenhum {thing}."
     nothing_changed: "Nada mudou aqui desde a última vez que olhaste."
     nothing_pending: "Não está nada pendente; o tempo fica onde está."
     time_stays: "O tempo fica onde está."
@@ -76,8 +80,8 @@ phrasing:
     no_next: "A história acaba aqui."
     let_time_pass: "Deixar passar {duration}? [s/N] "
     help: >-
-      (/go <sítio>, /wait, /look, /again para repetir o último momento,
-      /next para seguires, /quit. /reveal estraga a cena quando acabares.
+      (/go <sítio>, /wait, /look, /read <coisa>, /again para repetir o
+      último momento, /next para seguires, /quit. /reveal estraga a cena quando acabares.
       Tudo o resto dizes em voz alta.)
 
   # Palavras demasiado comuns para dizerem que duas frases falam do

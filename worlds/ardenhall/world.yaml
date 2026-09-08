@@ -39,3 +39,24 @@ facts:
       - the seventh file
       - the sealed file
       - what happened at Marlow
+
+# The only kind of object worth modelling here: one that carries a fact.
+# The room can see you open it; what it says is yours alone.
+items:
+  the_sealed_file:
+    name: the grey folder on the desk
+    location_id: office
+    reveals: the_seventh_file
+    text: >
+      Marlow Academy — incident report, 4 June. Two paragraphs are struck
+      through in a different hand. What is left says a stair rail on the
+      third floor came away from the wall while eleven children were on
+      it, that nobody was hurt, and that the matter is closed. Your name
+      is in the margin, twice, circled.
+  the_intake_list:
+    name: the intake list pinned by the stairs
+    location_id: hall
+    text: >
+      Thirty-one names in a column, each with a house beside it. Yours is
+      the only one where the house has been rubbed out and not written
+      in again.
