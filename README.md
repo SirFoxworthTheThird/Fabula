@@ -120,10 +120,14 @@ python -m fabula.cli worlds/ashgrove the_dinner
 You are Elena, in the kitchen with your brother Tomás. Your sister Maria is in the
 study. Tomás is sitting on something he does not want Maria to hear.
 
-The scene says its first line before you have to: a story that opens on a bare prompt is
-a text box, with a room that has a name and nothing in it until somebody thinks to type
-`/look`. And when nobody is there to answer you, the room answers — a player alone used
-to speak into "No one answers." and nothing else, which is not a story.
+The scene says its first line before you have to, and whoever is standing there gets to
+speak first if they want to: a story that opens on a bare prompt puts the whole burden of
+starting it on you — you arrive somewhere, nobody says anything, and the only way to find
+out you are not alone is to talk to the air. One beat, and no pressures: a greeting is the
+room noticing you, while a pressure is the director escalating, and a story whose first
+move is its own complication has started without you. And when nobody *is* there to
+answer, the room answers — a player alone used to speak into "No one answers." and nothing
+else, which is not a story.
 
 ```
 Elena> Tomás, you've been strange all evening.

@@ -1,4 +1,4 @@
-"""The line a scene says before the player has to.
+"""How a scene opens.
 
 A story that opens on a bare prompt is a text box: the room has a name
 and nothing in it until somebody thinks to type /look. The narrator has
@@ -32,9 +32,43 @@ def test_a_scene_opens_with_a_line_of_its_own():
 
     opened = session.store.get_events(session.scene.id)
 
-    assert [e.kind for e in opened] == ["narration"]
+    assert opened[0].kind == "narration"
     assert opened[0].actor_id is None
     assert opened[0].location_id == session.here(), "the room the player is standing in"
+
+
+def test_and_then_whoever_is_there_may_speak_first():
+    """A story that waits for the player to speak first puts the whole
+    burden of starting it on them: you arrive somewhere, nobody says
+    anything, and the only way to find out you are not alone is to talk
+    to the air. Tomás is in the kitchen; the kitchen can say so."""
+    session = Session.open(ASHGROVE, "the_dinner", llm=FakeLLM())
+
+    opened = session.store.get_events(session.scene.id)
+
+    assert [e.kind for e in opened] == ["narration", "utterance"]
+    assert opened[1].actor_id == "tomas"
+
+
+def test_the_opening_is_a_hello_not_a_conversation():
+    """One beat. Two characters talking to each other before the player
+    has typed is a scene that started without them."""
+    session = Session.open(ASHGROVE, "the_reckoning", llm=FakeLLM())
+
+    spoken = [e for e in session.store.get_events(session.scene.id) if e.actor_id]
+
+    assert len(spoken) <= 1
+
+
+def test_the_opening_beat_is_not_a_pressure():
+    """A greeting is the room noticing you; a pressure is the director
+    escalating, and a story whose first move is its own complication has
+    started without you."""
+    session = Session.open(ASHGROVE, "the_reckoning", llm=FakeLLM())
+
+    opened = session.store.get_events(session.scene.id)
+
+    assert not any(e.metadata.get("pressure_id") for e in opened)
 
 
 def test_the_player_is_shown_it_before_they_type():
@@ -44,7 +78,7 @@ def test_the_player_is_shown_it_before_they_type():
 
     perceived = session.perceived_so_far()
 
-    assert len(perceived) == 1
+    assert perceived, "there is something on screen before they type"
     assert perceived[0].event.kind == "narration"
 
 
@@ -66,7 +100,7 @@ def test_the_next_scene_opens_too(fake_llm):
     second = first.go_on()
 
     assert second is not None
-    assert [e.kind for e in second.store.get_events(second.scene.id)] == ["narration"]
+    assert second.store.get_events(second.scene.id)[0].kind == "narration"
 
 
 def test_a_resumed_story_is_not_re_established(tmp_path, fake_llm):
@@ -97,20 +131,33 @@ def test_the_opening_line_may_not_name_a_secret():
     assert opened[0].content == session.world.rooms["kitchen"].description
 
 
-def test_it_costs_one_model_call():
-    """Per scene, before the player types. The curtain is not absorbed as
-    a memory — nobody needs a durable belief about what the room they are
-    standing in looks like, and that would be a reading per character."""
+def test_opening_an_empty_room_costs_one_model_call():
+    """Ana starts the long dark alone in the mess. The curtain is not
+    absorbed as a memory — nobody needs a durable belief about what the
+    room they are standing in looks like, and that would be a reading per
+    character."""
     llm = FakeLLM()
-    Session.open(ASHGROVE, "the_dinner", llm=llm)
+    session = Session.open(WORLDS / "winterlight", "the_long_dark", llm=llm)
 
+    assert session.present() == []
     assert len(llm.calls) == 1
 
 
+def test_a_greeting_costs_the_people_in_the_room_and_nobody_else():
+    """The bill for opening a scene is bounded by who is standing there:
+    the line, a bid each, and at most one reply."""
+    llm = FakeLLM()
+    session = Session.open(ASHGROVE, "the_reckoning", llm=llm)
+
+    here = len(session.present())
+    assert len(llm.calls) <= 1 + here + 1
+
+
 def test_a_player_alone_is_answered_by_the_room():
-    """The transcript that prompted this: `arrival` puts Rook alone in
-    the hall, and every line he spoke came back "No one answers." """
-    session = Session.open(WORLDS / "ardenhall", "arrival", llm=FakeLLM())
+    """The transcript that prompted this: a player alone in a room spoke,
+    and every line came back "No one answers." Ana starts the long dark
+    alone in the mess."""
+    session = Session.open(WORLDS / "winterlight", "the_long_dark", llm=FakeLLM())
 
     perceived = session.say("Is anyone here?")
 

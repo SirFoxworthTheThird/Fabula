@@ -110,11 +110,11 @@ def test_history_is_the_scene_as_this_character_experienced_it(client, session_i
 
     history = client.get(f"/sessions/{session_id}/events").json()
 
-    # The scene opens with a line of its own, so the player's is not the
-    # first thing in the log — only the first thing they said.
-    spoken = [event for event in history if event["speaker"]]
-    assert spoken[0]["speaker"] == "elena"
-    assert spoken[0]["content"] == "Tomas, hello."
+    # The scene opens with a line of its own and whoever is standing
+    # there may say hello, so the player's line is not the first thing in
+    # the log — only the first thing they said.
+    theirs = [event for event in history if event["speaker"] == "elena"]
+    assert theirs[0]["content"] == "Tomas, hello."
     assert history[0]["speaker"] is None  # the scene establishing itself
     assert [event["seq"] for event in history] == sorted(event["seq"] for event in history)
 
@@ -243,7 +243,11 @@ def test_the_reveal_is_asked_for_and_never_pushed(client, session_id):
 
     assert revealed["character"] == "Elena"
     assert any(SECRET in m["content"].lower() for m in revealed["missed"])
-    assert revealed["knowledge"]["music_box"]["Maria"] is False
+    # Elena walked out before it was said, and the reveal is the only
+    # place she is told. Not Maria: the scene is free to move her into
+    # the kitchen, and then she really did hear it.
+    assert revealed["knowledge"]["music_box"]["Elena"] is False
+    assert revealed["knowledge"]["music_box"]["Tomás"] is True
     assert SECRET in revealed["text"].lower()
 
 
@@ -274,9 +278,9 @@ def test_stream_sends_sse_frames(client, session_id):
     frames = _read_stream(client, session_id)
 
     assert frames
-    spoken = [frame for frame in frames if frame["speaker"]]
-    assert spoken[0]["speaker"] == "elena"
-    assert spoken[0]["visibility"] == "full"
+    theirs = [frame for frame in frames if frame["speaker"] == "elena"]
+    assert theirs[0]["content"] == "Tomas, hello."
+    assert theirs[0]["visibility"] == "full"
 
 
 def test_live_subscribers_receive_each_turn_as_it_happens(client, session_id):
@@ -373,9 +377,9 @@ def test_the_stream_is_told_where_to_truncate(client):
         entry.subscribers.remove(queue)
 
     assert isinstance(published[0], Retake)
-    # Back to where the turn began, which is after the scene's opening
-    # line — a retake rewinds a turn, not the scene.
-    assert published[0].from_seq == 2
+    # Back to where the turn began, which is after the scene opened — a
+    # retake rewinds a turn, not the scene.
+    assert published[0].from_seq > 1, "the scene's own opening is not part of the turn"
     assert all(event.seq >= published[0].from_seq for event in published[1:])
 
 

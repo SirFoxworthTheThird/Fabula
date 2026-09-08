@@ -4,8 +4,8 @@ title: Arrival
 premise: >-
   Thirty-one names on the intake list. Yours is the one with the house rubbed out.
 mode: arc
-cast: [vance, rook]
-starting_positions: {vance: office, rook: hall}
+cast: [vance, pell, rook]
+starting_positions: {vance: office, pell: hall, rook: hall}
 start_time: 2024-09-02T11:15:00
 end_condition:
   character_at: {rook: office}

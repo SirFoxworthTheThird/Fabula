@@ -167,7 +167,14 @@ class Session:
         # The scene says its first line before the player has to. A story
         # that opens on a bare prompt is a text box: the room has a name
         # and nothing in it until somebody thinks to type /look.
-        session.director.establish(user_character.location_id)
+        opening = session.director.establish(user_character.location_id)
+        # And then whoever is standing there gets to speak first if they
+        # want to. Arriving somewhere and having to talk to the air to
+        # find out you are not alone is the wrong way round: a story
+        # should meet you. Only for people actually in the room — this
+        # costs a bid each, once.
+        if opening is not None and session.present():
+            session.director.open_turn(opening)
         return session
 
     def here(self) -> str:

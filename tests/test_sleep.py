@@ -73,16 +73,20 @@ def test_it_stays_out_of_their_context_and_their_memory(table):
 
 def test_their_own_state_is_theirs_to_know(table):
     """Going under and coming back up are both things they feel."""
+    opened = table.store.next_seq(table.scene.id) - 1
     sleeps(table, "maria")
     table.store.append_event(
         table.director.build_event("utterance", "tomas", "kitchen", SECRET)
     )
     sleeps(table, "maria", state="awake")
 
-    # The scene's own opening line is in the kitchen with her; what this
-    # is about is the two moments she felt happen to her.
+    # A scene opens with a line of its own and whoever is standing there
+    # may greet you; what this is about is the two moments she felt
+    # happen to her.
     kinds = [
-        p.event.kind for p in perceived(table, "maria") if p.event.kind != "narration"
+        p.event.kind
+        for p in perceived(table, "maria")
+        if p.event.seq > opened
     ]
 
     assert kinds == ["state_change", "state_change"]

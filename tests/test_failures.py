@@ -97,10 +97,12 @@ def test_a_retake_after_a_failure_replays_the_last_real_moment():
 def test_a_failure_in_the_first_turn_of_all_leaves_a_playable_scene():
     """The opening line is already in the log by then, so a turn that
     fails must roll back to it rather than to nothing."""
-    # Exactly one call: the scene's own opening line, and nothing after.
-    session = Session.open(ASHGROVE, "the_reckoning", llm=FailsAfter(1))
+    # Opened normally — the scene's own line, and whoever was there to
+    # say hello — and the provider stops answering after that.
+    session = Session.open(ASHGROVE, "the_reckoning", llm=FakeLLM())
     opening = session.store.get_events(session.scene.id)
-    assert [e.kind for e in opening] == ["narration"]
+    assert opening, "the scene opened"
+    session.use(FailsAfter(0))
 
     with pytest.raises(ModelUnavailable):
         session.say("Tomás?")

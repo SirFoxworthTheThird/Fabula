@@ -206,10 +206,36 @@ class Director:
         if reported is not None:
             events_this_turn.append(reported)
             self._absorb()
-        last_event = stored_user_event
+        return events_this_turn + self._loop(stored_user_event)
+
+    def open_turn(self, opening: Event) -> list[Event]:
+        """Let the room have the first word.
+
+        A story that waits for the player to speak first puts the whole
+        burden of starting it on them: you arrive somewhere, nobody says
+        anything, and the only way to find out you are not alone is to
+        talk to the air. Whoever is standing there bids on the scene's
+        opening exactly as they would on a line — so somebody who has
+        nothing to say still says nothing, and it costs one bid each,
+        once, for the people actually in the room with you.
+
+        One beat, and no pressures. A greeting is the room noticing you;
+        a pressure is the director escalating, and a story whose first
+        move is its own complication has started without you. The budget
+        of one says the same thing from the other side: an opening is a
+        hello, not a conversation you were not in.
+        """
+        return self._loop(opening, budget=1, pressures=False)
+
+    def _loop(
+        self, last_event: Event, budget: int | None = None, pressures: bool = True
+    ) -> list[Event]:
+        """Bid, arbitrate, act, repeat — until somebody yields to the
+        player or the scene runs out of budget."""
+        events_this_turn: list[Event] = []
         consecutive_agent_turns = 0
 
-        for _ in range(self.scene.turn_budget):
+        for _ in range(budget if budget is not None else self.scene.turn_budget):
             all_events = self.store.get_events(self.scene.id)
             candidates = prefilter_candidates(last_event, self.characters, all_events, self.world)
 
@@ -237,12 +263,16 @@ class Director:
             )
             bids: list[Bid] = asked[:-1]
             narrator_bid = asked[-1]
-            pressure_choice = select_pressure(
-                self.pressures,
-                scene_state(all_events, self.characters, self.world),
-                self.world.facts,
-                self.scene.mode,
-                max((b.desire for b in bids), default=0.0),
+            pressure_choice = (
+                select_pressure(
+                    self.pressures,
+                    scene_state(all_events, self.characters, self.world),
+                    self.world.facts,
+                    self.scene.mode,
+                    max((b.desire for b in bids), default=0.0),
+                )
+                if pressures
+                else None
             )
             decision = arbitrate(
                 bids,

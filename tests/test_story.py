@@ -107,7 +107,8 @@ def test_the_new_scene_starts_with_a_log_of_its_own(fake_llm):
     second = a_reckoning(fake_llm, maria_stays=True).go_on()
 
     opened = second.store.get_events("the_morning_after")
-    assert [e.kind for e in opened] == ["narration"]
+    assert opened[0].kind == "narration"
+    assert all(e.scene_id == "the_morning_after" for e in opened)
     assert second.store.get_events("the_reckoning")  # the old one is still there
 
 

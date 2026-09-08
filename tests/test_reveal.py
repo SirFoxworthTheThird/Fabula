@@ -47,8 +47,18 @@ def test_a_reveal_never_appears_in_a_character_context(fake_llm):
     reveal_text(session)
 
     events = session.store.get_events(session.scene.id)
-    context = session.director.contexts.for_character(session.characters["maria"], events)
-    assert SECRET not in context.lower()
+    # Every character, and judged against what they actually perceived —
+    # the scene is free to move somebody into earshot, and the invariant
+    # is that the reveal is not what put the secret there.
+    for character in session.characters.values():
+        context = session.director.contexts.for_character(character, events).lower()
+        heard = any(
+            SECRET in p.perceived_content.lower()
+            for p in session.director.contexts.project(character, events)
+        )
+        assert "never knew" not in context, character.id
+        if not heard:
+            assert SECRET not in context, character.id
 
 
 def test_asking_for_a_reveal_changes_nothing(fake_llm):
