@@ -1,6 +1,9 @@
 # Placed, and none the wiser. The file is still in the drawer.
 id: first_night
 world: ardenhall
+title: First night
+premise: >-
+  Lights out, an unfamiliar building, and nobody asleep yet.
 mode: sandbox
 cast: [vance, rook]
 starting_positions: {vance: office, rook: hall}

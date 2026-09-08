@@ -33,6 +33,11 @@ from fabula.world import (
 class Scene(BaseModel):
     id: str
     world: str
+    # What this scene is called and the one line that says why you would
+    # play it. Both optional: a world written before this existed still
+    # loads, and falls back to its id.
+    title: str = ""
+    premise: str = ""
     mode: Literal["arc", "sandbox"] = "sandbox"
     cast: list[str]
     # Characters written for this world who are not in the room when it
@@ -58,6 +63,10 @@ class Scene(BaseModel):
     # scene and not a story.
     next: list[dict] = Field(default_factory=list)
 
+    @property
+    def name(self) -> str:
+        return self.title or self.id.replace("_", " ")
+
 
 def load_world(world_dir: Path) -> World:
     data = yaml.safe_load((world_dir / "world.yaml").read_text(encoding="utf-8"))
@@ -76,6 +85,8 @@ def load_world(world_dir: Path) -> World:
     }
     return World(
         id=data["id"],
+        title=data.get("title", ""),
+        blurb=data.get("blurb", ""),
         rooms=rooms,
         facts=facts,
         language=data.get("language", "en"),
@@ -145,3 +156,62 @@ def load_scenario(world_dir: Path, scene_name: str) -> tuple[World, dict[str, Ch
             )
 
     return world, characters, scene
+
+
+def catalogue(worlds_root: Path) -> list[dict]:
+    """The shelf: every world, and the scenes a story can start from.
+
+    A scene named as somebody else's `next` is a chapter, not a story —
+    starting cold in chapter three is how a menu of scenes reads, and
+    people came here to play a story. Derived from what the author wrote
+    rather than from a flag, so it cannot fall out of step with it.
+
+    Reading YAML, not opening a scene: no store, no model, nothing
+    durable. A world that fails to load is left out rather than taking
+    the shelf down with it.
+    """
+    shelf = []
+    for world_dir in sorted(p for p in worlds_root.iterdir() if (p / "world.yaml").is_file()):
+        try:
+            world = load_world(world_dir)
+            characters = load_characters(world_dir)
+            scenes = [
+                load_scene(world_dir, path.stem)
+                for path in sorted((world_dir / "scenes").glob("*.yaml"))
+            ]
+        except Exception:
+            continue
+        continues = {
+            entry["scene"] for scene in scenes for entry in scene.next if entry.get("scene")
+        }
+        shelf.append(
+            {
+                "id": world.id,
+                "title": world.name,
+                "blurb": world.blurb,
+                "language": world.language,
+                "scenes": [
+                    {
+                        "id": scene.id,
+                        "title": scene.name,
+                        "premise": scene.premise,
+                        "opens": scene.id not in continues,
+                        "you": next(
+                            (
+                                characters[cid].name
+                                for cid in scene.cast
+                                if cid in characters and characters[cid].is_user
+                            ),
+                            "",
+                        ),
+                        "with": [
+                            characters[cid].name
+                            for cid in scene.cast
+                            if cid in characters and not characters[cid].is_user
+                        ],
+                    }
+                    for scene in scenes
+                ],
+            }
+        )
+    return shelf

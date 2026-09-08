@@ -5,6 +5,9 @@
 # mal, a passagem do tempo, as palavras que o motor ignora ao comparar
 # frases. Nada disso está escrito em Python.
 id: vilamar
+title: Vilamar
+blurb: >-
+  Uma casa à beira-mar, uma família à mesa, e uma coisa que ninguém diz.
 language: pt-PT
 
 rooms:

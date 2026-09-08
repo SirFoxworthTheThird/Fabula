@@ -1,5 +1,8 @@
 id: o_almoco
 world: vilamar
+title: O almoço
+premise: >-
+  A mesa está posta e há uma coisa que ninguém quer levantar.
 mode: sandbox
 cast:
   - joaquim

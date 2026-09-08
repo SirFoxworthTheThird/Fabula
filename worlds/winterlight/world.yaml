@@ -6,6 +6,9 @@
 # Winterlight Station, 78°S. Nine months in, three weeks before the first
 # aircraft of the season is due.
 id: winterlight
+title: Winterlight Station
+blurb: >-
+  78°S, nine months in. Four people, two secrets, and a chain of cold rooms.
 
 rooms:
   radio:

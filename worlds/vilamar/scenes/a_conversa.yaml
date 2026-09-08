@@ -1,6 +1,9 @@
 # O arco. Os três à mesa, e acaba quando o barco for finalmente dito.
 id: a_conversa
 world: vilamar
+title: A conversa
+premise: >-
+  Já não dá para adiar.
 mode: arc
 cast:
   - joaquim

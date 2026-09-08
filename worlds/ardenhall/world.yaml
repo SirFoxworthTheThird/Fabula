@@ -5,6 +5,9 @@
 # So the spine is authored and the rest is found. What the story turns on
 # is named; everything that turns on nothing is furniture.
 id: ardenhall
+title: Ardenhall
+blurb: >-
+  A school on your first day, where the map is bigger than anyone wrote down.
 language: en
 discover_rooms: true
 

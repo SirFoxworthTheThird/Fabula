@@ -13,6 +13,7 @@ from typing import Callable
 
 from fabula.chronology import describe_duration
 from fabula.commands import run_command
+from fabula.api import serve
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
 from fabula.env import load_env
@@ -189,6 +190,17 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Skip the per-memory reading — most of a scene's model calls",
     )
+    parser.add_argument("--port", type=int, default=8000, help="Where the app listens")
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Start the app without opening a browser at it",
+    )
+    parser.add_argument(
+        "--terminal",
+        action="store_true",
+        help="Play here instead of in the browser",
+    )
     args = parser.parse_args(argv)
 
     library = Library(root=args.library, worlds_root=args.worlds)
@@ -211,9 +223,27 @@ def main(argv: list[str] | None = None) -> None:
             parser.error(f"not a story id: {args.delete} (see fabula --list)")
         print("Deleted." if gone else f"No story {args.delete}.")
         return
-    # With nothing to play, show what there is — the same thing a person
-    # opening the app wants to see.
-    if args.list or not (args.resume or args.world):
+    if args.list:
+        show_library(library)
+        return
+
+    # Typing the name of the app opens the app. Everything else here —
+    # naming a scene, resuming an id, --terminal — is the developer's
+    # door, and stays exactly where it was; but a person who installed a
+    # roleplay app and typed its name should get the app, not a REPL.
+    if not (args.resume or args.world or args.terminal):
+        serve(
+            worlds_root=args.worlds,
+            port=args.port,
+            model=args.model,
+            api_base=args.api_base,
+            workers=args.workers,
+            library_root=args.library,
+            open_browser=not args.no_browser,
+        )
+        return
+
+    if args.terminal and not (args.resume or args.world):
         show_library(library)
         return
 

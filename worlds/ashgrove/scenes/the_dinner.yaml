@@ -1,5 +1,8 @@
 id: the_dinner
 world: ashgrove
+title: The dinner
+premise: >-
+  Your brother has been strange all evening, and your sister is in the next room.
 mode: sandbox
 cast:
   - tomas

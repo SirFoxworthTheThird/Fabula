@@ -30,7 +30,7 @@ def test_a_started_story_is_in_the_library(library):
     card = library.list()[0]
     assert card.world == "ashgrove"
     assert card.scene == "the_dinner"
-    assert card.title == "Ashgrove — the dinner"
+    assert card.title == "The dinner", "named after the scene, in the author's words"
     assert card.turns == 0
     assert card.unplayed
 
@@ -256,18 +256,19 @@ def test_a_bad_story_id_is_rejected_at_the_wire(client):
 # --- At the terminal --------------------------------------------------
 
 
-def test_the_listing_is_what_you_see_with_nothing_to_play(library, capsys):
-    """`fabula` on its own is a person opening the app: show them their
-    stories, not a usage string."""
+def test_the_listing_is_what_you_see_in_the_terminal(library, capsys):
+    """`fabula` on its own opens the app in a browser; the terminal path
+    shows the same thing in words."""
     from fabula.cli import main as cli_main
 
-    cli_main(["--library", str(library.root), "--worlds", str(WORLDS)])
+    argv = ["--terminal", "--library", str(library.root), "--worlds", str(WORLDS)]
+    cli_main(argv)
     assert "No stories yet" in capsys.readouterr().out
 
     with library.start("ashgrove", "the_dinner", title="Tuesday", llm=FakeLLM()) as session:
         session.say("Pass the salt.")
 
-    cli_main(["--library", str(library.root), "--worlds", str(WORLDS)])
+    cli_main(argv)
     listed = capsys.readouterr().out
     assert "Tuesday" in listed
     assert "1 turn" in listed and "1 turns" not in listed

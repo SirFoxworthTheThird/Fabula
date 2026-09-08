@@ -3,6 +3,9 @@
 # finally said out loud, and the director escalates toward that.
 id: the_reckoning
 world: ashgrove
+title: The reckoning
+premise: >-
+  The same three people, one room, and nowhere left to put it.
 mode: arc
 cast:
   - tomas

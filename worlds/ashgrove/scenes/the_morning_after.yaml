@@ -3,6 +3,9 @@
 # night of knowing she has.
 id: the_morning_after
 world: ashgrove
+title: The morning after
+premise: >-
+  Whatever was said last night, everyone woke up in the same house.
 mode: arc
 cast: [tomas, maria, elena]
 starting_positions:

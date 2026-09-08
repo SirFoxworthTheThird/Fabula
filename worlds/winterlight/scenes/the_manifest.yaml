@@ -3,6 +3,9 @@
 # it. Over when both things are finally in the room — not one of them.
 id: the_manifest
 world: winterlight
+title: The manifest
+premise: >-
+  Everyone in the mess, and a crate that somebody signed for.
 mode: arc
 cast:
   - ilse

@@ -2,6 +2,9 @@
 # whether Rook got the Director anywhere near the other thing.
 id: the_interview
 world: ardenhall
+title: The interview
+premise: >-
+  The Director has read your file and would like a word about it.
 mode: arc
 cast: [vance, rook]
 starting_positions: {vance: office, rook: office}

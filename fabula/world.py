@@ -178,6 +178,12 @@ class Item(BaseModel):
 
 class World(BaseModel):
     id: str
+    # What this world is called and what kind of story it is, for the
+    # shelf a player picks from. Authored, because "ashgrove" is a
+    # directory name and "A house, a family, and something nobody has
+    # said out loud" is the reason to click it.
+    title: str = ""
+    blurb: str = ""
     rooms: dict[str, Room]
     facts: dict[str, Fact] = Field(default_factory=dict)
     # A BCP-47 tag, passed to the model so it writes in the world's
@@ -189,6 +195,10 @@ class World(BaseModel):
     # and a world that never opts in behaves exactly as it always did.
     discover_rooms: bool = False
     items: dict[str, Item] = Field(default_factory=dict)
+
+    @property
+    def name(self) -> str:
+        return self.title or self.id.replace("_", " ").title()
 
     def items_in(self, room_id: str) -> list[Item]:
         return [item for item in self.items.values() if item.location_id == room_id]

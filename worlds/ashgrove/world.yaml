@@ -1,4 +1,7 @@
 id: ashgrove
+title: Ashgrove
+blurb: >-
+  A house, a family, and something one of them has not said out loud.
 rooms:
   kitchen:
     name: the kitchen

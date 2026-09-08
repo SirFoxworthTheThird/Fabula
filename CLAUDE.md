@@ -76,8 +76,10 @@ designing it, not afterwards. `--no-interpret` is a symptom of not having done t
 
 What being a local *application* does demand, and what is missing:
 
-* **Install and run without a toolchain.** Today it is `pip install -e .` and a CLI —
-  a developer's product, not a roleplay app's.
+* **Install without a toolchain.** *Running* is now one word — `fabula` starts the
+  service and opens the browser client, which is one HTML file with no build step. But
+  installing is still `pip install -e .` from a clone, which is a developer's front door.
+  What is missing is a way to get the app onto a machine that has no Python on it.
 * ~~**A library of your stories.**~~ Done: one SQLite file per story in
   `~/.fabula/stories`, listed, resumed and deleted from the CLI, the API and the web
   start screen. Sessions still live in memory, but a story no longer depends on one.

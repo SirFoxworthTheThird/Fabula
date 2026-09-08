@@ -4,6 +4,9 @@
 # middle of a chain and makes you go and find people.
 id: the_long_dark
 world: winterlight
+title: The long dark
+premise: >-
+  Four of you awake in a building where sound does not travel the way you think.
 mode: sandbox
 cast:
   - ilse

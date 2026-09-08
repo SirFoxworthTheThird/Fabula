@@ -2,6 +2,9 @@
 # what that means.
 id: what_marlow_sent
 world: ardenhall
+title: What Marlow sent
+premise: >-
+  A sealed envelope that came ahead of you, and the person it was sent to.
 mode: sandbox
 cast: [vance, rook]
 starting_positions: {vance: office, rook: office}

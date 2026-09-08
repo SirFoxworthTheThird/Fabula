@@ -2,6 +2,9 @@
 # Tomás got away with it for one more night, which is its own weight.
 id: nobody_said_a_word
 world: ashgrove
+title: Nobody said a word
+premise: >-
+  It kept. Breakfast, as though the evening had not happened.
 mode: sandbox
 cast: [tomas, maria, elena]
 starting_positions:

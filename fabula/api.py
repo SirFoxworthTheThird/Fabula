@@ -27,6 +27,7 @@ from starlette.concurrency import run_in_threadpool
 from fabula.env import load_env
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
+from fabula.loader import catalogue
 from fabula.llm import (
     LiteLLMClient,
     LLMClient,
@@ -432,6 +433,15 @@ def create_app(
             if (world / "world.yaml").is_file()
         }
 
+    @app.get("/catalogue")
+    def shelf() -> list[dict]:
+        """Every world and its scenes, with the ones a story starts from
+        marked — what a person picking something to play needs to see,
+        as opposed to `/worlds`, which is the flat list a tool wants."""
+        if not worlds_root.is_dir():
+            return []
+        return catalogue(worlds_root)
+
     @app.post("/sessions", response_model=SceneState)
     def create_session(body: NewSession) -> SceneState:
         session_id, session = open_session(body.world, body.scene)
@@ -577,6 +587,29 @@ def create_app(
     return app
 
 
+def free_port(host: str, wanted: int) -> int:
+    """`wanted` if it is free, otherwise one the operating system picks.
+
+    Somebody who has left a story open in another window should not be
+    told to go and find it and close it: the second one takes another
+    port and says which.
+    """
+    import socket
+
+    with socket.socket() as probe:
+        try:
+            probe.bind((host, wanted))
+            # What was actually bound, which for port 0 is the one the
+            # operating system chose — otherwise the address printed on
+            # the way up would be a lie.
+            return probe.getsockname()[1]
+        except OSError:
+            pass
+    with socket.socket() as probe:
+        probe.bind((host, 0))
+        return probe.getsockname()[1]
+
+
 def serve(
     worlds_root: Path = Path("worlds"),
     host: str = "127.0.0.1",
@@ -584,6 +617,8 @@ def serve(
     model: str | None = None,
     api_base: str | None = None,
     workers: int = DEFAULT_WORKERS,
+    library_root: Path | None = None,
+    open_browser: bool = False,
 ) -> None:
     try:
         import uvicorn
@@ -594,7 +629,23 @@ def serve(
         if unreachable:
             raise SystemExit(f"fabula-serve: {unreachable}")
     llm = LiteLLMClient(model=model, api_base=api_base) if model else None
-    uvicorn.run(create_app(worlds_root, llm=llm, workers=workers), host=host, port=port)
+    port = free_port(host, port)
+    where = f"http://{host}:{port}"
+    if open_browser:
+        # After the server is listening, in a thread, and never fatal: a
+        # machine with no browser to open (a container, a server over
+        # ssh) still gets a running app and the address to reach it at.
+        import threading
+        import webbrowser
+
+        threading.Timer(0.7, lambda: webbrowser.open(where)).start()
+    print(f"Fabula is at {where}   (ctrl-c to stop)")
+    uvicorn.run(
+        create_app(worlds_root, llm=llm, workers=workers, library_root=library_root),
+        host=host,
+        port=port,
+        log_level="warning",
+    )
 
 
 def main(argv: list[str] | None = None) -> None:

@@ -1,5 +1,8 @@
 id: arrival
 world: ardenhall
+title: Arrival
+premise: >-
+  Thirty-one names on the intake list. Yours is the one with the house rubbed out.
 mode: arc
 cast: [vance, rook]
 starting_positions: {vance: office, rook: hall}

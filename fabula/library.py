@@ -46,6 +46,7 @@ class StoryCard:
 
 
 def default_title(world: str, scene: str) -> str:
+    """A fallback for a story whose scene could not be read."""
     return f"{world.replace('_', ' ').title()} — {scene.replace('_', ' ')}"
 
 
@@ -105,11 +106,18 @@ class Library:
         story_id = uuid4().hex[:12]
         path = self._path(story_id)
         store = EventStore(str(path))
-        store.start_story(story_id, title or default_title(world, scene), world, scene)
         try:
-            return Session.open(
+            session = Session.open(
                 self.worlds_root / world, scene, llm=llm, store=store, **kwargs
             )
+            # Named after the scene it begins in, in the author's words —
+            # "The dinner" rather than "Ashgrove — the_dinner". Written
+            # after the scene loads, because that is where the name is.
+            store.start_story(
+                story_id, title or session.scene.name or default_title(world, scene),
+                world, scene,
+            )
+            return session
         except Exception:
             # A world that does not load leaves no card behind. The file
             # is written before the scene is opened (the story row is

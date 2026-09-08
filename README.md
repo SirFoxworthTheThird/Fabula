@@ -52,7 +52,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 432 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 444 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -97,9 +97,23 @@ If those report `No module named fabula`, the install itself did not take — ch
 `python -c "import fabula; print(fabula.__file__)"` and re-run `pip install -e .` from
 the repository root, using the same interpreter you are invoking.
 
+### Play
+
+```bash
+fabula
+```
+
+That starts the app and opens it in a browser: your stories on top, worlds underneath,
+and a scene to click. It is the whole app — the shelf, play, the reveal — and it needs no
+build step, because the client is one HTML file the service hands you.
+
+If the port is busy (another copy is already open), it takes a free one and says which.
+`--no-browser` starts it without opening anything, `--port` picks the port.
+
 ### Play in a terminal
 
 ```bash
+fabula --terminal                      # your stories, in words
 python -m fabula.cli worlds/ashgrove the_dinner
 ```
 
@@ -370,16 +384,22 @@ On a 1.5B local model the three variants landed at 3/16, 4/16 and 3/16 — the s
 guard line does nothing there. Whether it earns its place on a capable model is exactly
 what this command is for.
 
-### Play in a browser
+### What the browser client does
 
-```bash
-fabula-serve --worlds worlds        # then open http://127.0.0.1:8000
-```
+`fabula` opens it; `fabula-serve` runs the same thing without a browser, for a machine
+you reach over ssh.
 
-It opens on your stories rather than on a menu of things to begin — resume one, delete
-one, or start something new underneath. Then it renders *your character's projection*.
-Dialogue is attributed; things you half-hear are dimmed behind an `unclear` tag and
-deliberately left unattributed, because your character does not know who that was.
+It opens on your stories rather than on a menu of things to begin. Underneath them are
+the worlds, each with what kind of story it is, and the scenes a story can *start* from —
+a scene another scene leads to is a chapter, and offering it cold is how a menu of scenes
+reads. What you play, who you play, and who is in the room with you are on the card.
+
+In the scene it renders *your character's projection*. Dialogue is attributed; things you
+half-hear are dimmed behind an `unclear` tag and deliberately left unattributed, because
+your character does not know who that was. Your own line appears the moment you send it,
+held back until the turn lands — and vanishes again if the turn failed, because then it
+did not happen. While the room is answering it says so: a turn is several model calls and
+a blank screen for ten seconds reads as a crash.
 
 ## Invariants
 
@@ -573,10 +593,25 @@ agent asked to change it.
 
 ```
 worlds/<name>/
-  world.yaml          rooms, adjacency, facts the story can turn on
+  world.yaml          title, blurb, rooms, adjacency, facts the story can turn on
   characters/*.yaml   persona, traits, goals, intentions, relationships
   pressures.yaml      authored complications
-  scenes/*.yaml       cast, starting positions, mode, turn budget
+  scenes/*.yaml       title, premise, cast, starting positions, mode, turn budget
+```
+
+`title` and `blurb` on a world, and `title` and `premise` on a scene, are what the shelf
+is made of — a directory name and a scene id are not a reason to click anything:
+
+```yaml
+# world.yaml
+title: Ashgrove
+blurb: >-
+  A house, a family, and something one of them has not said out loud.
+
+# scenes/the_dinner.yaml
+title: The dinner
+premise: >-
+  Your brother has been strange all evening, and your sister is in the next room.
 ```
 
 Drop a directory in `worlds/` and every client finds it: the terminal, the playtest
