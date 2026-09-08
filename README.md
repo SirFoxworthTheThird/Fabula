@@ -52,7 +52,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 444 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 458 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -311,9 +311,24 @@ stays open on the same scene. Retype the line and play on.
 
 ### Point it at your own model
 
-Every entry point takes `--model` (any id litellm understands) and `--api-base` (any
-OpenAI-compatible endpoint — a hosted proxy, an aggregator, a local server). Credentials
-come from the environment, never a flag, so they stay out of shell history.
+There is a panel at the bottom of the shelf: the model id, an optional endpoint, how many
+of a turn's calls may be in flight, and whether characters read back what they remember.
+It saves to `~/.fabula/settings.json`, so the choice survives a restart, and it applies to
+stories already open — the log, the beliefs and the trust are the engine's; the model is
+only who gets asked next. A model the environment cannot reach is refused with the reason
+rather than saved, because saving it would mean every story from then on failing at its
+first line, several clicks from the screen that caused it.
+
+**The panel will not take your key, on purpose.** Credentials reach the engine through
+the environment and nowhere else — a browser form posting an API key into a JSON file
+would be a worse place for it than the environment, dressed up as a better one. So the
+panel *looks* instead: it names which provider variables are set (names only; the values
+are never read by the app) and tells you the exact file to put a missing one in.
+
+Every entry point also takes `--model` (any id litellm understands) and `--api-base` (any
+OpenAI-compatible endpoint — a hosted proxy, an aggregator, a local server). A flag is
+for that run and wins over the file; the panel says so rather than quietly disagreeing
+with the process it is running in.
 
 ```bash
 export OPENAI_API_KEY=...
@@ -923,6 +938,8 @@ it never enters the stream.
 |---|---|
 | `GET /` | the web client |
 | `GET /worlds` | worlds and their scenes |
+| `GET /catalogue` | worlds and their scenes, with the ones a story starts from marked |
+| `GET`/`PUT /settings` | which model answers — never a credential, in either direction |
 | `GET /stories` | your saved stories, most recently played first |
 | `POST /stories` | start one, and save it → the same state as `POST /sessions` |
 | `POST /stories/{id}/resume` | pick one back up, on the scene it was left on |

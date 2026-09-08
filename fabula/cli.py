@@ -16,6 +16,7 @@ from fabula.commands import run_command
 from fabula.api import serve
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
+from fabula.settings import DEFAULT_SETTINGS, Settings
 from fabula.env import load_env
 from fabula.llm import LiteLLMClient, ModelUnavailable, missing_credentials
 from fabula.models import Character, ProjectedEvent
@@ -182,8 +183,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--workers",
         type=int,
-        default=DEFAULT_WORKERS,
+        default=None,
         help="How many model calls a turn may have in flight at once (1 = one at a time)",
+    )
+    parser.add_argument(
+        "--settings",
+        type=Path,
+        default=DEFAULT_SETTINGS,
+        help="Where your choice of model is kept",
     )
     parser.add_argument(
         "--no-interpret",
@@ -204,15 +211,26 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     library = Library(root=args.library, worlds_root=args.worlds)
+    # The same choice the app's own settings panel writes, so the two
+    # doors do not disagree about which model answers. A flag still wins:
+    # it is for this run.
+    settings = Settings.load(args.settings)
     if args.model:
         # Before the story opens, not several turns in. A key that was
         # never set used to surface as a provider traceback mid-scene.
         unreachable = missing_credentials(args.model, args.api_base)
         if unreachable:
             parser.error(unreachable)
-    llm = LiteLLMClient(model=args.model, api_base=args.api_base) if args.model else None
-    interpret = not args.no_interpret
-    opening = {"interpret_beliefs": interpret, "workers": args.workers}
+    llm = (
+        LiteLLMClient(model=args.model, api_base=args.api_base)
+        if args.model
+        else settings.client()
+    )
+    interpret = settings.interpret and not args.no_interpret
+    opening = {
+        "interpret_beliefs": interpret,
+        "workers": args.workers if args.workers is not None else settings.workers,
+    }
 
     if args.delete:
         # A mistyped id is a typo, not a crash: the ids are for people to
@@ -239,6 +257,7 @@ def main(argv: list[str] | None = None) -> None:
             api_base=args.api_base,
             workers=args.workers,
             library_root=args.library,
+            settings_path=args.settings,
             open_browser=not args.no_browser,
         )
         return

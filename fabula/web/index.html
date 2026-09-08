@@ -168,6 +168,75 @@
   }
   .story .drop:hover { color: var(--danger); border-color: #4a2a2a; }
 
+  /* Which model answers is the player's choice, so it is on the shelf
+     rather than in the flags of whoever started the process. */
+  .panel {
+    background: var(--ground-lift);
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    padding: 16px 18px 14px;
+  }
+  .panel .state { margin: 0 0 14px; color: var(--ink-soft); font-size: 15px; }
+  .panel .state.warn { color: var(--accent); }
+  .panel .field {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .panel label {
+    font-family: var(--sans);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    width: 5.5rem;
+    flex: none;
+  }
+  .panel input[type=text] { font-family: var(--sans); font-size: 14px; padding: 8px 11px; }
+  .panel input[type=number] {
+    width: 5rem;
+    background: var(--ground);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 8px 11px;
+  }
+  .panel .hint { font-family: var(--sans); font-size: 12px; color: var(--ink-faint); }
+  .panel .check {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    width: auto;
+    text-transform: none;
+    letter-spacing: 0;
+    font-family: var(--serif);
+    font-size: 15px;
+    color: var(--ink-soft);
+    margin: 14px 0 4px;
+    cursor: pointer;
+  }
+  .panel .check input { margin-top: 5px; accent-color: var(--accent); }
+  .panel .save { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+  .panel .save .notice { margin: 0; }
+  .panel .keys {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin: 14px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--edge-soft);
+    line-height: 1.5;
+  }
+  .panel code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: var(--ink-dim);
+  }
+
   /* --- The stage ---------------------------------------------------- */
 
   header {
@@ -442,6 +511,37 @@
     <h2 class="section" id="new-heading">Begin</h2>
     <div id="worlds"></div>
 
+    <h2 class="section">Model</h2>
+    <div class="panel" id="settings">
+      <p class="state" id="model-state"></p>
+      <div class="field">
+        <label for="model">Model</label>
+        <input type="text" id="model" placeholder="gpt-4o-mini, anthropic/claude-…, openai/…"
+               autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="api-base">Endpoint</label>
+        <input type="text" id="api-base" placeholder="optional — your own server or a proxy"
+               autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="workers">At once</label>
+        <input type="number" id="workers" min="1" max="32">
+        <span class="hint">how many of a turn's calls may be in flight</span>
+      </div>
+      <label class="check">
+        <input type="checkbox" id="interpret">
+        <span>Let characters read back what they remember
+          <span class="hint">— most of a turn's calls, and what makes a memory more than an echo</span>
+        </span>
+      </label>
+      <div class="save">
+        <button type="button" class="primary" id="save-settings">Save</button>
+        <span class="notice" id="settings-notice"></span>
+      </div>
+      <p class="keys" id="keys"></p>
+    </div>
+
     <div class="notice" id="start-notice"></div>
   </div>
 </section>
@@ -510,6 +610,13 @@ const send = (url, body) =>
 
 const api = {
   catalogue: () => ask("/catalogue"),
+  settings: () => ask("/settings"),
+  saveSettings: chosen =>
+    ask("/settings", {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(chosen),
+    }),
   stories: () => ask("/stories"),
   startStory: (world, scene) => send("/stories", {world, scene}),
   resumeStory: id => send(`/stories/${id}/resume`),
@@ -967,6 +1074,85 @@ function sceneCard(world, scene) {
   return button;
 }
 
+// Which model answers is the player's choice — the whole pitch is that
+// the application is local and the model is yours — and a choice that
+// lives in the flags of whoever started the process is not theirs.
+//
+// The one thing this panel will not do is take a key. Credentials reach
+// the engine through the environment and nowhere else, so what it does
+// instead is say which ones are there and where to put one that is not.
+async function showSettings() {
+  const current = await api.settings();
+  el("model").value = current.model;
+  el("api-base").value = current.api_base;
+  el("workers").value = current.workers;
+  el("interpret").checked = current.interpret;
+
+  const state = el("model-state");
+  state.classList.toggle("warn", current.placeholder || Boolean(current.unreachable));
+  if (current.pinned) {
+    state.textContent =
+      "The model was set on the command line for this run. Restart without --model to choose it here.";
+  } else if (current.unreachable) {
+    state.textContent = current.unreachable;
+  } else if (current.placeholder) {
+    state.textContent =
+      "No model set and no provider key in the environment, so stories run on placeholder text — " +
+      "everything works, but nobody says anything real.";
+  } else if (current.model) {
+    state.textContent = `Stories run on ${current.model}${current.api_base ? " at " + current.api_base : ""}.`;
+  } else {
+    state.textContent = "Stories run on whatever your environment implies. Name a model to be sure.";
+  }
+
+  for (const id of ["model", "api-base", "workers", "interpret", "save-settings"]) {
+    el(id).disabled = current.pinned;
+  }
+
+  // Names only. The values are never read by the app and never leave the
+  // machine except to the endpoint you chose.
+  const keys = el("keys");
+  keys.textContent = "";
+  if (current.keys_present.length) {
+    keys.append(document.createTextNode("Keys in your environment: "));
+    current.keys_present.forEach((name, i) => {
+      if (i) keys.append(document.createTextNode(", "));
+      const code = document.createElement("code");
+      code.textContent = name;
+      keys.appendChild(code);
+    });
+    keys.append(document.createTextNode(". Your key is never asked for here and never stored by the app."));
+  } else {
+    keys.append(document.createTextNode("No provider key found. Put one in "));
+    const where = document.createElement("code");
+    where.textContent = current.env_file;
+    keys.appendChild(where);
+    keys.append(document.createTextNode(
+      " as OPENAI_API_KEY=… (or export it) and restart. It is never asked for here and never stored by the app."
+    ));
+  }
+}
+
+el("save-settings").onclick = async () => {
+  const notice = el("settings-notice");
+  notice.classList.remove("bad");
+  notice.textContent = "Saving…";
+  try {
+    await api.saveSettings({
+      model: el("model").value,
+      api_base: el("api-base").value,
+      workers: Number(el("workers").value) || 1,
+      interpret: el("interpret").checked,
+    });
+    await showSettings();
+    notice.textContent = "Saved.";
+    setTimeout(() => { if (notice.textContent === "Saved.") notice.textContent = ""; }, 2500);
+  } catch (failure) {
+    notice.textContent = failure.message;
+    notice.classList.add("bad");
+  }
+};
+
 async function showShelf() {
   el("start-notice").textContent = "";
   el("start-notice").classList.remove("bad");
@@ -975,6 +1161,7 @@ async function showShelf() {
     shelf = await api.catalogue();
     await showStories();
     await showWorlds();
+    await showSettings();
   } catch (failure) {
     el("start-notice").textContent = failure.message;
     el("start-notice").classList.add("bad");

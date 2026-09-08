@@ -196,3 +196,23 @@ def test_the_terminal_keeps_playing_after_a_failure(monkeypatch, capsys):
     assert "Are you still there?" in [
         p.perceived_content for p in session.perceived_so_far()
     ], "the line after the failure was played"
+
+
+def test_starting_a_story_when_the_model_is_unreachable_says_so(tmp_path):
+    """A scene opens with a line of its own, which is a model call — so
+    a wrong key now fails on the first click rather than the first line,
+    and that is the click that must not produce a traceback."""
+    from fastapi.testclient import TestClient
+
+    from fabula.api import create_app
+
+    app = create_app(
+        worlds_root=ASHGROVE.parent, llm=FailsAfter(0), library_root=tmp_path / "stories"
+    )
+    with TestClient(app, raise_server_exceptions=False) as client:
+        refused = client.post("/stories", json={"world": "ashgrove", "scene": "the_dinner"})
+
+        assert refused.status_code == 502
+        assert "did not answer" in refused.json()["detail"]
+        # And no half-made story was left on the shelf.
+        assert client.get("/stories").json() == []

@@ -13,6 +13,7 @@ The engine knows nothing about this module. Everything here goes through
 from __future__ import annotations
 
 import asyncio
+import threading
 from contextlib import asynccontextmanager
 import uuid
 from datetime import datetime
@@ -21,13 +22,14 @@ from typing import Literal
 
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from starlette.concurrency import run_in_threadpool
 
 from fabula.env import load_env
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
 from fabula.loader import catalogue
+from fabula.settings import DEFAULT_SETTINGS, Settings, describe
 from fabula.llm import (
     LiteLLMClient,
     LLMClient,
@@ -131,6 +133,18 @@ class NewStory(BaseModel):
     title: str | None = None
 
 
+class NewSettings(BaseModel):
+    """Deliberately closed: an unknown field is refused rather than
+    stored, so no client can talk this into keeping a credential."""
+
+    model_config = ConfigDict(extra="forbid", protected_namespaces=())
+
+    model: str = ""
+    api_base: str = ""
+    interpret: bool = True
+    workers: int = DEFAULT_WORKERS
+
+
 class NewSession(BaseModel):
     world: str
     scene: str
@@ -216,18 +230,32 @@ def _world_dir(worlds_root: Path, name: str) -> Path:
     return candidate
 
 
+def _warm_litellm() -> None:
+    try:
+        import litellm  # noqa: F401
+    except Exception:  # pragma: no cover - depends on the install
+        pass
+
+
 def create_app(
     worlds_root: Path = Path("worlds"),
     llm: LLMClient | None = None,
     db_path: str = ":memory:",
     library_root: Path | None = None,
-    workers: int = DEFAULT_WORKERS,
+    workers: int | None = None,
+    settings_path: Path | None = None,
 ) -> FastAPI:
     live: dict[str, _LiveSession] = {}
     by_token: dict[str, str] = {}
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        # Importing litellm takes several seconds, and it happens on the
+        # first thing that needs a model — which was the first save in
+        # the settings panel, and the first line of the first story.
+        # Doing it on a thread while somebody is still reading the shelf
+        # costs nothing and takes that wait off the front of the app.
+        threading.Thread(target=_warm_litellm, daemon=True).start()
         yield
         # The turn a session is in the middle of is uncommitted, which is
         # what lets a player take it again. Somebody has to say when play
@@ -242,9 +270,25 @@ def create_app(
         lifespan=lifespan,
     )
     library = Library(root=library_root or DEFAULT_ROOT, worlds_root=worlds_root)
+    # Which model answers is the player's choice, and a choice that lives
+    # only in the flags of whoever started the process is not theirs. An
+    # explicit `llm` — a flag, or a test — still wins for that run, and
+    # the panel says so rather than pretending to be in charge.
+    settings_file = Path(settings_path) if settings_path else DEFAULT_SETTINGS
+    settings = Settings.load(settings_file)
+    pinned = llm is not None
     app.state.sessions = live
     app.state.sessions_by_token = by_token
     app.state.library = library
+    app.state.settings = settings
+
+    def opening() -> dict:
+        """What to open the next story with."""
+        return {
+            "llm": llm if pinned else settings.client(),
+            "workers": workers if workers is not None else settings.workers,
+            "interpret_beliefs": settings.interpret,
+        }
 
     def get_live(session_id: str) -> _LiveSession:
         if session_id not in live:
@@ -254,9 +298,9 @@ def create_app(
     def open_session(world_name: str, scene_name: str) -> tuple[str, Session]:
         world_dir = _world_dir(worlds_root, world_name)
         try:
-            session = Session.open(
-                world_dir, scene_name, db_path=db_path, llm=llm, workers=workers
-            )
+            session = Session.open(world_dir, scene_name, db_path=db_path, **opening())
+        except ModelUnavailable as failure:
+            raise HTTPException(status_code=502, detail=f"the model did not answer: {failure}")
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail=f"no scene named {scene_name!r}")
         except ValueError as error:
@@ -372,11 +416,15 @@ def create_app(
     @app.post("/stories", response_model=SceneState)
     def start_story(body: NewStory) -> SceneState:
         try:
-            session = library.start(
-                body.world, body.scene, title=body.title, llm=llm, workers=workers
-            )
+            session = library.start(body.world, body.scene, title=body.title, **opening())
         except FileNotFoundError as missing:
             raise HTTPException(status_code=404, detail=str(missing))
+        except ModelUnavailable as failure:
+            # A scene opens with a line of its own, which is a model call
+            # — so the first click of a run with a wrong key lands here,
+            # and it should say what happened rather than 500. The story
+            # file is already gone: a start that fails leaves no card.
+            raise HTTPException(status_code=502, detail=f"the model did not answer: {failure}")
         return remember(session)
 
     @app.post("/stories/{story_id}/resume", response_model=SceneState)
@@ -392,9 +440,11 @@ def create_app(
             if entry.story_id == story_id:
                 return state_of(session_id, entry.session)
         try:
-            session = library.resume(story_id, llm=llm, workers=workers)
+            session = library.resume(story_id, **opening())
         except (FileNotFoundError, ValueError) as missing:
             raise HTTPException(status_code=404, detail=str(missing))
+        except ModelUnavailable as failure:
+            raise HTTPException(status_code=502, detail=f"the model did not answer: {failure}")
         return remember(session)
 
     @app.delete("/stories/{story_id}")
@@ -432,6 +482,51 @@ def create_app(
             for world in sorted(worlds_root.iterdir())
             if (world / "world.yaml").is_file()
         }
+
+    @app.get("/settings")
+    def read_settings() -> dict:
+        """What a story started now would run on, and what the
+        environment can and cannot reach. Never a credential: the keys
+        this reports are names, and their values are not read here."""
+        return dict(describe(settings), pinned=pinned)
+
+    @app.put("/settings")
+    def write_settings(body: NewSettings) -> dict:
+        """Change it, for the stories opened from now on and for the ones
+        already open.
+
+        A model the environment cannot reach is refused rather than
+        saved: accepting it would mean every story from here on failing
+        at its first turn, several clicks away from the screen that
+        caused it.
+        """
+        if pinned:
+            raise HTTPException(
+                status_code=409,
+                detail="the model was set on the command line for this run; "
+                       "restart without --model to choose it here",
+            )
+        wanted = Settings(
+            model=body.model.strip(),
+            api_base=body.api_base.strip(),
+            interpret=body.interpret,
+            workers=max(1, min(body.workers, 32)),
+        )
+        unreachable = wanted.unreachable()
+        if unreachable:
+            raise HTTPException(status_code=400, detail=unreachable)
+
+        settings.model = wanted.model
+        settings.api_base = wanted.api_base
+        settings.interpret = wanted.interpret
+        settings.workers = wanted.workers
+        settings.save(settings_file)
+        # A story already open changes model too. Nothing about it moves:
+        # the log, the beliefs and the trust are the engine's; the model
+        # is only who gets asked next.
+        for entry in live.values():
+            entry.session.use(settings.client(), settings.workers, settings.interpret)
+        return dict(describe(settings), pinned=pinned)
 
     @app.get("/catalogue")
     def shelf() -> list[dict]:
@@ -616,8 +711,9 @@ def serve(
     port: int = 8000,
     model: str | None = None,
     api_base: str | None = None,
-    workers: int = DEFAULT_WORKERS,
+    workers: int | None = None,
     library_root: Path | None = None,
+    settings_path: Path | None = None,
     open_browser: bool = False,
 ) -> None:
     try:
@@ -641,7 +737,13 @@ def serve(
         threading.Timer(0.7, lambda: webbrowser.open(where)).start()
     print(f"Fabula is at {where}   (ctrl-c to stop)")
     uvicorn.run(
-        create_app(worlds_root, llm=llm, workers=workers, library_root=library_root),
+        create_app(
+            worlds_root,
+            llm=llm,
+            workers=workers,
+            library_root=library_root,
+            settings_path=settings_path,
+        ),
         host=host,
         port=port,
         log_level="warning",
@@ -664,7 +766,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--workers",
         type=int,
-        default=DEFAULT_WORKERS,
+        default=None,
         help="How many model calls a turn may have in flight at once (1 = one at a time)",
     )
     args = parser.parse_args(argv)

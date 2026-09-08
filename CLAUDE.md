@@ -47,7 +47,11 @@ pacing, of who speaks when, of what a "secret" even is — and none of them has 
 install and a service you start — and it keeps your stories in a SQLite file you own.
 No account, no SaaS in the middle, nothing leaving the box that you did not point it at.
 Which model answers is entirely your choice: a hosted endpoint, an aggregator, your own
-llama server. `--model`, `--api-base`, and a key from the environment.
+llama server. Chosen in the app itself — a panel on the shelf, saved to
+`~/.fabula/settings.json`, applying to stories already open — or with `--model` and
+`--api-base` for one run. The key comes from the environment and only from there: the
+panel reports which provider variables are set and where to put one that is not, and has
+nowhere to store a credential even if it wanted to.
 
 So model cost and latency are the *user's* bill and the *user's* wait, not a hardware
 ceiling — which makes them an engineering problem rather than a disqualifier. They are

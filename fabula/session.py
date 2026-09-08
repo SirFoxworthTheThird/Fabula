@@ -247,6 +247,30 @@ class Session:
             self._last_take = was_playable
             raise
 
+    def use(
+        self,
+        llm: LLMClient | None,
+        workers: int | None = None,
+        interpret_beliefs: bool | None = None,
+    ) -> None:
+        """Change which model answers, mid-story.
+
+        Four objects hold the client — the session, the director, the
+        context builder and the narrator — and a change that reached
+        three of them would leave a character still talking to the old
+        endpoint. Nothing about the story moves: the log, the beliefs and
+        the trust are all the engine's, and the model is only who is
+        asked next.
+        """
+        self.llm = llm
+        self.director.llm = llm
+        self.director.contexts.llm = llm
+        self.director.narrator.llm = llm
+        if workers is not None:
+            self.director.workers = workers
+        if interpret_beliefs is not None:
+            self.director.interpret_beliefs = interpret_beliefs
+
     def close(self) -> None:
         """Settle the scene and let go of the database.
 
