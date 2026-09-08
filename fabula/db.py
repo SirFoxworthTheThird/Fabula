@@ -242,6 +242,17 @@ class EventStore:
             )
             self.conn.commit()
 
+    def set_trust(self, character_id: str, toward_id: str, trust: float) -> None:
+        """How far one character now believes another. Written only from
+        that character's own projection — see `fabula.persistence`."""
+        with self._lock:
+            self.conn.execute(
+                """UPDATE relationships SET trust = ?
+                   WHERE character_id = ? AND toward_id = ?""",
+                (max(0.0, min(1.0, trust)), character_id, toward_id),
+            )
+            self.conn.commit()
+
     def bump_interaction(self, character_id: str, toward_id: str) -> None:
         with self._lock:
             self.conn.execute(

@@ -41,6 +41,11 @@ class Session:
         self.store = store
         self.director = director
         self.user_character = user_character
+        # Where everyone's trust stood when this scene opened. Never
+        # returned by any method here — `fabula.reveal` reads it to show
+        # what the evening did to people, which is the one place the
+        # engine is allowed to step outside a point of view.
+        self.trust_at_open: dict[str, dict[str, float]] = {}
 
     @classmethod
     def open(
@@ -76,7 +81,18 @@ class Session:
         # what they already believe, aged by the time between scenes.
         begin_scene(store, characters)
 
-        return cls(world, characters, scene, store, director, user_character)
+        session = cls(world, characters, scene, store, director, user_character)
+        # After seeding, not from the YAML: a character on their second
+        # evening arrives carrying what the first one did to them, and
+        # "was" has to mean when this scene started.
+        session.trust_at_open = {
+            character_id: {
+                toward: relationship.trust
+                for toward, relationship in store.get_relationships(character_id).items()
+            }
+            for character_id in characters
+        }
+        return session
 
     def here(self) -> str:
         return self.director.current_location(self.user_character)

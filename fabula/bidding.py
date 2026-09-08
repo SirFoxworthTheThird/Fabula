@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fabula.llm import LLMClient
 from fabula.memory import ContextBuilder, location_at_seq
-from fabula.models import Bid, Character, Event
+from fabula.models import Bid, Character, Event, Relationship
 from fabula.world import World, mentions_fact, resolve_perception
 
 AMBIGUOUS_LOW = 0.35
@@ -16,6 +16,9 @@ AMBIGUOUS_HIGH = 0.65
 
 WITHHOLD_RETICENCE = 0.6   # below this, a character just answers
 WITHHOLD_COOLDOWN = 6      # events; deflecting every turn stops being drama
+
+NEUTRAL_TRUST = 0.5        # the authored default: no reason either way
+DISTRUST_ATTENTION = 0.4   # at most +0.2, so it colours a bid, never decides it
 
 
 def recently_withheld(character_id: str, events: list[Event], window: int = WITHHOLD_COOLDOWN) -> bool:
@@ -78,13 +81,26 @@ def prefilter_candidates(
     return candidates
 
 
-def heuristic_bid(character: Character, event: Event, level: str) -> tuple[float, str]:
+def heuristic_bid(
+    character: Character,
+    event: Event,
+    level: str,
+    regard: Relationship | None = None,
+) -> tuple[float, str]:
     score = character.traits.talkativeness * 0.5
     reasons: list[str] = []
 
     if character.id in event.addressed_to:
         score += 0.5
         reasons.append("addressed directly")
+
+    if regard is not None and regard.trust < NEUTRAL_TRUST:
+        # Distrust is attention. You watch the person you have stopped
+        # believing, and you are quicker to speak into what they say —
+        # which is what gives a withheld beat a cost beyond the pause the
+        # narrator renders for it.
+        score += (NEUTRAL_TRUST - regard.trust) * DISTRUST_ATTENTION
+        reasons.append("does not trust them")
 
     for trigger in event.metadata.get("triggers", []):
         weight = character.traits.reactivity.get(trigger, 0.0)
@@ -135,7 +151,14 @@ def get_bid(
             character_id=character.id, desire=desire, one_line_reason=reason, kind="withhold"
         )
 
-    score, reason = heuristic_bid(character, event, level)
+    # How this character regards whoever just acted. Their own stored
+    # state, so consulting it cannot tell them anything new about the room.
+    regard = (
+        contexts.store.get_relationships(character.id).get(event.actor_id)
+        if event.actor_id
+        else None
+    )
+    score, reason = heuristic_bid(character, event, level, regard)
 
     if llm is not None and AMBIGUOUS_LOW <= score <= AMBIGUOUS_HIGH:
         context = contexts.for_character(character, events)

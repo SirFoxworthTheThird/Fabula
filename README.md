@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 164 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 179 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -118,8 +118,8 @@ Information asymmetry is invisible while you play. A character with nothing to s
 exactly like a character saying nothing, and a scene where the secret held reads — from
 the inside — like a scene with no secret in it. So the payoff comes afterwards: `/reveal`
 in the terminal, or **What I missed** in the browser, shows what happened out of your
-sight, what you half-heard set against what it actually was, and who ended the scene
-knowing the secret. In a scene with an `end_condition` you are offered it at the moment
+sight, what you half-heard set against what it actually was, who ended the scene knowing
+the secret, and whose regard for whom moved while you were not looking. In a scene with an `end_condition` you are offered it at the moment
 the scene reaches its end, rather than having to remember it exists.
 
 It is the one part of the engine that deliberately steps outside a point of view, which
@@ -282,6 +282,27 @@ That matters because a reticent character who merely loses the bid reads exactly
 someone who isn't there. The narrator is never told *what* is being withheld, and is
 never given the persona (that is where the secret is written down).
 
+And it costs them. Watching somebody refuse to answer is the one thing in the engine that
+deterministically moves how they are regarded: every witness who saw it **at full
+fidelity** loses a fraction of their trust in the withholder, and low trust raises their
+bid the next time that person speaks — distrust is attention. Two things make that safe.
+It is computed from each witness's own projection, so a character in the next room loses
+nothing and neither does one who only half-heard it (the degraded descriptor carries no
+name, so they cannot know who that was — a number that moved on an unperceived event
+would be invariant 1 leaking through arithmetic instead of prose). And it never moves the
+*player's* trust: deciding that Elena believes her brother less tonight is telling the
+person holding her how they feel, which is the same overreach as narrating her actions
+for her.
+
+Trust that nothing reads is trust that does not exist, so the reveal shows what moved —
+and it is a good example of what the reveal is for. Elena, standing in the study, has no
+way to know her sister stopped believing her brother tonight.
+
+```
+What tonight changed:
+  Maria trusts Tomás less than at the start (0.50 → 0.42)
+```
+
 Pressures are a trigger plus an intent, never a script. The director chooses among
 *authored* pressures and the narrator renders the chosen one; it can never invent a
 complication, because a director allowed to improvise produces generic beats — a knock,
@@ -389,10 +410,10 @@ The suite is the regression net *and* the clearest description of the product:
   "what you guard" reminder made no difference at all: 4/16 openings blurted the secret
   with it, 3/16 without. Treat every prompt-level rule here as unproven until measured
   on the model you actually ship.
-* Relationship affinity does not move during play. Interaction counts accumulate and
-  authored affinity/trust persist, but nothing shifts affinity from the *content* of what
-  is said; that needs judgment that could not be made deterministically without risking
-  invariant 2.
+* Relationship **affinity** still does not move during play; only trust does, and only on
+  a witnessed refusal to answer. Moving either from the *content* of what is said needs a
+  model deciding whether someone was being sincere, and a wrong call there quietly
+  rewrites a character's inner life — which is the correction invariant 2 forbids.
 * Sessions live in memory, so restarting the service drops them. Scene state survives if
   you point sessions at a database file.
 

@@ -80,6 +80,13 @@ class HalfHeardOut(BaseModel):
     truth: str
 
 
+class RegardOut(BaseModel):
+    who: str
+    toward: str
+    trust: float
+    started: float
+
+
 class RevealOut(BaseModel):
     """Deliberately omniscient, and only produced on request."""
 
@@ -87,6 +94,9 @@ class RevealOut(BaseModel):
     missed: list[MissedOut]
     half_heard: list[HalfHeardOut]
     knowledge: dict[str, dict[str, bool]]
+    # Only the regard that moved during the scene, and never the player's
+    # own — how they feel is not the engine's to report back to them.
+    regard: list[RegardOut]
     text: str
 
 
@@ -339,6 +349,12 @@ def create_app(
                 HalfHeardOut(heard=heard, truth=event.content) for heard, event in built.half_heard
             ],
             knowledge=built.knowledge,
+            regard=[
+                RegardOut(
+                    who=r.who, toward=r.toward, trust=r.trust, started=r.started
+                )
+                for r in built.regard
+            ],
             text=render(built, session),
         )
 

@@ -304,3 +304,23 @@ def _read_stream(client, session_id) -> list[dict]:
         for line in response.text.split("\n")
         if line.startswith("data: ")
     ]
+
+
+def test_the_reveal_reports_regard_that_moved(client):
+    """The GUI needs it on the wire, and it is one of the few things in
+    the scene the player provably could not have seen."""
+    opened = client.post(
+        "/sessions", json={"world": "ashgrove", "scene": "the_reckoning"}
+    ).json()
+    session_id = opened["session_id"]
+    client.post(
+        f"/sessions/{session_id}/say",
+        json={"text": "What happened to Grandma's music box?"},
+    )
+
+    reveal = client.post(f"/sessions/{session_id}/reveal").json()
+    moved = {(r["who"], r["toward"]): r for r in reveal["regard"]}
+
+    assert ("Maria", "Tomás") in moved
+    assert moved[("Maria", "Tomás")]["trust"] < moved[("Maria", "Tomás")]["started"]
+    assert not [r for r in reveal["regard"] if r["who"] == reveal["character"]]

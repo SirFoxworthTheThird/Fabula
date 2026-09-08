@@ -31,6 +31,15 @@ from fabula.world import mentions_fact
 
 
 @dataclass
+class Regard:
+    """One character believing another less than they did at dinner."""
+    who: str
+    toward: str
+    trust: float
+    started: float
+
+
+@dataclass
 class Reveal:
     character: Character
     # Things that happened which they never perceived at all.
@@ -39,6 +48,8 @@ class Reveal:
     half_heard: list[tuple[str, Event]] = field(default_factory=list)
     # fact id -> character name -> did they know it by the end
     knowledge: dict[str, dict[str, bool]] = field(default_factory=dict)
+    # Only the regard that actually moved tonight.
+    regard: list[Regard] = field(default_factory=list)
 
 
 def knows_fact(session: Session, character: Character, fact_id: str) -> bool:
@@ -59,6 +70,33 @@ def knows_fact(session: Session, character: Character, fact_id: str) -> bool:
         mentions_fact(fact, projected.perceived_content)
         for projected in session.director.contexts.project(character, events)
     )
+
+
+def trust_moved(session: Session) -> list[Regard]:
+    """Who ended the evening believing someone less than they started it.
+
+    Only what changed. A full matrix of everyone's standing toward
+    everyone else is a table; the two lines where a number moved are the
+    story, and they are invisible from inside a point of view — Elena in
+    the study has no way to know her sister stopped believing her brother.
+    """
+    moved = []
+    for character in session.characters.values():
+        opening = session.trust_at_open.get(character.id, {})
+        for toward_id, relationship in session.store.get_relationships(character.id).items():
+            started = opening.get(toward_id)
+            if started is None or abs(relationship.trust - started) < 0.005:
+                continue
+            other = session.characters.get(toward_id)
+            moved.append(
+                Regard(
+                    who=character.name,
+                    toward=other.name if other else toward_id,
+                    trust=relationship.trust,
+                    started=started,
+                )
+            )
+    return moved
 
 
 def build_reveal(session: Session) -> Reveal:
@@ -86,6 +124,7 @@ def build_reveal(session: Session) -> Reveal:
             }
             for fact_id in session.world.facts
         },
+        regard=trust_moved(session),
     )
 
 
@@ -110,6 +149,15 @@ def render(reveal: Reveal, session: Session) -> str:
             who = f"{actor.name}: " if actor else ""
             lines.append(f"  you got — {heard}")
             lines.append(f"  it was  — {who}{event.content}")
+
+    if reveal.regard:
+        lines.append("\nWhat tonight changed:")
+        for regard in reveal.regard:
+            direction = "less" if regard.trust < regard.started else "more"
+            lines.append(
+                f"  {regard.who} trusts {regard.toward} {direction} than at the start "
+                f"({regard.started:.2f} → {regard.trust:.2f})"
+            )
 
     for fact_id, holders in reveal.knowledge.items():
         knew = sorted(name for name, yes in holders.items() if yes)

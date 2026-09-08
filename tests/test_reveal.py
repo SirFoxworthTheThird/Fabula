@@ -148,3 +148,29 @@ def test_a_quiet_scene_says_so_rather_than_printing_nothing(fake_llm):
     text = reveal_text(session)
 
     assert "Nothing happened out of your sight." in text
+
+
+def test_the_reveal_shows_regard_that_moved_out_of_sight(fake_llm):
+    """Elena has no way to know her sister stopped believing her brother
+    tonight — which is precisely why the reveal is where it belongs."""
+    session = Session.open(ASHGROVE, "the_reckoning", llm=fake_llm)
+    session.say("What happened to Grandma's music box?")
+
+    built = build_reveal(session)
+    moved = {(r.who, r.toward): r for r in built.regard}
+
+    assert ("Maria", "Tomás") in moved
+    entry = moved[("Maria", "Tomás")]
+    assert entry.trust < entry.started
+    # The player's own feelings are not reported back to them.
+    assert not [r for r in built.regard if r.who == session.user_character.name]
+    assert "Maria trusts Tomás less" in render(built, session)
+
+
+def test_a_scene_where_nothing_moved_reports_nothing(fake_llm):
+    session = Session.open(ASHGROVE, "the_dinner", llm=fake_llm)
+
+    built = build_reveal(session)
+
+    assert built.regard == []
+    assert "trusts" not in render(built, session)

@@ -455,6 +455,15 @@ async function showReveal() {
     }
   }
 
+  if (data.regard.length) {
+    block(panel, "h3", "What tonight changed");
+    for (const r of data.regard) {
+      const direction = r.trust < r.started ? "less" : "more";
+      block(panel, "p", `${r.who} trusts ${r.toward} ${direction} than at the start`);
+      block(panel, "p", `${r.started.toFixed(2)} → ${r.trust.toFixed(2)}`, "truth");
+    }
+  }
+
   for (const [fact, holders] of Object.entries(data.knowledge)) {
     const knew = Object.entries(holders).filter(([, y]) => y).map(([n]) => n);
     const not = Object.entries(holders).filter(([, y]) => !y).map(([n]) => n);

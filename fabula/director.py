@@ -30,7 +30,7 @@ from fabula.chronology import (
 from fabula.db import EventStore
 from fabula.loader import Scene
 from fabula.memory import ContextBuilder, form_belief, location_at_seq, record_rehearsals
-from fabula.persistence import encode_belief
+from fabula.persistence import encode_belief, witnessed_withholding
 from fabula.models import Bid, Character, Event, Pressure
 from fabula.narrator import NARRATOR_ID, Narrator
 from fabula.pressures import scene_state, select_pressure
@@ -164,7 +164,7 @@ class Director:
         already be constructed (kind/location/etc set by the caller); this
         appends it and then loops until yield or turn-budget exhaustion."""
         stored_user_event = self.store.append_event(user_event)
-        self._record_rehearsals()
+        self._absorb()
         events_this_turn = [stored_user_event]
         last_event = stored_user_event
         consecutive_agent_turns = 0
@@ -230,7 +230,7 @@ class Director:
 
             last_event = self.store.append_event(new_event)
             events_this_turn.append(last_event)
-            self._record_rehearsals()
+            self._absorb()
             consecutive_agent_turns += 1
 
             if self._addresses_user(last_event):
@@ -286,7 +286,7 @@ class Director:
         )
         appended = [self.store.append_event(skip)]
         appended.extend(self._resolve_offscreen(minutes))
-        self._record_rehearsals()
+        self._absorb()
         return appended
 
     def current_location(self, character: Character) -> str:
@@ -372,7 +372,7 @@ class Director:
             metadata={"materializes": summary_event.id},
         )
         appended = self.store.append_event(event)
-        self._record_rehearsals()
+        self._absorb()
         return appended
 
     def unmaterialized_here(self, observer: Character) -> list[Event]:
@@ -405,20 +405,31 @@ class Director:
             metadata={"pressure_id": pressure.id},
         )
 
-    def _record_rehearsals(self) -> None:
-        """After each append: note which of a character's own earlier
-        perceived events the newest one re-mentions, and encode the newest
-        one as a belief if it was salient enough to keep.
+    def _absorb(self) -> None:
+        """After each append, let every character take in what they just
+        perceived: rehearse the earlier moments this one re-mentions,
+        encode it as a belief if it was salient enough to keep, count the
+        interaction, and move their regard for whoever acted.
 
-        Both are done per character against their own projection, so an
-        event they could not perceive is neither rehearsed nor
-        remembered — it does not exist for them.
+        All of it runs per character against their own projection, so an
+        event they could not perceive is neither rehearsed, remembered,
+        counted nor held against anyone — it does not exist for them.
         """
         all_events = self.store.get_events(self.scene.id)
+        if not all_events:
+            return
+        appended = all_events[-1].seq
+
         for character in self.characters.values():
             projected = self.contexts.project(character, all_events)
             record_rehearsals(character, projected, self.store)
-            if not projected:
+            if not projected or projected[-1].event.seq != appended:
+                # They did not perceive the event that was just appended,
+                # so there is nothing new for them to take in. Without
+                # this check an older event stays "newest" for them and
+                # gets absorbed again on every append they miss — one
+                # withheld beat charging them four times over while the
+                # others talk in another room.
                 continue
 
             newest = projected[-1]
@@ -427,3 +438,11 @@ class Director:
             actor_id = newest.event.actor_id
             if actor_id and actor_id != character.id:
                 self.store.bump_interaction(character.id, actor_id)
+            # Watching someone refuse to answer is the one thing in the
+            # engine that deterministically moves how they are regarded —
+            # for everyone but the player. Deciding that Elena believes
+            # her brother less tonight is telling the person holding her
+            # how they feel, which is the same overreach as narrating
+            # their actions for them.
+            if not character.is_user:
+                witnessed_withholding(self.store, character.id, newest)
