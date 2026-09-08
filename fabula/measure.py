@@ -25,6 +25,7 @@ import argparse
 from pathlib import Path
 
 import fabula.agents as agents
+from fabula.env import load_env
 from fabula.llm import LiteLLMClient, LLMClient, get_default_llm
 from fabula.models import Character, Event
 from fabula.session import Session
@@ -110,6 +111,10 @@ def measure_guard(
 
 
 def main(argv: list[str] | None = None) -> None:
+    # Read a local .env first, so a key in the file is available to
+    # everything below. Only in an entry point: importing a library
+    # should never mutate the process environment.
+    load_env()
     parser = argparse.ArgumentParser(
         prog="fabula-measure",
         description="Measure whether the guarded-subject prompt line changes behaviour.",

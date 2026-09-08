@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 198 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 207 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -182,6 +182,23 @@ fabula-playtest worlds/ashgrove the_dinner \
 ```
 
 The same two flags work on `fabula`, `fabula-serve` and `fabula-measure`.
+
+Rather than exporting it every session, put it in a `.env` beside the repo — copy
+`.env.example`. Every entry point reads it at startup, and `.gitignore` already covers it
+(`.env.example` is the only one that belongs in the repo).
+
+```bash
+cp .env.example .env && chmod 600 .env     # then fill it in
+```
+
+**An exported variable always wins over the file.** A dotfile that silently shadowed a key
+you set in your shell would make it impossible to say which credential a run actually
+used. Nothing prints, logs, or returns a value from it — names only — and on POSIX you get
+one line of warning if the file is readable by other users on the machine.
+
+There is deliberately no `--api-key` flag anywhere: a flag puts the key in shell history
+and in every `ps` on the machine. There is a test that walks the syntax tree of every
+module to keep it that way.
 
 <details>
 <summary>Worked example: nano-gpt.com</summary>

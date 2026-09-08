@@ -23,6 +23,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
+from fabula.env import load_env
 from fabula.llm import LiteLLMClient, LLMClient
 from fabula.models import ProjectedEvent
 from fabula.openai_shim import add_openai_shim
@@ -408,6 +409,10 @@ def serve(
 
 
 def main(argv: list[str] | None = None) -> None:
+    # Read a local .env first, so a key in the file is available to
+    # everything below. Only in an entry point: importing a library
+    # should never mutate the process environment.
+    load_env()
     import argparse
 
     parser = argparse.ArgumentParser(prog="fabula-serve", description="Run the Fabula service.")

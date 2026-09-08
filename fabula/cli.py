@@ -12,6 +12,7 @@ from pathlib import Path
 
 from fabula.chronology import describe_duration
 from fabula.commands import run_command
+from fabula.env import load_env
 from fabula.llm import LiteLLMClient
 from fabula.models import Character, ProjectedEvent
 from fabula.session import Session
@@ -105,6 +106,10 @@ def run(
 
 
 def main(argv: list[str] | None = None) -> None:
+    # Read a local .env first, so a key in the file is available to
+    # everything below. Only in an entry point: importing a library
+    # should never mutate the process environment.
+    load_env()
     parser = argparse.ArgumentParser(prog="fabula", description="Run a Fabula scene from YAML.")
     parser.add_argument("world_dir", type=Path, help="Path to worlds/<name>/")
     parser.add_argument("scene", help="Scene name (file stem under scenes/)")

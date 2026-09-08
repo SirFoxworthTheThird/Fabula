@@ -18,6 +18,7 @@ import argparse
 from pathlib import Path
 
 from fabula.commands import run_command
+from fabula.env import load_env
 from fabula.llm import LiteLLMClient, LLMClient, get_default_llm
 from fabula.models import Character, ProjectedEvent
 from fabula.session import Session
@@ -118,6 +119,10 @@ def playtest(
 
 
 def main(argv: list[str] | None = None) -> None:
+    # Read a local .env first, so a key in the file is available to
+    # everything below. Only in an entry point: importing a library
+    # should never mutate the process environment.
+    load_env()
     parser = argparse.ArgumentParser(
         prog="fabula-playtest",
         description="Run a scripted scene and print it for reading.",

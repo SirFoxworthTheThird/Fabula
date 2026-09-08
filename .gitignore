@@ -4,3 +4,8 @@ __pycache__/
 .pytest_cache/
 *.db
 .venv/
+
+# Credentials. `.env.example` is the only one that belongs in the repo.
+.env
+.env.*
+!.env.example
