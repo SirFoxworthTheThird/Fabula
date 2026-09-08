@@ -21,6 +21,7 @@ goals:
   - id: guardar_o_barco
     description: Não falar do barco enquanto não houver maneira de o dizer
     priority: 0.9
+    about: o_barco
 protects:
   - o_barco
 relationships:

@@ -28,6 +28,7 @@ goals:
   - id: hold_the_flight_news
     description: Say nothing about the flight until there is a plan to say it alongside
     priority: 0.95
+    about: the_flight
   - id: get_the_audit_done
     description: Get the stores audit finished before anyone starts guessing
     priority: 0.6

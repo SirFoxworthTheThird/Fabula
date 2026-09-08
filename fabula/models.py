@@ -35,10 +35,24 @@ class Event(BaseModel):
 
 
 class Goal(BaseModel):
+    """A standing want, not a reflex.
+
+    `reactivity` is how hard you jump when something comes up; a goal is
+    what you are still trying to do about it, and it can stop being open.
+    """
+
     id: str
     description: str
     priority: float = 0.5
     resolved: bool = False
+    # The fact this goal turns on, if it turns on one. Optional and
+    # authored, for the same reason `protects` is: free text cannot be
+    # matched deterministically, but a named fact can. It makes the goal
+    # mechanical rather than only prose — it raises the bid when the
+    # subject is raised, and it closes once the character has heard the
+    # subject come up, because a secret you are keeping stops being a
+    # thing you are keeping the moment it is out.
+    about: str | None = None
 
 
 class Traits(BaseModel):

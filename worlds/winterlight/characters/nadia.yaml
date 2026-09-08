@@ -27,6 +27,7 @@ goals:
   - id: reconcile_the_numbers
     description: Get the fuel column reconciled against something other than the log
     priority: 0.8
+    about: the_fuel
   - id: find_out_what_changed
     description: Find out what came in on the last radio window
     priority: 0.7

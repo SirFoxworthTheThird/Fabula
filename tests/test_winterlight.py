@@ -287,6 +287,12 @@ def test_every_authored_reference_resolves(world_dir):
             assert fact_id in world.facts, f"{character.id} protects {fact_id}"
         for intention in character.intentions:
             assert intention.location_id in world.rooms, intention.id
+        for goal in character.goals:
+            # A goal naming a fact that does not exist stays open forever
+            # and raises nobody's bid, silently.
+            assert goal.about is None or goal.about in world.facts, (
+                f"{character.id}'s goal {goal.id} is about {goal.about}"
+            )
         for toward in character.relationships:
             assert toward in characters, f"{character.id} -> {toward}"
 

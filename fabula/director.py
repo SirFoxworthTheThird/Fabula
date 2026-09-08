@@ -31,7 +31,12 @@ from fabula.db import EventStore
 from fabula.loader import Scene
 from fabula.memory import ContextBuilder, form_belief, location_at_seq, record_rehearsals
 from fabula.interpret import INTERPRETATION_WINDOW, interpret
-from fabula.persistence import begin_scene, encode_belief, witnessed_withholding
+from fabula.persistence import (
+    begin_scene,
+    close_reached_goals,
+    encode_belief,
+    witnessed_withholding,
+)
 from fabula.models import Bid, Character, Event, Pressure
 from fabula.narrator import NARRATOR_ID, Narrator
 from fabula.pressures import scene_state, select_pressure
@@ -508,3 +513,8 @@ class Director:
             # their actions for them.
             if not character.is_user:
                 witnessed_withholding(self.store, character.id, newest)
+            # A goal whose subject they have now heard raised is closed.
+            # Judged from their own projection: a secret that came out in
+            # a room they were not in has not stopped being a secret to
+            # them, and they go on guarding it.
+            close_reached_goals(self.store, character, projected, self.world)

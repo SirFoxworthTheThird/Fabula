@@ -28,6 +28,7 @@ goals:
   - id: keep_the_column_adding_up
     description: Keep anyone from counting the reserve drums against the log
     priority: 0.95
+    about: the_fuel
   - id: be_useful
     description: Be so obviously useful that nobody looks past it
     priority: 0.5

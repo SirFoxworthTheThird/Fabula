@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 290 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 304 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -481,6 +481,30 @@ intentions:
     private: true            # only when the room is empty
 ```
 
+A `goal` is a standing want, and it is mechanical too. `reactivity` is a reflex — how
+hard you jump when something comes up. A goal outlives the moment, and it can stop being
+open:
+
+```yaml
+goals:
+  - id: protect_secret
+    description: Keep the broken music box a secret from Maria
+    priority: 0.9
+    about: music_box     # optional: the fact this goal turns on
+```
+
+Naming a fact is what makes it more than prose. It reaches the character's own prompt
+(never anyone else's, and never the narrator's — what somebody wants is not something the
+room can see), it raises their bid when the subject is raised, and it **closes when they
+hear the subject come up**, because a secret you are keeping stops being one you are
+keeping the moment it is out.
+
+Closing is judged from that character's own projection, not from the log. A secret that
+came out in a room Tomás was not in has not stopped being a secret *to him*, and he goes
+on guarding it — the same rule that decides whether a fact was really spoken. A goal
+written as prose alone never closes and never moves a bid, which is honest: nothing here
+can read "sort out grandmother's belongings fairly" and judge it done.
+
 A character with high `reticence` who is pressed on something in `protects` bids to
 **withhold** — the narrator renders them visibly not answering, which the room can see.
 That matters because a reticent character who merely loses the bid reads exactly like
@@ -671,18 +695,16 @@ The suite is the regression net *and* the clearest description of the product:
   `may_arrive` plus an authored pressure — a person the author wrote, at a moment the
   director chose. Deciding to introduce somebody the author never wrote would be a
   director-level classification, which does not exist yet.
-* Prompt adherence is still the soft spot, and playing `winterlight` on a 1.5B model made
-  that vivid: Yusuf recited his own persona aloud three times ("I fix the transfer valve.
-  It's been a quarter turn open"), and the narrator invented an interrogator and an
-  elderly man who are not on the station. Nothing structural gave way — see below — but
-  every prompt-level rule here is worth exactly what the model makes of it.
 * Prompt adherence is the soft spot. Structural rules hold regardless of model (the
   narrator cannot narrate the player, because it does not bid), but the ones that live in
   prompts — invent no props, never speak for a character, don't raise what you guard —
   are only as good as the model reading them. Measured on a 1.5B local model, the
   "what you guard" reminder made no difference at all: 4/16 openings blurted the secret
-  with it, 3/16 without. Treat every prompt-level rule here as unproven until measured
-  on the model you actually ship.
+  with it, 3/16 without. Playing `winterlight` on the same model made it vivid: Yusuf
+  recited his own persona aloud three times ("I fix the transfer valve. It's been a
+  quarter turn open"), and the narrator invented two people who are not on the station.
+  Nothing structural gave way. Treat every prompt-level rule here as unproven until
+  measured on the model you actually ship.
 * Relationship **affinity** still does not move during play; only trust does, and only on
   a witnessed refusal to answer. Moving either from the *content* of what is said needs a
   model deciding whether someone was being sincere, and a wrong call there quietly

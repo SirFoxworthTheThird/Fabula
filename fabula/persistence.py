@@ -16,6 +16,7 @@ from typing import Callable
 
 from fabula.db import EventStore
 from fabula.models import Belief, Character, Goal, ProjectedEvent, Relationship
+from fabula.world import World, mentions_fact
 
 BELIEF_SALIENCE_FLOOR = 0.5   # below this, a perceived moment is not worth encoding
 DECAY_PER_SCENE = 0.85
@@ -26,6 +27,7 @@ MINIMUM_SALIENCE = 0.05
 # so an evening full of deflection erodes trust without ever spending it:
 # a character who trusts you at zero has nothing left to lose by lying,
 # which is the least interesting place to leave them.
+GOALS_IN_CONTEXT = 3      # the most pressing few; a list is not a character
 WITHHOLD_TRUST_FLOOR = 0.1
 WITHHOLD_TRUST_MOVE = 0.2
 
@@ -105,10 +107,57 @@ def witnessed_withholding(
 
 
 def unresolved_goals(store: EventStore, character: Character) -> list[Goal]:
+    """What this character is still trying to do, most pressing first."""
     resolved = store.get_resolved_goals(character.id)
-    return [
-        goal for goal in character.goals if goal.id not in resolved and not goal.resolved
-    ]
+    return sorted(
+        (goal for goal in character.goals if goal.id not in resolved and not goal.resolved),
+        key=lambda goal: -goal.priority,
+    )
+
+
+def wants(store: EventStore, character: Character, limit: int = GOALS_IN_CONTEXT) -> str:
+    """The character's own wants, for their own prompt.
+
+    Authored inner life, like the persona — it describes them rather than
+    the room, so it carries no risk of telling them something they could
+    not perceive. It is only ever assembled for the character it belongs
+    to, and the narrator is never given it: what somebody wants is not
+    something the room can see.
+    """
+    open_goals = unresolved_goals(store, character)[:limit]
+    if not open_goals:
+        return ""
+    return "\nWhat you are still trying to do: " + "; ".join(
+        goal.description for goal in open_goals
+    )
+
+
+def close_reached_goals(
+    store: EventStore, character: Character, projected: list[ProjectedEvent], world: World
+) -> list[str]:
+    """Close any goal whose subject this character has now heard raised.
+
+    Judged from their own projection, not the log: a secret that came out
+    in a room they were not in has not stopped being a secret *to them*,
+    and they go on guarding it. Degraded perception does not count either
+    — the descriptor carries no words, so they did not catch the subject.
+
+    Only goals that name a fact can close this way. A goal written as
+    prose alone stays open, which is honest: nothing here can read
+    "sort out grandmother's belongings fairly" and judge it done.
+    """
+    closed = []
+    for goal in unresolved_goals(store, character):
+        fact = world.facts.get(goal.about) if goal.about else None
+        if fact is None:
+            continue
+        if any(
+            perceived.perception == "full" and mentions_fact(fact, perceived.perceived_content)
+            for perceived in projected
+        ):
+            store.resolve_goal(character.id, goal.id)
+            closed.append(goal.id)
+    return closed
 
 
 def begin_scene(store: EventStore, characters: dict[str, Character]) -> None:

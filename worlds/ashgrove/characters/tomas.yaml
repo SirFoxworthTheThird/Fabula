@@ -22,6 +22,9 @@ goals:
   - id: protect_secret
     description: Keep the broken music box a secret from Maria
     priority: 0.9
+    # Closes the moment he hears it said out loud: a secret you are
+    # keeping stops being one you are keeping once it is out.
+    about: music_box
 # Asked about this directly, he deflects rather than answers.
 protects:
   - music_box

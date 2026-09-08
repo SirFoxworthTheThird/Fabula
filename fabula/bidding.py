@@ -6,9 +6,11 @@ triggering event is never even asked.
 """
 from __future__ import annotations
 
+from fabula.db import EventStore
 from fabula.llm import LLMClient
 from fabula.memory import ContextBuilder, location_at_seq
 from fabula.models import Bid, Character, Event, Relationship
+from fabula.persistence import unresolved_goals
 from fabula.world import World, mentions_fact, resolve_perception
 
 AMBIGUOUS_LOW = 0.35
@@ -17,6 +19,7 @@ AMBIGUOUS_HIGH = 0.65
 WITHHOLD_RETICENCE = 0.6   # below this, a character just answers
 WITHHOLD_COOLDOWN = 6      # events; deflecting every turn stops being drama
 
+GOAL_STAKE = 0.45          # a goal at full priority is worth about this much
 NEUTRAL_TRUST = 0.5        # the authored default: no reason either way
 DISTRUST_ATTENTION = 0.4   # at most +0.2, so it colours a bid, never decides it
 
@@ -81,11 +84,34 @@ def prefilter_candidates(
     return candidates
 
 
+def goal_at_stake(
+    character: Character, event: Event, level: str, world: World, store: EventStore
+) -> float:
+    """The priority of the most pressing open goal this event touches.
+
+    Only at `full` perception, which is what makes reading `event.content`
+    here safe — at full fidelity the perceived content *is* the content,
+    so this asks nothing beyond what the character actually heard. A goal
+    only counts if it names a fact: prose alone cannot be matched.
+    """
+    if level != "full":
+        return 0.0
+    priorities = [
+        goal.priority
+        for goal in unresolved_goals(store, character)
+        if goal.about
+        and goal.about in world.facts
+        and mentions_fact(world.facts[goal.about], event.content)
+    ]
+    return max(priorities, default=0.0)
+
+
 def heuristic_bid(
     character: Character,
     event: Event,
     level: str,
     regard: Relationship | None = None,
+    stake: float = 0.0,
 ) -> tuple[float, str]:
     score = character.traits.talkativeness * 0.5
     reasons: list[str] = []
@@ -93,6 +119,14 @@ def heuristic_bid(
     if character.id in event.addressed_to:
         score += 0.5
         reasons.append("addressed directly")
+
+    if stake:
+        # Somebody is talking about the thing you are still trying to do
+        # something about. Wanting is not the same as reacting: reactivity
+        # is a reflex, this is a standing want that outlives the moment
+        # and stops mattering once the goal is closed.
+        score += stake * GOAL_STAKE
+        reasons.append("this touches what they want")
 
     if regard is not None and regard.trust < NEUTRAL_TRUST:
         # Distrust is attention. You watch the person you have stopped
@@ -158,7 +192,8 @@ def get_bid(
         if event.actor_id
         else None
     )
-    score, reason = heuristic_bid(character, event, level, regard)
+    stake = goal_at_stake(character, event, level, contexts.world, contexts.store)
+    score, reason = heuristic_bid(character, event, level, regard, stake)
 
     if llm is not None and AMBIGUOUS_LOW <= score <= AMBIGUOUS_HIGH:
         context = contexts.for_character(character, events)
