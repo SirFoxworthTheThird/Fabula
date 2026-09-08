@@ -33,7 +33,7 @@ what they half-heard happens naturally when they speak.
 
 ## Status
 
-Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 231 tests passing.
+Milestones M0–M8 of [`spec.md`](spec.md) are implemented, with 233 tests passing.
 
 **One thing is unverified, and it is the important one.** Without a provider API key the
 engine runs on `FakeLLM`, which emits `(a considered pause) [gen:8334793e]` in place of
@@ -540,6 +540,14 @@ The suite is the regression net *and* the clearest description of the product:
   crosses that doorway, which would let an author seal one; perception uses only the
   presence of an edge and the *event's* own audibility. Until it is wired up, a one-way
   edge is how you make a room you cannot hear out of.
+* **A character the narrator invents is a ghost.** It is told to introduce no people who
+  have not appeared, and a small model ignores that — the `winterlight` run produced an
+  interrogator and an elderly man who are not on the station. They stay in prose and
+  cannot become anything more, because an event needs an `actor_id` the director assigns
+  from the cast, so an invented person cannot speak, act, be perceived as an actor, or
+  hold a belief. It is a quality bug rather than a leak, and nothing promotes them.
+  Bringing somebody genuinely new into a scene wants an authored latent cast and a
+  pressure that fetches them, which does not exist yet.
 * Prompt adherence is still the soft spot, and playing `winterlight` on a 1.5B model made
   that vivid: Yusuf recited his own persona aloud three times ("I fix the transfer valve.
   It's been a quarter turn open"), and the narrator invented an interrogator and an

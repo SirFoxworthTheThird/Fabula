@@ -58,6 +58,17 @@ class Session:
     ) -> Session:
         world, characters, scene = load_scenario(world_dir, scene_name)
         pressures = load_pressures(world_dir)
+
+        # Only the cast is in the scene. Everything downstream — bidding,
+        # presence, projection, the reveal — walks this dict, so a
+        # character left in the world but out of the cast was taking
+        # turns in every scene the world had. `cast` was decorative until
+        # this line: a list you write and the engine ignores is worse
+        # than no list at all.
+        missing = [cid for cid in scene.cast if cid not in characters]
+        if missing:
+            raise ValueError(f"scene {scene.id} casts unknown character(s): {missing}")
+        characters = {cid: characters[cid] for cid in scene.cast}
         store = EventStore(db_path)
         llm = llm or get_default_llm()
 

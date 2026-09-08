@@ -313,3 +313,49 @@ def test_every_authored_reference_resolves(world_dir):
         named = scene.end_condition.get("fact_spoken")
         for fact_id in [named] if isinstance(named, str) else (named or []):
             assert fact_id in world.facts, f"{scene.id} ends on {fact_id}"
+
+
+def test_only_the_cast_is_in_the_scene(tmp_path):
+    """`cast` was decorative. Every character in the world was handed to
+    the director, so one authored for a single scene took turns in every
+    scene the world had — bidding, forming beliefs, showing up in
+    `present()`. A list you write and the engine ignores is worse than no
+    list at all.
+    """
+    import shutil
+
+    import yaml
+
+    world_dir = tmp_path / "winterlight"
+    shutil.copytree(WINTERLIGHT, world_dir)
+    scene_file = world_dir / "scenes" / "the_manifest.yaml"
+    scene = yaml.safe_load(scene_file.read_text(encoding="utf-8"))
+    scene["cast"] = ["ilse", "ana"]
+    scene["starting_positions"] = {"ilse": "mess", "ana": "mess"}
+    scene_file.write_text(yaml.safe_dump(scene), encoding="utf-8")
+
+    session = Session.open(world_dir, "the_manifest", llm=FakeLLM())
+    session.say("Is anyone else here?")
+
+    assert sorted(session.characters) == ["ana", "ilse"]
+    acted = {e.actor_id for e in session.store.get_events(session.scene.id) if e.actor_id}
+    assert acted <= {"ana", "ilse"}
+    assert [c.id for c in session.present()] == ["ilse"]
+
+
+def test_a_scene_that_casts_a_stranger_is_refused(tmp_path):
+    """Silently dropping an unknown id would make a typo look like a
+    character who simply never speaks."""
+    import shutil
+
+    import yaml
+
+    world_dir = tmp_path / "winterlight"
+    shutil.copytree(WINTERLIGHT, world_dir)
+    scene_file = world_dir / "scenes" / "the_manifest.yaml"
+    scene = yaml.safe_load(scene_file.read_text(encoding="utf-8"))
+    scene["cast"] = ["ilse", "ana", "yusuff"]  # typo
+    scene_file.write_text(yaml.safe_dump(scene), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unknown character"):
+        Session.open(world_dir, "the_manifest", llm=FakeLLM())
