@@ -233,4 +233,13 @@ def _atmosphere(
             )
             break
 
+    # The room itself is always a defensible thing to give a beat to —
+    # but only ever as an *alternative*. On its own it would turn every
+    # quiet moment into a paragraph of scenery; alongside something else
+    # it is what makes the choice a choice, and the first run against a
+    # real model found the chooser was almost never asked anything
+    # because nothing else was ever on offer beside it.
+    if offered:
+        offered.append(Beat("the_room", 0.25, "let the room itself have the beat"))
+
     return offered

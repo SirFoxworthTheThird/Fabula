@@ -94,6 +94,13 @@ def playtest(
         f"(scripted run: {you.name}'s lines are fixed, so runs can be compared. "
         "--script for your own; play freely with `python -m fabula.cli`.)\n"
     )
+    # How the scene opened: its own first words, the room, and whoever
+    # was standing there when it did. An author playtesting a scene has
+    # to be able to read the thing they authored, and this harness was
+    # starting the transcript at the player's first line.
+    for projected in session.perceived_so_far():
+        print(format_line(projected, characters))
+    print()
 
     for line in script:
         print(f"{you.name:>10}> {line}")

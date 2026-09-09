@@ -57,6 +57,9 @@ DecisionKind = Literal["speak", "narrate", "yield_to_user", "fire_pressure", "wi
 
 YIELD_FLOOR = 0.12
 
+# Long enough that saying it twice in one scene cannot be a coincidence.
+REPEAT_WORDS = 6
+
 
 def _fold(text: str) -> str:
     """Strip diacritics and lowercase, so "Tomas" matches "Tomás"."""
@@ -362,13 +365,20 @@ class Director:
                 content = self.narrator.generate(
                     last_event, all_events, self.world, beat=beat, present=here
                 )
-                named = invents_a_fact(content, self.world)
+                named = invents_a_fact(content, self.world) or self._plays_the_player(content)
                 if named:
                     # A narration that names a fact raises the subject in
                     # front of everybody in the room — it satisfies
                     # `fact_spoken` and can end an arc that was waiting
                     # for somebody to say it out loud. Nobody said it, so
                     # the beat is dropped and the turn goes on.
+                    #
+                    # And one that names the player is playing the one
+                    # character somebody else is holding. The prompt has
+                    # said not to since M0 and a small model does it
+                    # anyway — measured on a 1.5B: "Elena's finger
+                    # brushed against the dusty glass of a photo album",
+                    # which Elena never did.
                     consecutive_agent_turns += 1
                     continue
                 new_event = self.build_event("narration", None, last_event.location_id, content)
@@ -378,6 +388,20 @@ class Director:
                     character.id, character.location_id, all_events, last_event.seq + 1
                 )
                 content = generate_utterance(character, all_events, self.contexts, self.llm)
+                if self._already_said(character.id, content, all_events):
+                    # Word for word what they last said. Their own lines
+                    # are in the context they were given, and a small
+                    # model repeats them anyway — measured on a 1.5B,
+                    # Maria said one sentence twice inside four lines,
+                    # which reads as the app being broken rather than as
+                    # a character insisting. One more try, and if it
+                    # comes back the same they say nothing this beat.
+                    content = generate_utterance(
+                        character, all_events, self.contexts, self.llm
+                    )
+                    if self._already_said(character.id, content, all_events):
+                        consecutive_agent_turns += 1
+                        continue
                 new_event = self.build_event("utterance", character.id, location, content)
 
             last_event = self.store.append_event(new_event)
@@ -442,6 +466,52 @@ class Director:
         # A model that answered with a sentence, or with a beat nobody
         # offered, has said nothing. The scene takes the first one.
         return None
+
+    def _plays_the_player(self, content: str) -> str | None:
+        """Does this narration have the player doing something?
+
+        Their name, on a word boundary and diacritics folded, is enough:
+        the narrator is told never to describe them at all, so any
+        mention is the rule being broken rather than a borderline case.
+        Deterministic, because the prompt-level version of this rule is
+        the one a small model ignores most reliably.
+        """
+        user = next((c for c in self.characters.values() if c.is_user), None)
+        if user is None:
+            return None
+        folded = _fold(content)
+        for name in {user.name, user.name.split()[0]}:
+            if re.search(rf"(?<!\w){re.escape(_fold(name))}(?!\w)", folded):
+                return f"names {user.name}"
+        return None
+
+    def _already_said(self, character_id: str, content: str, all_events: list[Event]) -> bool:
+        """Is this the last thing this character said, again?
+
+        Word for word once punctuation and spacing are set aside: their
+        own most recent line, the one just said in front of them, or —
+        for anything longer than a few words — anything they have
+        already said in this scene. Short lines repeat honestly ("No."
+        twice is a person); a whole sentence repeated verbatim is a
+        model looping.
+        """
+        def bare(text: str) -> str:
+            return "".join(c for c in text.lower() if c.isalnum() or c.isspace()).split()
+
+        words = bare(content)
+        spoken = [e for e in all_events if e.kind == "utterance"]
+        mine = [e for e in spoken if e.actor_id == character_id]
+        # The last line said in front of them by anybody, and their own
+        # last line: a small model parrots the previous speaker as
+        # readily as it parrots itself.
+        against = [e.content for e in (mine[-1:] + spoken[-1:])]
+        # And anything of their own from earlier in the scene, once the
+        # line is long enough that saying it twice cannot be a
+        # coincidence. "No." twice is a person; a whole sentence about
+        # the coffee and the herbs, word for word, is a loop.
+        if len(words) > REPEAT_WORDS:
+            against += [e.content for e in mine]
+        return any(bare(earlier) == words for earlier in against)
 
     def _reaches_user(self, event: Event) -> bool:
         """Did the player perceive any of that, at any fidelity?"""

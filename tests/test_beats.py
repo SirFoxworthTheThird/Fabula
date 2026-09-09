@@ -414,3 +414,103 @@ def test_it_can_be_turned_off():
 
     assert llm.asked == []
     session.close()
+
+
+# --- Saying it twice --------------------------------------------------
+
+
+class Loops(FakeLLM):
+    """A model that answers every character prompt with the same line,
+    which is what a small one does when a scene runs out of road."""
+
+    def __init__(self, line: str = "I'm going to check on grandmother's belongings."):
+        super().__init__()
+        self.line = line
+        self.tries = 0
+
+    def complete(self, system: str, prompt: str, key: str | None = None) -> str:
+        if key in ("tomas", "maria"):
+            self.tries += 1
+            return self.line
+        return super().complete(system, prompt, key)
+
+
+def test_nobody_says_the_same_line_twice_in_a_row():
+    """Their own lines are in the context they were given, and a small
+    model repeats them anyway: measured on a 1.5B, Maria said one
+    sentence twice inside four lines. That reads as the app being broken
+    rather than as a character insisting."""
+    llm = Loops()
+    session = Session.open(ASHGROVE, "the_reckoning", llm=llm)
+    for said in ("Tomás?", "Say something.", "Please."):
+        session.say(said)
+
+    for character_id in ("tomas", "maria"):
+        theirs = [
+            e.content for e in session.store.get_events(session.scene.id)
+            if e.actor_id == character_id
+        ]
+        assert all(
+            first != second for first, second in zip(theirs, theirs[1:])
+        ), f"{character_id} repeated themselves word for word"
+    session.close()
+
+
+def test_it_is_the_same_line_that_is_caught_not_a_similar_one():
+    """Saying the same thing twice in a scene is something people do.
+    Saying it twice in a row, identically, is a model looping."""
+    session = Session.open(ASHGROVE, "the_reckoning", llm=FakeLLM())
+    said = session.store.append_event(
+        session.director.build_event("utterance", "tomas", "kitchen", "It was nothing.")
+    )
+    events = session.store.get_events(session.scene.id)
+    assert events[-1].seq == said.seq
+
+    assert session.director._already_said("tomas", "It was nothing.", events)
+    assert session.director._already_said("tomas", "  it was NOTHING!  ", events)
+    assert not session.director._already_said("tomas", "It was nothing much.", events)
+    # And parroting whoever just spoke, which a small model does as
+    # readily as it repeats itself.
+    assert session.director._already_said("maria", "It was nothing.", events)
+    session.close()
+
+
+def test_a_whole_sentence_does_not_come_round_twice_in_one_scene():
+    """A short line can honestly repeat — "No." twice is a person. A
+    sentence about the coffee and the herbs, word for word, twice, is a
+    loop, and a 1.5B produced exactly that."""
+    session = Session.open(ASHGROVE, "the_reckoning", llm=FakeLLM())
+    build = session.director.build_event
+    long_line = "The aroma of coffee wafts through it, mingling with herbs from the garden."
+    session.store.append_event(build("utterance", "tomas", "kitchen", long_line))
+    session.store.append_event(build("utterance", "tomas", "kitchen", "No."))
+    session.store.append_event(build("utterance", "tomas", "kitchen", "Because of the rain."))
+    session.store.append_event(build("utterance", "maria", "kitchen", "Sort them out."))
+    events = session.store.get_events(session.scene.id)
+
+    assert session.director._already_said("tomas", long_line, events)
+    assert not session.director._already_said("tomas", "No.", events)
+    session.close()
+
+
+def test_a_narration_that_plays_the_player_is_dropped():
+    """The prompt has said never to describe them since M0, and a small
+    model does it anyway — measured on a 1.5B: "Elena's finger brushed
+    against the dusty glass of a photo album", which Elena never did.
+    Playing the one character somebody else is holding is the worst
+    thing the narrator can do, so the deterministic version of the rule
+    is the one that counts."""
+    class Plays(FakeLLM):
+        def complete(self, system, prompt, key=None):
+            if key == "__narrator__":
+                return "Elena's finger brushes the dusty glass of the photo album."
+            return super().complete(system, prompt, key)
+
+    session = Session.open(ASHGROVE, "the_reckoning", llm=Plays())
+    for said in ("Tomás?", "You have been quiet.", "Say something.", "Please."):
+        session.say(said)
+
+    written = [e.content for e in session.store.get_events(session.scene.id)]
+
+    assert not any("Elena's finger" in line for line in written)
+    session.close()

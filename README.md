@@ -439,6 +439,34 @@ On a 1.5B local model the three variants landed at 3/16, 4/16 and 3/16 — the s
 guard line does nothing there. Whether it earns its place on a capable model is exactly
 what this command is for.
 
+Played against the same 1.5B (`llama-cpp-python` serving Qwen2.5-1.5B-Instruct, pointed at
+with `--model openai/… --api-base http://127.0.0.1:8090/v1`), three things came back worth
+writing down:
+
+* **The beat choice survives a small model.** Asked which of two beats a moment wanted, it
+  answered `lull` — the bare id, taken as given. The answer space is three labels, which
+  is small enough that a model this size can hit it. That is the argument for a closed
+  vocabulary rather than an instruction.
+* **The first run of the chooser never fired at all.** Only one beat was ever on offer, so
+  there was nothing to choose between; `the_room` is now always offered as an alternative
+  when something else already is.
+* **Characters repeat themselves.** Maria said one sentence twice, word for word, inside
+  four lines — with her own prior line in the context she was given — and then said
+  Tomás's line back at him. The engine catches an exact repeat now (their own last line,
+  the line just said in front of them, or anything of their own from earlier in the scene
+  once it is longer than a few words), tries once more, and lets them say nothing rather
+  than say it twice. Short lines are left alone: "No." twice is a person.
+* **The narrator played the player.** "Elena's finger brushes the dusty glass of the photo
+  album" — which Elena never did. The prompt has said never to describe the protagonist
+  since M0. A narration naming them is now dropped, the same way one naming a fact is:
+  playing the one character somebody else is holding is the worst thing the narrator can
+  do, so it gets the deterministic version of the rule rather than the asked-nicely one.
+* **What is left is what cannot be caught structurally.** The same run put a laptop in a
+  1990s kitchen and had Tomás announce his own secret in his second line. "Introduce
+  nothing that is not already established" cannot be checked by keyword, because the set
+  of things that do not exist cannot be enumerated. Treat it as unproven on any model you
+  have not measured.
+
 ### What the browser client does
 
 `fabula` opens it; `fabula-serve` runs the same thing without a browser, for a machine

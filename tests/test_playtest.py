@@ -80,3 +80,15 @@ def test_commands_are_shared_with_the_cli(fake_llm):
     moved = run_command(session, "/go study")
     assert "the study" in moved.message
     assert session.here() == "study"
+
+
+def test_the_playtest_shows_how_the_scene_opened(capsys, fake_llm):
+    """An author playtesting a scene has to be able to read the thing
+    they authored. The transcript used to start at the player's first
+    line, so the scene's own opening words, the room and whoever was
+    standing in it never appeared."""
+    playtest(ASHGROVE, "the_dinner", ["Tomás?"], show_beliefs=False, llm=fake_llm)
+
+    printed = capsys.readouterr().out
+
+    assert "Sunday at the house you grew up in" in printed
