@@ -38,6 +38,8 @@ class StoryCard:
     scene: str
     # Who the player is in it, when it is somebody they made.
     character: str
+    # Whether it is being played to stay in rather than to finish.
+    open_ended: bool
     created_at: datetime
     played_at: datetime
     turns: int
@@ -89,6 +91,7 @@ class Library:
                         world=row["world"],
                         scene=row["scene"],
                         character=row["character_name"],
+                        open_ended=bool(row["open_ended"]),
                         created_at=datetime.fromisoformat(row["created_at"]),
                         played_at=datetime.fromisoformat(row["played_at"]),
                         turns=row["turns"],
@@ -104,6 +107,7 @@ class Library:
         title: str | None = None,
         llm: LLMClient | None = None,
         player: Player | None = None,
+        open_ended: bool = False,
         **kwargs,
     ) -> Session:
         """Begin a story and put it in the library."""
@@ -113,7 +117,8 @@ class Library:
         store = EventStore(str(path))
         try:
             session = Session.open(
-                self.worlds_root / world, scene, llm=llm, store=store, player=player, **kwargs
+                self.worlds_root / world, scene, llm=llm, store=store, player=player,
+                open_ended=open_ended, **kwargs,
             )
             # Named after the scene it begins in, in the author's words —
             # "The dinner" rather than "Ashgrove — the_dinner". Written
@@ -123,6 +128,7 @@ class Library:
                 world, scene,
                 character_name=(player.called if player else ""),
                 character_look=(player.look.strip() if player else ""),
+                open_ended=open_ended,
             )
             return session
         except Exception:
@@ -148,6 +154,11 @@ class Library:
         if row is None:
             store.close()
             raise ValueError(f"{path} is not a story")
+        # How the story is played is the story's, not the caller's. A CLI
+        # run with `--open-ended` must not quietly convert a story that
+        # was started with its endings intact, and a run without the flag
+        # must not put endings back into one that never had them.
+        kwargs.pop("open_ended", None)
         # The same person they made when they started it. The look is not
         # replayed — it was said once, at the beginning — but the name
         # goes back through every line of authored prose.
@@ -157,6 +168,10 @@ class Library:
             llm=llm,
             store=store,
             player=Player(name=row["character_name"], look=row["character_look"]),
+            # How it was being played, not how the caller happens to be
+            # opening it: a story you left running does not quietly
+            # acquire endings because you resumed it from somewhere else.
+            open_ended=bool(row["open_ended"]),
             **kwargs,
         )
 

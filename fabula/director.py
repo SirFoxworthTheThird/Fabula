@@ -50,6 +50,7 @@ from fabula.beats import NOBODY_SPEAKS, Beat
 from fabula.beats import available as available_beats
 from fabula.beats import choose as choose_beat
 from fabula.narrator import NARRATOR_ID, Narrator, as_bid
+from fabula import situations
 from fabula.pressures import scene_state, select_pressure
 from fabula.world import World, resolve_perception
 
@@ -141,6 +142,7 @@ class Director:
         classify_reports: bool = True,
         workers: int = DEFAULT_WORKERS,
         direct_beats: bool = True,
+        open_ended: bool = False,
     ):
         self.store = store
         self.world = world
@@ -160,6 +162,11 @@ class Director:
         # than one thing the moment could be; off, the first of the
         # offered beats is taken, which is the deterministic order.
         self.direct_beats = direct_beats
+        # Played to stay in rather than to finish: no ending is reported,
+        # no seam is crossed, and when the authored pressures run out the
+        # engine writes the next thing that happens instead of the story
+        # going quiet for good.
+        self.open_ended = open_ended
         # How many of the independent calls in a turn — the bids, the
         # readings — may be in flight at once. Somebody else's endpoint
         # is on the other end of them; 1 is the old sequential engine.
@@ -288,17 +295,25 @@ class Director:
                 [bid_for(character) for character in candidates], self.workers
             )
             narrator_bid = as_bid(beat)
+            top_bid = max((b.desire for b in bids), default=0.0)
             pressure_choice = (
                 select_pressure(
                     self.pressures,
                     scene_state(all_events, self.characters, self.world),
                     self.world.facts,
-                    self.scene.mode,
-                    max((b.desire for b in bids), default=0.0),
+                    # An arc ramps its pressures harder the longer it runs,
+                    # because it is climbing toward an ending. Played
+                    # open-ended there is no ending to climb toward, so the
+                    # ramp would only get louder forever: hold equilibrium
+                    # instead, which is what sandbox already means.
+                    "sandbox" if self.open_ended else self.scene.mode,
+                    top_bid,
                 )
                 if pressures
                 else None
             )
+            if pressures and pressure_choice is None and self.open_ended:
+                pressure_choice = self._something_happens(all_events, last_event, top_bid)
             decision = arbitrate(
                 bids,
                 narrator_bid,
@@ -822,6 +837,41 @@ class Director:
             if e.detail_level == "summary" and e.location_id == location and e.id not in done
         ]
 
+    def _something_happens(
+        self, all_events: list[Event], last_event: Event, top_bid: float
+    ) -> tuple[Pressure, float] | None:
+        """Write the next thing that happens, when nothing else can.
+
+        Only reached in open-ended play, and only once the authored
+        pressures have nothing left to offer — `select_pressure` returned
+        None, which in a sandbox means either the room is still generating
+        its own tension or every pressure is spent. `drifting` separates
+        those two: it asks whether the last several events were all people
+        talking.
+
+        A `None` here is ordinary. The turn carries on exactly as it did
+        before this existed, so a model that failed or answered with
+        nothing costs a beat of atmosphere and not the story.
+        """
+        if self.llm is None:
+            return None
+        if not situations.drifting(all_events, self.protagonist_id(), top_bid):
+            return None
+        # Placed where the player is standing by default. A situation
+        # two rooms away is the story moving and still silence where they
+        # are, which is the failure the `must_answer` path exists to stop.
+        player = next((c for c in self.characters.values() if c.is_user), None)
+        made = situations.compose(
+            self.llm,
+            self.world,
+            all_events,
+            self.characters,
+            self.current_location(player) if player else last_event.location_id,
+        )
+        # Scored like any other pressure, so it competes rather than
+        # interrupts: somebody with something to say still wins the turn.
+        return (made, made.weight) if made else None
+
     def _fire(self, pressure: Pressure) -> Event:
         """Turn an authored pressure into one ordinary event. The firing is
         recorded in the event's metadata, so cooldown and max_fires derive
@@ -833,6 +883,11 @@ class Director:
         if effect["kind"] == "arrival" and actor_id in self.waiting:
             self.admit(actor_id)
         metadata = {"pressure_id": pressure.id}
+        if situations.is_invented(pressure):
+            # So `/reveal`, the drift check and anybody reading the log can
+            # tell what the author wrote from what the engine did when the
+            # author ran out.
+            metadata["invented"] = True
         if effect["kind"] == "state_change":
             metadata |= {"character_id": actor_id, "state": effect["state"]}
         content = self.narrator.render_pressure(pressure, location_id, self.world)

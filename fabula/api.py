@@ -93,8 +93,10 @@ class SceneState(BaseModel):
     # Whether the scene has reached its declared end condition.
     ended: bool
     # The scene the story goes to from here, given what happened in this
-    # one. None means the story ends here.
+    # one. None means the story ends here — and always, when the story is
+    # being played open-ended, because there are no seams to cross.
     next_scene: str | None
+    open_ended: bool = False
 
 
 class MissedOut(BaseModel):
@@ -136,6 +138,7 @@ class StoryOut(BaseModel):
     world: str
     scene: str
     character: str = ""
+    open_ended: bool = False
     created_at: datetime
     played_at: datetime
     turns: int
@@ -160,6 +163,7 @@ class NewWorld(BaseModel):
 
     premise: str
     character: "NewCharacter | None" = None
+    open_ended: bool = False
 
 
 class NewStory(BaseModel):
@@ -167,6 +171,10 @@ class NewStory(BaseModel):
     scene: str
     title: str | None = None
     character: NewCharacter | None = None
+    # Played to stay in rather than to finish: no ending is reported, no
+    # seam is crossed, and the engine writes what happens next once the
+    # authored complications are spent.
+    open_ended: bool = False
 
 
 class NewSettings(BaseModel):
@@ -416,6 +424,7 @@ def create_app(
             pending_skip_minutes=session.pending_skip(),
             ended=session.ended(),
             next_scene=session.next_scene(),
+            open_ended=session.director.open_ended,
         )
 
     async def act(session_id: str, operation) -> list[StreamEvent]:
@@ -445,6 +454,7 @@ def create_app(
             id=card.id,
             title=card.title,
             character=card.character,
+            open_ended=card.open_ended,
             world=card.world,
             scene=open_here.scene.id if open_here else card.scene,
             created_at=card.created_at,
@@ -484,7 +494,8 @@ def create_app(
                 )
         try:
             session = library.start(
-                body.world, body.scene, title=body.title, player=player, **opening()
+                body.world, body.scene, title=body.title, player=player,
+                open_ended=body.open_ended, **opening(),
             )
         except FileNotFoundError as missing:
             raise HTTPException(status_code=404, detail=str(missing))
@@ -691,7 +702,8 @@ def create_app(
             )
         try:
             session = library.start(
-                made.world_dir.name, made.scene, player=player, **chosen
+                made.world_dir.name, made.scene, player=player,
+                open_ended=body.open_ended, **chosen,
             )
         except ModelUnavailable as failure:
             raise HTTPException(

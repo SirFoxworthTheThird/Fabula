@@ -89,6 +89,7 @@ class Session:
         workers: int = DEFAULT_WORKERS,
         player: Player | None = None,
         direct_beats: bool = True,
+        open_ended: bool = False,
     ) -> Session:
         world, characters, scene = load_scenario(world_dir, scene_name, player)
         called = None
@@ -147,6 +148,7 @@ class Session:
             waiting=waiting,
             workers=workers,
             direct_beats=direct_beats,
+            open_ended=open_ended,
         )
 
         # Characters are durable: with a real db path they arrive carrying
@@ -393,7 +395,15 @@ class Session:
         return self._play(take)
 
     def next_scene(self) -> str | None:
-        """The scene this one leads to, given what happened in it."""
+        """The scene this one leads to, given what happened in it.
+
+        Nowhere, when the story is being played open-ended. Not because
+        the successors stopped resolving — they would — but because being
+        moved out of a story you are living in is the seam this way of
+        playing exists to not have.
+        """
+        if self.director.open_ended:
+            return None
         events = self.store.get_events(self.scene.id)
         return next_scene(
             self.scene.next,
@@ -427,6 +437,7 @@ class Session:
             store=self.store,
             workers=self.director.workers,
             direct_beats=self.director.direct_beats,
+            open_ended=self.director.open_ended,
         )
 
     def items_here(self) -> list[Item]:
@@ -487,7 +498,14 @@ class Session:
         it reports that the thing the author was building toward has
         happened. What a client does with that — offer the reveal, roll
         credits, keep going — is the client's call.
+
+        Never, when the story is being played open-ended. The end
+        condition is still a true thing about the log and the reveal will
+        still say the secret came out; it is just not an *ending* any
+        more, because nobody asked for one.
         """
+        if self.director.open_ended:
+            return False
         events = self.store.get_events(self.scene.id)
         return has_ended(
             self.scene.end_condition,

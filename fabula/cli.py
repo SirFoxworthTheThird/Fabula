@@ -249,6 +249,11 @@ def main(argv: list[str] | None = None) -> None:
         help="Start the app without opening a browser at it",
     )
     parser.add_argument(
+        "--open-ended", action="store_true",
+        help="Play to stay in the story rather than to finish it: no endings, no scene "
+             "seams, and the engine writes what happens next when the world runs out",
+    )
+    parser.add_argument(
         "--terminal",
         action="store_true",
         help="Play here instead of in the browser",
@@ -291,6 +296,7 @@ def main(argv: list[str] | None = None) -> None:
             )
     interpret = settings.interpret and not args.no_interpret
     opening = {
+        "open_ended": args.open_ended,
         "interpret_beliefs": interpret,
         "direct_beats": settings.direct and not args.no_direct,
         "workers": args.workers if args.workers is not None else settings.workers,

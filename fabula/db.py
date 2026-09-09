@@ -135,7 +135,12 @@ CREATE TABLE IF NOT EXISTS story (
     -- with the world, because it is theirs and it has to come back when
     -- they pick the story up again.
     character_name TEXT NOT NULL DEFAULT '',
-    character_look TEXT NOT NULL DEFAULT ''
+    character_look TEXT NOT NULL DEFAULT '',
+    -- Whether this story is being played to stay in rather than to
+    -- finish. Kept with the story for the same reason the character is:
+    -- it is how *this* story is being played, not a property of the
+    -- world, and picking it back up must not silently change it.
+    open_ended INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS rehearsals (
@@ -226,6 +231,12 @@ class EventStore:
                 self.conn.execute(
                     f"ALTER TABLE story ADD COLUMN {column} TEXT NOT NULL DEFAULT ''"
                 )
+        if "open_ended" not in story:
+            # A story saved before this existed was played with scenes and
+            # endings, so it resumes that way.
+            self.conn.execute(
+                "ALTER TABLE story ADD COLUMN open_ended INTEGER NOT NULL DEFAULT 0"
+            )
 
     def close(self) -> None:
         with self._lock:
@@ -490,6 +501,7 @@ class EventStore:
         scene: str,
         character_name: str = "",
         character_look: str = "",
+        open_ended: bool = False,
     ) -> None:
         # Full precision: two stories started or played in the same
         # second are ordered by when they happened, not by filename.
@@ -498,9 +510,10 @@ class EventStore:
             self.conn.execute(
                 """INSERT OR IGNORE INTO story
                    (only_row, story_id, title, world, scene, created_at, played_at, turns,
-                    character_name, character_look)
-                   VALUES (1, ?, ?, ?, ?, ?, ?, 0, ?, ?)""",
-                (story_id, title, world, scene, now, now, character_name, character_look),
+                    character_name, character_look, open_ended)
+                   VALUES (1, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)""",
+                (story_id, title, world, scene, now, now, character_name, character_look,
+                 int(open_ended)),
             )
             self._commit()
 

@@ -198,7 +198,7 @@
     margin-bottom: 9px;
     flex-wrap: wrap;
   }
-  .who-form label {
+  .who-form .field label {
     font-family: var(--sans);
     font-size: 11px;
     letter-spacing: .1em;
@@ -207,6 +207,21 @@
     width: 4.5rem;
     flex: none;
   }
+  /* How the story gets played, asked next to who you are in it. A
+     sentence rather than a field label: it is a choice about the whole
+     run, not another blank to fill in. */
+  .who-form .check {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    margin: 13px 0 2px;
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .who-form .check input { flex: none; min-width: 0; accent-color: var(--accent); }
+  .who-form .check .hint { display: inline; font-size: 12px; }
   .who-form input {
     flex: 1;
     min-width: 12rem;
@@ -683,6 +698,13 @@
         <input type="text" id="invent-name" autocomplete="off"
                placeholder="optional — a name of your own">
       </div>
+      <label class="check">
+        <input type="checkbox" id="invent-open-ended">
+        <span>Just let it run
+          <span class="hint">— no endings and no chapters, and the engine makes things
+            happen when the world runs out of them</span>
+        </span>
+      </label>
       <span class="notice" id="invent-notice"></span>
     </form>
 
@@ -812,8 +834,10 @@ const api = {
       body: JSON.stringify(chosen),
     }),
   stories: () => ask("/stories"),
-  startStory: (world, scene, character) => send("/stories", {world, scene, character}),
-  inventWorld: (premise, character) => send("/invent", {premise, character}),
+  startStory: (world, scene, character, openEnded) =>
+    send("/stories", {world, scene, character, open_ended: openEnded}),
+  inventWorld: (premise, character, openEnded) =>
+    send("/invent", {premise, character, open_ended: openEnded}),
   resumeStory: id => send(`/stories/${id}/resume`),
   dropStory: id => ask(`/stories/${id}`, {method: "DELETE"}),
   state: id => ask(`/sessions/${id}`),
@@ -1371,6 +1395,23 @@ function askWho(holder, button, world, scene) {
     form, "Anyone can see", "one line — what the room notices about you", ""
   );
 
+  // How this story gets played, asked where it is chosen. Not a property
+  // of the world: the same house can be a story you finish or one you
+  // stay in, and that is the player's call rather than the author's.
+  const how = document.createElement("label");
+  how.className = "check";
+  const run = document.createElement("input");
+  run.type = "checkbox";
+  const label = document.createElement("span");
+  label.textContent = "Just let it run";
+  const why = document.createElement("span");
+  why.className = "hint";
+  why.textContent = " — no endings and no chapters. It keeps going, and the "
+                  + "engine makes things happen when the world runs out of them.";
+  label.appendChild(why);
+  how.append(run, label);
+  form.appendChild(how);
+
   const go = document.createElement("div");
   go.className = "go";
   const begin = document.createElement("button");
@@ -1393,7 +1434,7 @@ function askWho(holder, button, world, scene) {
     notice.textContent = "";
     const character = {name: name.value.trim(), look: look.value.trim()};
     try {
-      const opened = await api.startStory(world.id, scene.id, character);
+      const opened = await api.startStory(world.id, scene.id, character, run.checked);
       await enter(Promise.resolve(opened));
     } catch (failure) {
       // The story was not started, so this is a correction rather than
@@ -1534,7 +1575,10 @@ el("invent").onsubmit = async event => {
   notice.classList.remove("bad");
   notice.textContent = "Writing the rooms, the people, and what one of them is not saying.";
   try {
-    const opened = await api.inventWorld(premise, {name: el("invent-name").value.trim(), look: ""});
+    const opened = await api.inventWorld(
+      premise, {name: el("invent-name").value.trim(), look: ""},
+      el("invent-open-ended").checked,
+    );
     await enter(Promise.resolve(opened));
     notice.textContent = "";
   } catch (failure) {

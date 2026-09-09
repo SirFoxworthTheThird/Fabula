@@ -136,6 +136,32 @@ and only ever the one shape of story — a secret, and the morning after it came
 premise gets that shape, which is the same mistake as the shipped worlds all being quiet
 literary drama, arrived at from the other direction.
 
+## Not a game
+
+Scenes, end conditions and an onward button are game furniture. Some stories are better
+for them and plenty are not: meeting a childhood friend after twenty years is not
+something you complete, and a school year is somewhere you stay. So a story can be played
+**open-ended** — chosen by the player where they pick it, because the same house can be
+one you finish or one you live in, and that is not the author's call.
+
+The half that matters is not hiding the endings, it is that **the engine writes what
+happens next**. Pressures have `max_fires`; measured on `ashgrove/the_dinner`, all three
+are spent by the seventh player line and every turn after that is identically two people
+talking with a narration between them. Nothing reports it, and no amount of authoring
+fixes it, because the twentieth complication is the one nobody wrote.
+
+Two things to keep hold of when extending this. An invented situation is an *ordinary
+`Pressure`* — not a new event kind and not a second path through perception — which is why
+the feature is one function rather than a fork in the director. And the writer is told
+less than the director is allowed to know: never the facts, because the deterministic
+guard downstream can only catch a secret's literal keywords and a writer that had been
+told could paraphrase around them.
+
+The instinct to reach for next, and to be suspicious of: giving this more *narrative*
+authority — arcs it plans, characters it introduces, secrets it invents. Every one of
+those is a claim the engine cannot check, and the reason this one is safe is that its
+whole output is one sentence of narration in a room that already exists.
+
 **The client is no longer only prose.** A world has a cover and everybody in it has a
 picture — an `image:` pointing at a file when somebody drew one, and a plate drawn from the
 id when nobody did, which is every generated world. That ordering is the point: art is the

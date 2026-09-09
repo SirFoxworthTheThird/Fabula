@@ -300,6 +300,69 @@ through a wall is never given one — attaching a face would claim the listener 
 that was, which is the whole thing the perception grading exists to avoid. The row of who
 is here rides on `present`, which is already filtered to what this character can perceive.
 
+### Living a story instead of finishing one
+
+Scenes, end conditions and an "onward" button are game furniture, and not every story
+wants them. Meeting a childhood friend after twenty years is not something you complete;
+a school year is somewhere you stay. So **"Just let it run"**, next to the name you pick
+where you choose a story, or `--open-ended`:
+
+```bash
+fabula ardenhall arrival --open-ended
+```
+
+Nothing ends, no seam is crossed, and the engine writes what happens next.
+
+That last part is the whole feature, because the alternative is measurably worse than it
+looks. Pressures have `max_fires`. On `ashgrove/the_dinner` over twenty-four player lines,
+all three authored ones are spent by the seventh — and every turn from the eighth on is
+*identically* two people talking with a narration between them. The story does not break
+and nothing reports it. It goes slack, and no amount of authoring fixes that, because the
+twentieth complication is the one nobody wrote.
+
+```
+                  authored pressures    something happens on
+the_dinner, 24 lines   spent by turn 7        5 of 24 turns
+  ... open-ended       spent by turn 7        9 of 24 turns, 4 model calls
+```
+
+**An invented situation is an ordinary `Pressure`.** Not a new event kind, not a special
+case in the director, not a second path through perception — the same object an author
+writes in `pressures.yaml`, built in `situations.py` instead of read off disk, and from
+there `_fire` renders it and the world model filters it exactly as it does the authored
+ones. So it is one function that returns a `Pressure`, and everything downstream is
+untouched.
+
+What constrains it:
+
+* **Narration only, in a room that exists.** An arrival would need somebody the scene said
+  might turn up and a state change would need a scene written around it; neither is a thing
+  to decide mid-turn on a model's say-so.
+* **It may not name a fact.** Same guard the generated room descriptions get — a situation
+  using a secret's own words would raise the subject as scenery, satisfying `fact_spoken`
+  before anybody in the story had said it.
+* **The writer is never told the secrets.** Narrower than the director is allowed to be, on
+  purpose: the deterministic guard can only catch a fact's actual keywords, and a writer
+  that had been told could paraphrase around them — *"he looks at the empty space on the
+  mantel"* names nothing and gives everything away. One that was never told cannot allude
+  to it. It gets the rooms, who is present, and lines that were said out loud.
+* **It competes rather than interrupts.** Scored like any other pressure, so somebody with
+  something to say still wins the turn.
+
+The trigger is drift: the room has gone quiet by the same threshold the sandbox pressures
+use, *and* nothing has happened for four things the player said. Counted in the player's
+lines rather than log positions, because a scene with four rooms of people racks up events
+fast and still feels like nothing is happening — and deliberately not "no narration for a
+while", since the atmosphere beats never run out and would mask the very state this has to
+detect.
+
+Cost: one model call per drift, none otherwise. Four across twenty-four player lines,
+against thirty-five for every three.
+
+How a story is played is stored with the story, not with the world — the same house can be
+one you finish or one you stay in — so resuming it cannot silently change it, and a story
+saved before this existed comes back with its scenes and endings intact.
+
 ### Play as somebody of your own
 
 Everything in a world is authored, which is right for the parts a story turns on and
