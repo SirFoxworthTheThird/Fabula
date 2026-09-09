@@ -644,6 +644,17 @@
                autocomplete="off" spellcheck="false">
       </div>
       <div class="field">
+        <label for="fast-model">Filing</label>
+        <input type="text" id="fast-model" placeholder="optional — a cheaper model for the calls nobody reads"
+               autocomplete="off" spellcheck="false">
+        <span class="hint">most of a turn is memory readings and summaries nobody sees</span>
+      </div>
+      <div class="field">
+        <label for="fast-api-base">Its endpoint</label>
+        <input type="text" id="fast-api-base" placeholder="optional — where that one lives, if elsewhere"
+               autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
         <label for="workers">At once</label>
         <input type="number" id="workers" min="1" max="32">
         <span class="hint">how many of a turn's calls may be in flight</span>
@@ -1304,6 +1315,8 @@ async function showSettings() {
   const current = await api.settings();
   el("model").value = current.model;
   el("api-base").value = current.api_base;
+  el("fast-model").value = current.fast_model;
+  el("fast-api-base").value = current.fast_api_base;
   el("workers").value = current.workers;
   el("interpret").checked = current.interpret;
   el("direct").checked = current.direct;
@@ -1320,12 +1333,17 @@ async function showSettings() {
       "No model set and no provider key in the environment, so stories run on placeholder text — " +
       "everything works, but nobody says anything real.";
   } else if (current.model) {
-    state.textContent = `Stories run on ${current.model}${current.api_base ? " at " + current.api_base : ""}.`;
+    state.textContent =
+      `Stories run on ${current.model}${current.api_base ? " at " + current.api_base : ""}.` +
+      (current.filing_with
+        ? ` The readings and summaries — most of a turn — go to ${current.filing_with}.`
+        : "");
   } else {
     state.textContent = "Stories run on whatever your environment implies. Name a model to be sure.";
   }
 
-  for (const id of ["model", "api-base", "workers", "interpret", "direct", "save-settings"]) {
+  for (const id of ["model", "api-base", "fast-model", "fast-api-base", "workers",
+                    "interpret", "direct", "save-settings"]) {
     el(id).disabled = current.pinned;
   }
 
@@ -1361,6 +1379,8 @@ el("save-settings").onclick = async () => {
     await api.saveSettings({
       model: el("model").value,
       api_base: el("api-base").value,
+      fast_model: el("fast-model").value,
+      fast_api_base: el("fast-api-base").value,
       workers: Number(el("workers").value) || 1,
       interpret: el("interpret").checked,
       direct: el("direct").checked,

@@ -37,6 +37,7 @@ from fabula.llm import (
     LiteLLMClient,
     LLMClient,
     ModelUnavailable,
+    Routed,
     get_default_llm,
     missing_credentials,
 )
@@ -172,6 +173,9 @@ class NewSettings(BaseModel):
 
     model: str = ""
     api_base: str = ""
+    # A second, cheaper model for the calls nobody reads.
+    fast_model: str = ""
+    fast_api_base: str = ""
     interpret: bool = True
     direct: bool = True
     workers: int = DEFAULT_WORKERS
@@ -569,6 +573,8 @@ def create_app(
         wanted = Settings(
             model=body.model.strip(),
             api_base=body.api_base.strip(),
+            fast_model=body.fast_model.strip(),
+            fast_api_base=body.fast_api_base.strip(),
             interpret=body.interpret,
             direct=body.direct,
             workers=max(1, min(body.workers, 32)),
@@ -579,6 +585,8 @@ def create_app(
 
         settings.model = wanted.model
         settings.api_base = wanted.api_base
+        settings.fast_model = wanted.fast_model
+        settings.fast_api_base = wanted.fast_api_base
         settings.interpret = wanted.interpret
         settings.direct = wanted.direct
         settings.workers = wanted.workers
@@ -816,16 +824,34 @@ def serve(
     library_root: Path | None = None,
     settings_path: Path | None = None,
     open_browser: bool = False,
+    fast_model: str | None = None,
+    fast_api_base: str | None = None,
 ) -> None:
     try:
         import uvicorn
     except ImportError:  # pragma: no cover - depends on the install
         raise SystemExit("serving needs uvicorn: pip install uvicorn")
+    llm = None
+    if fast_model and not model:
+        raise SystemExit(
+            "fabula-serve: --fast-model needs --model: it is for the calls the "
+            "first model would otherwise make, so on its own it changes nothing"
+        )
     if model:
-        unreachable = missing_credentials(model, api_base)
-        if unreachable:
-            raise SystemExit(f"fabula-serve: {unreachable}")
-    llm = LiteLLMClient(model=model, api_base=api_base) if model else None
+        # Both models, before anything opens. A second model is a second
+        # way for a story to end in a provider traceback several turns in.
+        for named, base in (
+            (model, api_base), (fast_model, fast_api_base or api_base)
+        ):
+            unreachable = named and missing_credentials(named, base)
+            if unreachable:
+                raise SystemExit(f"fabula-serve: {unreachable}")
+        llm = LiteLLMClient(model=model, api_base=api_base)
+        if fast_model:
+            llm = Routed(
+                llm,
+                LiteLLMClient(model=fast_model, api_base=fast_api_base or api_base),
+            )
     port = free_port(host, port)
     where = f"http://{host}:{port}"
     if open_browser:
@@ -865,13 +891,24 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--model", default=None, help="Any model id litellm understands")
     parser.add_argument("--api-base", default=None, help="An OpenAI-compatible endpoint")
     parser.add_argument(
+        "--fast-model", default=None, metavar="MODEL",
+        help="A cheaper model for the calls nobody reads — most of a turn",
+    )
+    parser.add_argument(
+        "--fast-api-base", default=None, metavar="URL",
+        help="Where that one lives, if it is not where --api-base points",
+    )
+    parser.add_argument(
         "--workers",
         type=int,
         default=None,
         help="How many model calls a turn may have in flight at once (1 = one at a time)",
     )
     args = parser.parse_args(argv)
-    serve(args.worlds, args.host, args.port, args.model, args.api_base, args.workers)
+    serve(
+        args.worlds, args.host, args.port, args.model, args.api_base, args.workers,
+        fast_model=args.fast_model, fast_api_base=args.fast_api_base,
+    )
 
 
 if __name__ == "__main__":

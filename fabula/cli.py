@@ -22,6 +22,7 @@ from fabula.env import load_env
 from fabula.llm import (
     LiteLLMClient,
     ModelUnavailable,
+    Routed,
     get_default_llm,
     missing_credentials,
 )
@@ -211,6 +212,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--model", default=None, help="Any model id litellm understands")
     parser.add_argument("--api-base", default=None, help="An OpenAI-compatible endpoint")
     parser.add_argument(
+        "--fast-model", default=None, metavar="MODEL",
+        help="A cheaper model for the calls nobody reads — the memory readings, "
+             "the summaries, the beat. Most of a turn.",
+    )
+    parser.add_argument(
+        "--fast-api-base", default=None, metavar="URL",
+        help="Where that one lives, if it is not where --api-base points",
+    )
+    parser.add_argument(
         "--workers",
         type=int,
         default=None,
@@ -250,17 +260,35 @@ def main(argv: list[str] | None = None) -> None:
     # doors do not disagree about which model answers. A flag still wins:
     # it is for this run.
     settings = Settings.load(args.settings)
+    if args.fast_model and not args.model:
+        parser.error(
+            "--fast-model needs --model: it is for the calls the first model "
+            "would otherwise make, so on its own it changes nothing"
+        )
     if args.model:
         # Before the story opens, not several turns in. A key that was
         # never set used to surface as a provider traceback mid-scene.
-        unreachable = missing_credentials(args.model, args.api_base)
-        if unreachable:
-            parser.error(unreachable)
-    llm = (
-        LiteLLMClient(model=args.model, api_base=args.api_base)
-        if args.model
-        else settings.client()
-    )
+        # Both models, because a second one is a second way to die.
+        for named, base in (
+            (args.model, args.api_base),
+            (args.fast_model, args.fast_api_base or args.api_base),
+        ):
+            unreachable = named and missing_credentials(named, base)
+            if unreachable:
+                parser.error(unreachable)
+    llm = settings.client()
+    if args.model:
+        llm = LiteLLMClient(model=args.model, api_base=args.api_base)
+        if args.fast_model:
+            # One client still, and what the call is for decides which
+            # of the two answers it.
+            llm = Routed(
+                llm,
+                LiteLLMClient(
+                    model=args.fast_model,
+                    api_base=args.fast_api_base or args.api_base,
+                ),
+            )
     interpret = settings.interpret and not args.no_interpret
     opening = {
         "interpret_beliefs": interpret,
@@ -291,6 +319,8 @@ def main(argv: list[str] | None = None) -> None:
             port=args.port,
             model=args.model,
             api_base=args.api_base,
+            fast_model=args.fast_model,
+            fast_api_base=args.fast_api_base,
             workers=args.workers,
             library_root=args.library,
             settings_path=args.settings,

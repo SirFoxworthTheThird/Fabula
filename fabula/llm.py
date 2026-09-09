@@ -71,6 +71,62 @@ def _one_line(failure: Exception) -> str:
     return text[0][:300] if text else failure.__class__.__name__
 
 
+# What a call is *for*, taken from the key every call site already
+# passes. Two thirds of a turn is the per-memory reading — one sentence
+# of "what does she now think is going on", stored as a belief and read
+# back only by the reveal and by the guard on the next reading. Nobody
+# sees it. The same goes for the compression that feeds context, the
+# classification whose every referent is checked afterwards, and the
+# director's beat, which is one id out of a list the engine handed it and
+# refuses to accept anything else from.
+#
+# So this is the seam where a cheaper model belongs, and it is a prefix
+# match rather than a new argument threaded through nine call sites,
+# because the key already says which job it is.
+#
+# `invent:` is deliberately not here. A world is a handful of calls once,
+# so there is no bill to cut, and it is the one job that was *measured*
+# to need the better model: a 1.5B hands back the example it was shown
+# and a 3B only just manages. Cheap where it is invisible, not cheap
+# where it was hard.
+FILING = ("interpret:", "summary:", "classify:", "beat")
+
+
+def is_filing(key: str | None) -> bool:
+    """Is this call bookkeeping, or is it the story?"""
+    return bool(key) and key.startswith(FILING)
+
+
+class Routed:
+    """Two models: one that writes, one that files.
+
+    A character's line and the narration are what somebody is paying for.
+    The readings, the summaries and the classifications are what the
+    engine needs in order to produce them, and on the measured shape of a
+    turn they are most of the bill — 23 calls out of 35 on `ashgrove`,
+    none of which anybody reads.
+
+    Splitting them is worth doing and worth being careful about, because
+    the readings feed the context the *writing* model gets: a cheap model
+    filing badly does not show up as bad filing, it shows up as a worse
+    scene one turn later. `/reveal` is where to look.
+
+    Nothing here touches perception. The projection is deterministic and
+    happens before any of these calls, so a second model cannot be told
+    anything the first could not — the invariant does not depend on which
+    model, or how many.
+    """
+
+    def __init__(self, writes: LLMClient, files: LLMClient | None = None):
+        self.writes = writes
+        self.files = files or writes
+
+    def complete(self, system: str, prompt: str, key: str | None = None) -> str:
+        return (self.files if is_filing(key) else self.writes).complete(
+            system=system, prompt=prompt, key=key
+        )
+
+
 class FakeLLM:
     """Deterministic, offline stand-in for tests and for running the CLI
     without an API key.

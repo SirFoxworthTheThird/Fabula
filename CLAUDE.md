@@ -74,6 +74,16 @@ issuing them after each event — in-scene beliefs are only read back by the rev
 the guard on a reading itself, so a turn's readings could be one batch rather than eight.
 That one changes when a belief becomes durable within a turn, so it is not free.
 
+The other half of the same bill is *which* model answers, and the split that pays is by
+job rather than by who: measured on `ashgrove`, 24 of a turn's 35 calls are the memory
+readings, the summaries, the classifications and the director's beat — none of which
+anybody reads — against 11 of character lines and narration, which are the product.
+`--fast-model` sends the first group somewhere cheaper. The trap is that the readings feed
+the context the *writing* model gets, so a bad second model shows up as a worse scene a
+turn later rather than as bad filing; `/reveal` is where to look. Note what the measurement
+ruled out: splitting "the director" from "the characters" would have moved one call in
+thirty-five, because a character makes both the expensive call and most of the cheap ones.
+
 The narration beats cost one call each, and the director choosing between them costs one
 more per narration — measured at 1 to 2 extra calls across four player lines, because the
 choice is only made once the narrator has won the turn and only when the moment could be

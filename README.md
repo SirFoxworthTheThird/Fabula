@@ -485,6 +485,53 @@ fabula-playtest worlds/ashgrove the_dinner \
 
 The same two flags work on `fabula`, `fabula-serve` and `fabula-measure`.
 
+### Two models: one that writes, one that files
+
+Most of a turn is text nobody ever reads. Measured on `ashgrove`, three player lines:
+
+```
+35 model calls
+  24  the model nobody reads   interpret (23), beat (1)
+  11  the model you are paying for   a character's line (6), narration (5)
+```
+
+The 24 are the per-memory readings — one sentence of "what does she now think is going
+on", stored as a belief and surfaced only by `/reveal` — plus the summaries that feed
+context, the classifications whose every referent is checked afterwards, and the
+director's beat, which is one id out of a list the engine handed it and refuses anything
+else from. The 11 are the product.
+
+So `--fast-model` names a cheaper model for the first group, and `--fast-api-base` says
+where it lives when that is somewhere else — a hosted model writing, a local one filing:
+
+```bash
+fabula --model anthropic/claude-sonnet-5        --fast-model openai/qwen2.5-3b-instruct        --fast-api-base http://127.0.0.1:8090/v1
+```
+
+Or the two extra boxes in the Model panel, saved to `~/.fabula/settings.json` like the
+rest. Leaving them empty means what it meant before: one model for everything.
+
+Note the seam is what a call is *for*, not who makes it. Splitting by "the director versus
+the characters" would move one call in thirty-five, because a character makes both the
+expensive call and most of the cheap ones — and the director's single call is already
+confined to a closed vocabulary, so a better model there has little to be better at.
+Making a world stays on the good model for the same reason in reverse: it is a handful of
+calls once, and the one job measured to *need* the better model.
+
+Two things worth knowing before turning it on:
+
+* **The readings feed the context the writing model gets.** A cheap model filing badly
+  does not show up as bad filing; it shows up as a worse scene one turn later. `/reveal`
+  is where to look — it is exactly the readable artefact for judging whether the second
+  model is filing sensibly.
+* **Invariant 1 does not depend on how many models there are.** The projection is
+  deterministic and happens before every call, so a second model cannot be told anything
+  the first could not. There is a test that asserts it on a real turn.
+
+Both models are checked against the environment before a story opens, for the same reason
+one was: a second model is a second way to lose a scene to a provider traceback several
+turns in.
+
 Rather than exporting it every session, put it in a `.env` beside the repo — copy
 `.env.example`. Every entry point reads it at startup, and `.gitignore` already covers it
 (`.env.example` is the only one that belongs in the repo).

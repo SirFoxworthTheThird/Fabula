@@ -129,6 +129,8 @@ def test_a_saved_choice_is_on_disk_and_has_no_credential_in_it(client, settings_
     assert stored == {
         "model": "gpt-4o-mini",
         "api_base": "",
+        "fast_model": "",
+        "fast_api_base": "",
         "interpret": False,
         "direct": True,
         "workers": 2,

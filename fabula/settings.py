@@ -28,7 +28,14 @@ from pathlib import Path
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.env import DEFAULT_ENV_FILE
 from fabula.library import DEFAULT_ROOT
-from fabula.llm import _KEY_ENV_VARS, FakeLLM, LiteLLMClient, LLMClient, missing_credentials
+from fabula.llm import (
+    _KEY_ENV_VARS,
+    FakeLLM,
+    LiteLLMClient,
+    LLMClient,
+    Routed,
+    missing_credentials,
+)
 
 DEFAULT_SETTINGS = DEFAULT_ROOT.parent / "settings.json"
 
@@ -44,6 +51,16 @@ class Settings:
     # An OpenAI-compatible endpoint: a proxy, an aggregator, llama.cpp on
     # this machine.
     api_base: str = ""
+    # A second, cheaper model for the calls nobody reads — the per-memory
+    # readings, the summaries, the classifications, the director's beat.
+    # Measured on `ashgrove`, that is 24 calls out of 35. Empty means
+    # "the same model as everything else", which is what it was before
+    # this existed, so leaving it alone changes nothing.
+    fast_model: str = ""
+    # Where that one lives, when it is not where the first one lives —
+    # the whole point of the split is that these can be different
+    # providers, a hosted model writing and a local one filing.
+    fast_api_base: str = ""
     # The per-memory reading. It is most of a scene's model calls, so it
     # is the one knob that visibly changes what a turn costs.
     interpret: bool = True
@@ -72,16 +89,51 @@ class Settings:
 
     def client(self) -> LLMClient | None:
         """The model these settings name, or None for "work it out from
-        the environment" — which is what the engine already does."""
+        the environment" — which is what the engine already does.
+
+        A second model named here wraps the first rather than replacing
+        it: everything still goes through one `LLMClient`, and which of
+        the two answers is decided by what the call is for.
+        """
         if not self.model:
             return None
-        return LiteLLMClient(model=self.model, api_base=self.api_base or None)
+        writes = LiteLLMClient(model=self.model, api_base=self.api_base or None)
+        if not self.fast_model:
+            return writes
+        return Routed(
+            writes,
+            LiteLLMClient(
+                model=self.fast_model,
+                api_base=(self.fast_api_base or self.api_base) or None,
+            ),
+        )
 
     def unreachable(self) -> str | None:
-        """Why this choice will not work from here, or None."""
+        """Why this choice will not work from here, or None.
+
+        Both models, because a second one is a second way for a story to
+        die several turns in — and the whole reason this is checked
+        before a scene opens rather than at the first call is that the
+        old behaviour was a traceback with the scene already lost.
+        """
         if not self.model:
+            # A second model and no first one is a setting that does
+            # nothing: the engine falls back to the environment, which is
+            # one model for everything, and the box somebody just filled
+            # in has no effect they will ever see.
+            return (
+                "name the model that writes before the one that files — "
+                "the second one is for the calls the first would otherwise make"
+            ) if self.fast_model else None
+        first = missing_credentials(self.model, self.api_base or None)
+        if first:
+            return first
+        if not self.fast_model:
             return None
-        return missing_credentials(self.model, self.api_base or None)
+        second = missing_credentials(
+            self.fast_model, (self.fast_api_base or self.api_base) or None
+        )
+        return f"the second model: {second}" if second else None
 
 
 def keys_present() -> list[str]:
@@ -95,11 +147,16 @@ def describe(settings: Settings) -> dict:
     return {
         "model": settings.model,
         "api_base": settings.api_base,
+        "fast_model": settings.fast_model,
+        "fast_api_base": settings.fast_api_base,
         "interpret": settings.interpret,
         "direct": settings.direct,
         "workers": settings.workers,
         # What a story started right now would actually run on.
         "using": settings.model or ("a model from the environment" if keys_present() else ""),
+        # And what the calls nobody reads would run on, when that is
+        # something else.
+        "filing_with": settings.fast_model if settings.model else "",
         "unreachable": settings.unreachable(),
         "keys_present": keys_present(),
         "env_file": str(Path(DEFAULT_ENV_FILE).resolve()),
