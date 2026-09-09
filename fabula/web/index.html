@@ -356,6 +356,17 @@
   .line.provisional { opacity: .55; }
   .line.you .said { color: #cfe2ea; }
 
+  /* What the scene says before anybody speaks: where you are and what
+     you have walked into. The author's words, addressed to you and to
+     nobody else in the room, so it is set apart from the things that
+     happen in it. */
+  .line.opening {
+    color: var(--ink-soft);
+    border-left: 2px solid var(--accent-dim);
+    padding: 2px 0 2px 16px;
+    margin-bottom: 24px;
+  }
+
   /* Narration, arrivals, materialised detail: things observed, not said. */
   .line.prose {
     color: var(--ink-soft);
@@ -770,7 +781,13 @@ function render(event) {
   line.className = "line";
   line.dataset.seq = event.seq;
 
-  if (event.kind === "time_skip") {
+  if (event.opening) {
+    // The scene's own first words: not something that happened in the
+    // room, and not anybody's line. Set apart so it does not read as
+    // one.
+    line.classList.add("opening");
+    line.textContent = event.content;
+  } else if (event.kind === "time_skip") {
     line.classList.add("skip");
     line.textContent = event.content;
   } else if (event.visibility === "degraded") {

@@ -24,6 +24,13 @@ from fabula.models import Character, ProjectedEvent
 from fabula.session import Session
 
 
+def _wrap(text: str, width: int = 76) -> str:
+    """A paragraph a terminal can read, rather than one long line."""
+    import textwrap
+
+    return "\n".join(textwrap.wrap(" ".join(text.split()), width=width)) + "\n"
+
+
 def _format(projected: ProjectedEvent, characters: dict[str, Character]) -> str:
     """Render one event as the user's character perceived it.
 
@@ -31,6 +38,10 @@ def _format(projected: ProjectedEvent, characters: dict[str, Character]) -> str:
     terminal is the player character's POV, not the world log.
     """
     event = projected.event
+    # The scene's own first words. Not indented with the things that
+    # happened in the room, because it is not one of them.
+    if event.metadata.get("opening"):
+        return _wrap(projected.perceived_content)
     # Only an utterance is somebody speaking. Arrivals, departures and the
     # rest carry narrator-rendered prose about a character, not words from
     # their mouth, so they must not be printed behind a speaker's name.

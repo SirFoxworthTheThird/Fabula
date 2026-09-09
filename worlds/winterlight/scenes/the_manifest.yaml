@@ -6,6 +6,11 @@ world: winterlight
 title: The manifest
 premise: >-
   Everyone in the mess, and a crate that somebody signed for.
+opening: >-
+  All four of you in the mess at once, which has not happened in a
+  fortnight. A crate was signed for at the last resupply and never came
+  off the sledge, and the paperwork has this station on it. Everybody
+  here has some reason to want it dealt with quietly, including you.
 mode: arc
 cast:
   - ilse

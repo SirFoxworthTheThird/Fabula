@@ -46,8 +46,8 @@ def test_and_then_whoever_is_there_may_speak_first():
 
     opened = session.store.get_events(session.scene.id)
 
-    assert [e.kind for e in opened] == ["narration", "utterance"]
-    assert opened[1].actor_id == "tomas"
+    assert opened[-1].kind == "utterance"
+    assert opened[-1].actor_id == "tomas"
 
 
 def test_the_opening_is_a_hello_not_a_conversation():
@@ -125,10 +125,15 @@ def test_the_opening_line_may_not_name_a_secret():
     description stands in instead."""
     session = Session.open(ASHGROVE, "the_dinner", llm=Blurts())
 
-    opened = session.store.get_events(session.scene.id)
+    # The generated one: the scene's own opening words come before it and
+    # are the author's, not the model's.
+    generated = [
+        e for e in session.store.get_events(session.scene.id)
+        if e.kind == "narration" and not e.metadata.get("opening")
+    ]
 
-    assert SECRET_WORD not in opened[0].content.lower()
-    assert opened[0].content == session.world.rooms["kitchen"].description
+    assert SECRET_WORD not in generated[0].content.lower()
+    assert generated[0].content == session.world.rooms["kitchen"].description
 
 
 def test_opening_an_empty_room_costs_one_model_call():
@@ -140,7 +145,7 @@ def test_opening_an_empty_room_costs_one_model_call():
     session = Session.open(WORLDS / "winterlight", "the_long_dark", llm=llm)
 
     assert session.present() == []
-    assert len(llm.calls) == 1
+    assert len(llm.calls) == 1, "the scene's own opening words cost nothing"
 
 
 def test_a_greeting_costs_the_people_in_the_room_and_nobody_else():
@@ -175,3 +180,101 @@ def test_the_room_does_not_answer_over_somebody_who_can():
 
     spoken = [p for p in perceived if p.event.kind == "utterance"]
     assert any(p.event.actor_id != session.user_character.id for p in spoken)
+
+
+# --- The first thing you read -----------------------------------------
+
+
+def test_a_scene_says_what_you_have_walked_into():
+    """Every other platform on this shelf opens with one: a paragraph
+    that says what the situation is, so the first thing asked of somebody
+    is not "what do you say" to a room they know nothing about."""
+    session = Session.open(ASHGROVE, "the_dinner", llm=FakeLLM())
+
+    first = session.perceived_so_far()[0]
+
+    assert first.event.metadata.get("opening") is True
+    assert first.perceived_content == session.scene.opening
+    assert "Sunday" in first.perceived_content
+
+
+def test_it_is_addressed_to_the_player_and_perceived_by_nobody_else():
+    """Which is what lets it be written in the second person, and lets it
+    say what only this character would know coming in. Through the
+    ordinary perception path — `audibility: private` — so it is the same
+    choke point every leak test already covers."""
+    session = Session.open(ASHGROVE, "the_dinner", llm=FakeLLM())
+    events = session.store.get_events(session.scene.id)
+    briefing = events[0]
+
+    assert briefing.audibility == "private"
+    assert briefing.addressed_to == [session.user_character.id]
+    for other in ("tomas", "maria"):
+        seen = session.director.contexts.project(session.characters[other], events)
+        assert not any(p.event.seq == briefing.seq for p in seen), other
+
+
+def test_it_costs_nothing():
+    """Authored rather than generated: the same every time, free, and
+    good prose instead of whatever a model made of a room name."""
+    llm = FakeLLM()
+    Session.open(WORLDS / "winterlight", "the_long_dark", llm=llm)
+
+    # One call, and it is the room — not the opening.
+    assert len(llm.calls) == 1
+    assert all("place:" in str(key) for _, _, key in llm.calls)
+
+
+def test_a_scene_without_one_still_opens(tmp_path):
+    """Optional: a world written before this existed opens on the room
+    and whoever is standing in it, exactly as it did."""
+    import shutil
+
+    import yaml
+
+    world = tmp_path / "ashgrove"
+    shutil.copytree(ASHGROVE, world)
+    scene = world / "scenes" / "the_dinner.yaml"
+    written = yaml.safe_load(scene.read_text(encoding="utf-8"))
+    written.pop("opening")
+    scene.write_text(yaml.safe_dump(written), encoding="utf-8")
+
+    session = Session.open(world, "the_dinner", llm=FakeLLM())
+
+    assert session.scene.opening == ""
+    assert session.perceived_so_far(), "the room still gets described"
+    assert not any(
+        p.event.metadata.get("opening") for p in session.perceived_so_far()
+    )
+
+
+def test_it_is_said_once_per_scene_and_comes_back_on_resume(tmp_path, fake_llm):
+    """It is the scene's first words, not something repeated at every
+    turn — and a player picking the story back up should still be able to
+    read what they walked into."""
+    path = str(tmp_path / "story.sqlite")
+    first = Session.open(ASHGROVE, "the_dinner", db_path=path, llm=fake_llm)
+    first.say("Tomás?")
+    first.close()
+    first.store.close()
+
+    again = Session.open(ASHGROVE, "the_dinner", db_path=path, llm=fake_llm)
+    openings = [
+        e for e in again.store.get_events(again.scene.id) if e.metadata.get("opening")
+    ]
+
+    assert len(openings) == 1
+    assert again.perceived_so_far()[0].event.metadata.get("opening") is True
+
+
+def test_every_shipped_scene_says_what_you_have_walked_into():
+    """A guard on the authoring. A scene with no opening drops somebody
+    into a room with a name and nothing else, which is the thing this
+    fixes."""
+    from fabula.loader import catalogue, load_scene
+
+    for world in catalogue(WORLDS):
+        for scene in world["scenes"]:
+            opening = load_scene(WORLDS / world["id"], scene["id"]).opening
+            assert opening.strip(), f"{world['id']}/{scene['id']}"
+            assert len(opening) > 80, f"{world['id']}/{scene['id']} is barely a sentence"

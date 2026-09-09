@@ -28,9 +28,12 @@ def test_it_lists_what_happened_out_of_sight(fake_llm):
 
     built = build_reveal(session)
 
-    assert [e.content for e in built.missed] == [
-        "I broke Grandma's music box, and I never said."
-    ]
+    # Whatever else went on in the kitchen once she had left, the one
+    # thing she needed to miss is in there.
+    missed = [e.content for e in built.missed]
+    assert "I broke Grandma's music box, and I never said." in missed
+    perceived = {p.perceived_content for p in session.perceived_so_far()}
+    assert not any(content in perceived for content in missed), "missed means missed"
     assert SECRET in render(built, session).lower()  # the reveal is where it surfaces
 
 

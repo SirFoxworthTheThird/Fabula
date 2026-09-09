@@ -5,6 +5,10 @@ world: ashgrove
 title: Nobody said a word
 premise: >-
   It kept. Breakfast, as though the evening had not happened.
+opening: >-
+  Breakfast, all three of you at the table, and the evening behind you
+  filed away as though it had gone the way these evenings usually go. It
+  did not. Everyone at this table knows it did not.
 mode: sandbox
 cast: [tomas, maria, elena]
 starting_positions:

@@ -7,6 +7,12 @@ world: winterlight
 title: The long dark
 premise: >-
   Four of you awake in a building where sound does not travel the way you think.
+opening: >-
+  Nine months in, three weeks of dark still to run, and the four of you
+  have stopped being in the same room. You are in the mess with the urn
+  ticking. Ilse is on the radio, Yusuf is down with the generator, Nadia
+  turned in early. You are the station doctor and almost nothing has
+  needed a doctor all winter.
 mode: sandbox
 cast:
   - ilse

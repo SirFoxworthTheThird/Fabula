@@ -4,6 +4,10 @@ world: ardenhall
 title: First night
 premise: >-
   Lights out, an unfamiliar building, and nobody asleep yet.
+opening: >-
+  Lights out an hour ago and the building has not settled. You are in the
+  hall in the dark because your trunk is still where it was left this
+  morning, and there is a light on under the office door.
 mode: sandbox
 cast: [vance, rook]
 starting_positions: {vance: office, rook: hall}

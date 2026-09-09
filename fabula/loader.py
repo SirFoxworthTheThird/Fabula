@@ -39,6 +39,13 @@ class Scene(BaseModel):
     # loads, and falls back to its id.
     title: str = ""
     premise: str = ""
+    # The first thing the player reads: where they are, who they are in
+    # it, and what they have walked into. Authored, so it is the same
+    # every time and costs nothing, and addressed to them alone — which
+    # is what lets it be written in the second person and mention what
+    # only they would know. Empty is allowed; the scene then opens on the
+    # room and whoever is standing in it.
+    opening: str = ""
     mode: Literal["arc", "sandbox"] = "sandbox"
     cast: list[str]
     # Characters written for this world who are not in the room when it

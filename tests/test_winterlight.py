@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from fabula.llm import FakeLLM
-from fabula.loader import load_characters, load_scenario, load_world
+from fabula.loader import load_characters, load_scenario, load_scene, load_world
 from fabula.memory import project
 from fabula.session import Session
 from fabula.world import mentions_fact
@@ -247,10 +247,18 @@ def test_no_persona_names_a_secret_that_is_not_its_own(world_dir):
 
 @pytest.mark.parametrize("world_dir", ALL_WORLDS, ids=lambda p: p.name)
 def test_no_authored_text_names_a_fact(world_dir):
-    """Three kinds of authored prose end up in the log as event content:
+    """Four kinds of authored prose end up in the log as event content:
     a room description the narrator is given to describe a place, a
-    pressure's intent that it is given to render, and an intention's
-    description, which is materialised as the action itself.
+    pressure's intent that it is given to render, an intention's
+    description, which is materialised as the action itself, and a
+    scene's opening, which is appended as the first thing the player
+    reads.
+
+    The opening is the sharpest of the four. It is perceived in full by
+    the player and by nobody else, so a keyword in it satisfies
+    `fact_spoken` — the subject was raised in front of somebody — before
+    the story has a first line. An arc could end on its own opening
+    paragraph.
 
     A fact keyword in any of them lets the subject be raised by scenery.
     Keyword matching is deterministic and cannot tell a confession from a
@@ -280,6 +288,10 @@ def test_no_authored_text_names_a_fact(world_dir):
         for intention in character.intentions:
             named = names(intention.description)
             assert not named, f"intention {character.id}/{intention.id}: {named}"
+
+    for scene_file in sorted((world_dir / "scenes").glob("*.yaml")):
+        scene = load_scene(world_dir, scene_file.stem)
+        assert not names(scene.opening), f"opening {scene.id}: {names(scene.opening)}"
 
 
 @pytest.mark.parametrize("world_dir", ALL_WORLDS, ids=lambda p: p.name)

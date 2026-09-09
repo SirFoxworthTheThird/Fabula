@@ -175,6 +175,10 @@ class Session:
         # that opens on a bare prompt is a text box: the room has a name
         # and nothing in it until somebody thinks to type /look.
         began = not store.any_events()
+        # The scene's own first words, to the player alone: what they
+        # have walked into, before anybody asks them what they say about
+        # it. Authored, so it costs nothing and reads the same every time.
+        session.director.brief(user_character, user_character.location_id)
         opening = session.director.establish(user_character.location_id)
         # Who the player said they were, once, at the start of the story
         # and never again. An ordinary event in their own room, so the

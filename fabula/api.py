@@ -57,6 +57,10 @@ class StreamEvent(BaseModel):
     content: str
     story_time: datetime
     detail_level: str
+    # The scene's own first words, addressed to this character. Not
+    # something that happened in the room, so a client should not render
+    # it as though somebody did it.
+    opening: bool = False
 
 
 class Named(BaseModel):
@@ -229,6 +233,7 @@ def to_stream_events(session: Session, perceived: list[ProjectedEvent]) -> list[
                 content=projected.perceived_content,
                 story_time=event.story_time,
                 detail_level=event.detail_level,
+                opening=bool(event.metadata.get("opening")),
             )
         )
     return out

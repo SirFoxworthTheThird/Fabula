@@ -3,6 +3,10 @@ world: vilamar
 title: O almoço
 premise: >-
   A mesa está posta e há uma coisa que ninguém quer levantar.
+opening: >-
+  Domingo, e a mesa está posta para três. A Teresa está no quintal com a
+  roupa, o Joaquim está na cozinha a não fazer nada de especial, e desde
+  que chegaste que ele te trata bem demais.
 mode: sandbox
 cast:
   - joaquim

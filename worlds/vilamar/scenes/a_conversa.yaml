@@ -4,6 +4,10 @@ world: vilamar
 title: A conversa
 premise: >-
   Já não dá para adiar.
+opening: >-
+  A cozinha, a meio da tarde, e ninguém saiu depois do café. O Joaquim
+  está calado desde ontem e a Teresa já perguntou duas vezes se está tudo
+  bem. Já não dá para fingir que não se passa nada nesta casa.
 mode: arc
 cast:
   - joaquim

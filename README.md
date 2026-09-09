@@ -120,8 +120,11 @@ python -m fabula.cli worlds/ashgrove the_dinner
 You are Elena, in the kitchen with your brother Tomás. Your sister Maria is in the
 study. Tomás is sitting on something he does not want Maria to hear.
 
-The scene says its first line before you have to, and whoever is standing there gets to
-speak first if they want to: a story that opens on a bare prompt puts the whole burden of
+A scene opens by telling you what you have walked into — an authored paragraph, the same
+every time, addressed to you and perceived by nobody else in the room, which is what lets
+it be written in the second person and mention what only your character would know coming
+in. Then the room is described, and whoever is standing there gets to speak first if they
+want to: a story that opens on a bare prompt puts the whole burden of
 starting it on you — you arrive somewhere, nobody says anything, and the only way to find
 out you are not alone is to talk to the air. One beat, and no pressures: a greeting is the
 room noticing you, while a pressure is the director escalating, and a story whose first
@@ -665,6 +668,24 @@ title: The dinner
 premise: >-
   Your brother has been strange all evening, and your sister is in the next room.
 ```
+
+A scene's `opening` is the first thing the player reads — every other app on this shelf
+has one, and without it the first thing asked of somebody is "what do you say" to a room
+they know nothing about. It is appended as an event addressed to the player, at
+`audibility: private`, so the choke point every leak test covers returns `none` for
+everyone else in the room. That is what makes the second person safe here:
+
+```yaml
+opening: >-
+  Sunday at the house you grew up in. Tomás has been at the kitchen table since six
+  and has said about twenty words, none of them about anything. Maria is in the study
+  with the door not quite shut. Nobody has eaten yet.
+```
+
+Write it from inside your player character's head and no further: Elena does not know
+what her brother is sitting on, so her opening does not either. And it must not name a
+world fact — the player perceives it in full, so a keyword there satisfies `fact_spoken`
+and an arc can end on its own opening paragraph. Both are tested for every shipped world.
 
 Drop a directory in `worlds/` and every client finds it: the terminal, the playtest
 harness, `/worlds`, the browser picker and the shim's model list all enumerate the

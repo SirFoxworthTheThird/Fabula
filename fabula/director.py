@@ -394,7 +394,9 @@ class Director:
         Nothing if the scene has already started, so resuming a story
         does not re-describe a room somebody is standing in the middle of.
         """
-        if self.store.get_events(self.scene.id):
+        # Anything but the scene's own opening words, which come first
+        # and are addressed to the player rather than to the room.
+        if [e for e in self.store.get_events(self.scene.id) if not e.metadata.get("opening")]:
             return None
         content = self.narrator.describe_place(where, self.world)
         named = invents_a_fact(content, self.world)
@@ -415,6 +417,35 @@ class Director:
         # typed anything.
         return self.store.append_event(
             self.build_event("narration", None, where, content)
+        )
+
+    def brief(self, who: Character, where: str) -> Event | None:
+        """The scene's own first words, to the player and nobody else.
+
+        Every other platform on this shelf opens with one: a paragraph
+        that says what you have walked into, so the first thing asked of
+        somebody is not "what do you say" to a room they know nothing
+        about. Authored rather than generated — the same every time, free,
+        and good prose instead of whatever a model made of a room name.
+
+        Private, through the ordinary perception path: `audibility:
+        private` addressed to the player means the choke point every leak
+        test covers already returns "none" for everybody else. That is
+        what lets it be written in the second person, and lets it say
+        what only this character would know coming in.
+        """
+        if not self.scene.opening.strip() or self.store.get_events(self.scene.id):
+            return None
+        return self.store.append_event(
+            self.build_event(
+                "narration",
+                None,
+                where,
+                self.scene.opening.strip(),
+                audibility="private",
+                addressed_to=[who.id],
+                metadata={"opening": True},
+            )
         )
 
     def introduce(self, where: str, look: str) -> Event | None:

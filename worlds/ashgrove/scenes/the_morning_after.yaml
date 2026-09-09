@@ -6,6 +6,9 @@ world: ashgrove
 title: The morning after
 premise: >-
   Whatever was said last night, everyone woke up in the same house.
+opening: >-
+  Morning, and the kettle is on. Nobody has mentioned last night. Maria
+  went into the study before you came down and has not come out of it.
 mode: arc
 cast: [tomas, maria, elena]
 starting_positions:
