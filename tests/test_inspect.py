@@ -170,6 +170,34 @@ def test_a_scene_that_ends_on_a_fact_nobody_wrote(world):
     assert any("the_will" in c for c in complaints(world))
 
 
+def test_a_condition_that_asks_something_the_engine_cannot_answer(world):
+    """The sharp one. `evaluate_trigger` raises on a key it does not know
+    rather than quietly passing — which is right at runtime, and means an
+    author who invents `after_turns` has written a world that ends the
+    scene it is in with a traceback instead of a morning."""
+    edit(world / "scenes" / "the_reckoning.yaml", lambda s: s.update(
+        {"next": [{"scene": "the_morning_after", "when": {"after_turns": 5}}]}
+    ))
+
+    assert any("after_turns" in c for c in complaints(world))
+
+
+def test_a_branch_on_somebody_standing_somewhere_that_does_not_exist(world):
+    edit(world / "scenes" / "the_reckoning.yaml", lambda s: s.update(
+        {"next": [{"scene": "the_morning_after", "when": {"character_at": {"maria": "attic"}}}]}
+    ))
+
+    assert any("attic" in c for c in complaints(world))
+
+
+def test_a_scene_that_ends_on_where_nobody_is(world):
+    edit(world / "scenes" / "the_reckoning.yaml", lambda s: s.update(
+        {"end_condition": {"character_at": {"the_gardener": "kitchen"}}}
+    ))
+
+    assert any("the_gardener" in c for c in complaints(world))
+
+
 def test_a_world_with_no_scenes(world):
     for scene in (world / "scenes").glob("*.yaml"):
         scene.unlink()

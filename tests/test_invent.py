@@ -19,9 +19,15 @@ import pytest
 from fabula.inspect import complaints
 from fabula.invent import CannotInvent, invent
 from fabula.llm import FakeLLM
-from fabula.loader import load_characters, load_pressures, load_scene, load_world
+from fabula.loader import (
+    catalogue,
+    load_characters,
+    load_pressures,
+    load_scene,
+    load_world,
+)
 from fabula.models import Event
-from fabula.pressures import _KNOWN_TRIGGER_KEYS, is_eligible, scene_state
+from fabula.pressures import _KNOWN_TRIGGER_KEYS, is_eligible, next_scene, scene_state
 from fabula.session import Session
 
 from tests.conftest import ASHGROVE
@@ -78,16 +84,39 @@ EXTRAS = {
 }
 
 
+AFTER = {
+    "heard": {
+        "title": "What the freezer knew",
+        "premise": "Everybody slept somewhere, and everybody came back.",
+        "opening": "Nine in the morning and the extractor fans are still going. Inês has "
+                   "not put her coat down since she came in.",
+        "positions": {"Dessa Vane": "the kitchen", "Ruben Ott": "the kitchen",
+                      "Inês Cardoso": "the kitchen"},
+        "hours_later": 5,
+    },
+    "unheard": {
+        "title": "Service as usual",
+        "premise": "It kept. The shift starts as though the night had gone the way nights go.",
+        "opening": "Nine in the morning, and the prep list is on the pass in Ruben's "
+                   "handwriting as though nothing about last night needs discussing.",
+        "positions": {"Dessa Vane": "the kitchen", "Ruben Ott": "the kitchen",
+                      "Inês Cardoso": "the loading bay"},
+        "hours_later": 5,
+    },
+}
+
+
 class Scripted(FakeLLM):
-    """A model that answers the two design questions, and whatever else
-    the engine asks, with something readable."""
+    """A model that answers the design questions, and whatever else the
+    engine asks, with something readable."""
 
     def __init__(self, world=None, scene=None, repair="A room, and nothing in it to say.",
-                 extras=None):
+                 extras=None, after=None):
         super().__init__()
         self.world = WORLD if world is None else world
         self.scene = SCENE if scene is None else scene
         self.extras = EXTRAS if extras is None else extras
+        self.after = AFTER if after is None else after
         self.repair = repair
 
     def complete(self, system: str, prompt: str, key: str | None = None) -> str:
@@ -97,6 +126,8 @@ class Scripted(FakeLLM):
             return json.dumps(self.scene)
         if key == "invent:complications":
             return json.dumps(self.extras)
+        if key == "invent:aftermath":
+            return json.dumps(self.after)
         if key == "invent:repair":
             return self.repair
         return super().complete(system, prompt, key)
@@ -697,3 +728,164 @@ def test_a_generated_pressure_becomes_eligible_once_the_scene_has_run(root):
     assert is_eligible(first, after(9), world.facts), "and then the room has an opinion"
     # It waits on the secret, so somebody saying it out loud stops it.
     assert not is_eligible(first, after(9, "You made a copy of the key."), world.facts)
+
+
+# --- and where the story goes from there -------------------------------
+#
+# A scene stops; a story goes somewhere. A generated world used to be one
+# room's worth of conversation and then nothing, which is the shape of a
+# character-chat app rather than of a story. So the world now comes with
+# the two mornings after — and which one gets played is decided by who
+# was standing there when it finally came out, which is the one place the
+# asymmetry pays a *story* back rather than only a projection.
+
+
+def test_a_generated_story_goes_somewhere(root):
+    made = invent("a heist in a hotel kitchen", Scripted(), worlds_root=root)
+    first = load_scene(made.world_dir, made.scene)
+
+    followed = [load_scene(made.world_dir, s["scene"]) for s in first.next]
+
+    assert len(followed) == 2, "two mornings, and which one depends on you"
+    assert all(s.opening for s in followed)
+    assert all(s.start_time > first.start_time for s in followed), "later, not again"
+    assert complaints(made.world_dir) == []
+
+
+def test_the_same_ending_leads_to_two_different_mornings(root):
+    """Consequence, which is the point of having a second scene at all."""
+    made = invent("a heist", Scripted(), worlds_root=root)
+    world = load_world(made.world_dir)
+    characters = load_characters(made.world_dir)
+    first = load_scene(made.world_dir, made.scene)
+
+    def ending(*happened) -> str | None:
+        events = [
+            Event(
+                id=seq, scene_id=first.id, seq=seq, story_time=first.start_time,
+                location_id="the_kitchen", audibility="room", **what,
+            )
+            for seq, what in enumerate(happened, start=1)
+        ]
+        return next_scene(
+            first.next, scene_state(events, characters, world), world.facts
+        )
+
+    said = {"kind": "utterance", "actor_id": "ruben_ott",
+            "content": "Fine — I had a copy of the key."}
+    # Inês starts in the loading bay. Whether she is in the room for it is
+    # something that happens, not something the scene set up.
+    came_in = {"kind": "arrival", "actor_id": "ines_cardoso",
+               "content": "Inês comes in from the loading bay."}
+
+    assert ending(said) == "service_as_usual", "she never came in"
+    assert ending(came_in, said) == "what_the_freezer_knew", "she was standing there"
+
+
+def test_the_branch_is_built_here_rather_than_asked_for(root):
+    """A condition is a thing this file can build and a morning is not, so
+    the model is told the two situations in words and writes the prose."""
+    made = invent("a heist", Scripted(), worlds_root=root)
+    world = load_world(made.world_dir)
+    characters = load_characters(made.world_dir)
+    first = load_scene(made.world_dir, made.scene)
+
+    specific, fallback = first.next
+
+    assert set(specific["when"]) <= _KNOWN_TRIGGER_KEYS
+    assert "when" not in fallback, "the fallback decides nothing, so it asks nothing"
+    for who, room in specific["when"]["character_at"].items():
+        assert who in characters and room in world.rooms
+        assert not characters[who].is_user, "the player is not their own witness"
+
+
+def test_the_witness_is_not_the_one_keeping_it(root):
+    """They are the person it is news to. Branching on the keeper being in
+    the room would be branching on whether he was there to say it."""
+    made = invent("a heist", Scripted(), worlds_root=root)
+    characters = load_characters(made.world_dir)
+    first = load_scene(made.world_dir, made.scene)
+
+    who = next(iter(first.next[0]["when"]["character_at"]))
+
+    assert who == "ines_cardoso"
+    assert "the_second_key" not in characters[who].protects
+
+
+def test_a_two_hander_falls_back_to_whether_he_stayed(root):
+    """With nobody but the person keeping it, the question is whether he
+    was still standing there when it came out or had walked off first."""
+    world = dict(WORLD, characters=WORLD["characters"][:2])
+
+    made = invent("a heist", Scripted(world=world), worlds_root=root)
+    first = load_scene(made.world_dir, made.scene)
+
+    assert next(iter(first.next[0]["when"]["character_at"])) == "ruben_ott"
+    assert complaints(made.world_dir) == []
+
+
+def test_a_morning_that_keeps_naming_the_secret_is_not_shipped(root):
+    """A scene opening is perceived in full before the story's first line,
+    so a keyword in one raises the subject before anybody has spoken."""
+    after = {
+        "heard": dict(AFTER["heard"], opening="Nobody has mentioned the second key."),
+        "unheard": AFTER["unheard"],
+    }
+
+    made = invent("a heist", Scripted(after=after, repair="Still about the second key."),
+                  worlds_root=root)
+    first = load_scene(made.world_dir, made.scene)
+
+    assert [s["scene"] for s in first.next] == ["service_as_usual"]
+    assert "when" not in first.next[0], "one morning either way decides nothing"
+    assert any("kept naming the secret" in note for note in made.dropped)
+    assert complaints(made.world_dir) == []
+
+
+def test_a_world_whose_second_act_failed_is_smaller_not_broken(root):
+    """A story that stops after one scene is smaller than the one asked
+    for, and still a story. Losing the world over its second act is not."""
+
+    class NoAftermath(Scripted):
+        def complete(self, system, prompt, key=None):
+            if key == "invent:aftermath":
+                return "Here you go!"
+            return super().complete(system, prompt, key)
+
+    made = invent("a heist", NoAftermath(), worlds_root=root)
+    first = load_scene(made.world_dir, made.scene)
+
+    assert first.next == []
+    assert any("the story stops when it ends" in note for note in made.dropped)
+    assert complaints(made.world_dir) == []
+
+
+def test_the_story_can_actually_be_crossed(root):
+    """Not a menu of scenes. The engine walks the seam it wrote, carrying
+    what the first scene did to everybody."""
+    made = invent("a heist", Scripted(), worlds_root=root)
+    session = Session.open(made.world_dir, made.scene, llm=FakeLLM())
+
+    assert session.next_scene() is not None
+    session.say("You made a copy of the key, didn't you.")
+    assert session.ended()
+
+    second = session.go_on()
+
+    assert second.scene.id in {"service_as_usual", "what_the_freezer_knew"}
+    assert second.scene.next == [], "the story ends there, and says so"
+    assert second.perceived_so_far()[0].event.metadata.get("opening")
+    second.close()
+
+
+def test_the_mornings_are_chapters_rather_than_starting_points(root):
+    """Starting cold in chapter three is how a menu of scenes reads, and
+    the shelf derives that from what was written rather than a flag — so
+    a generated world has to be written the way one that says so is."""
+    made = invent("a heist", Scripted(), worlds_root=root)
+
+    listed = catalogue(root)[0]["scenes"]
+    opens = [s["id"] for s in listed if s["opens"]]
+
+    assert opens == [made.scene], "one way in, and it is the beginning"
+    assert len(listed) == 3

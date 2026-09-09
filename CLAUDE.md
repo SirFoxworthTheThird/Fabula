@@ -115,9 +115,16 @@ made-up one is a world that cannot be played rather than a pressure that misfire
 generated pressure only ever narrates, a generated intention is never the player's, and a
 complications call that fails loses the complications rather than the world.
 
-What a generated world still does not have against a hand-written one: **one scene, and
-nothing after it.** No successors, no goals, no items — so it converses and escalates and
-then stops, where the shipped worlds go somewhere.
+And it goes somewhere: the first scene is over when the secret is said out loud, and what
+follows is one of two mornings, chosen by whether the one person it is news to was standing
+there for it. That branch is built in `invent.py` and never asked for — the model is told
+the two situations in words and writes the prose — which is the one place the asymmetry
+pays a *story* back rather than only a projection.
+
+What a generated world still does not have against a hand-written one: no goals, no items,
+and only ever the one shape of story — a secret, and the morning after it came out. Every
+premise gets that shape, which is the same mistake as the shipped worlds all being quiet
+literary drama, arrived at from the other direction.
 
 The first dent: **the character you play is yours.** A name and a line about how
 you come across, chosen where you pick the story, with the name substituted through every

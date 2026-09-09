@@ -28,6 +28,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fabula.loader import load_characters, load_pressures, load_scene, load_world
+from fabula.pressures import _KNOWN_TRIGGER_KEYS
 from fabula.world import _fold, mentions_fact
 
 
@@ -50,6 +51,32 @@ def _named_facts(condition: dict) -> list[str]:
         value = condition.get(key)
         named += [value] if isinstance(value, str) else list(value or [])
     return named
+
+
+def _condition(condition: dict, about: str, world, characters) -> list[str]:
+    """Everything wrong with one authored condition.
+
+    The same vocabulary says when a pressure fires, when a scene is over
+    and where the story goes next, so it is checked in one place for all
+    three. An unrecognised key is the sharp one: `evaluate_trigger`
+    raises on it rather than quietly passing, which is right at runtime
+    and means an author who invents `after_turns` has written a world
+    that ends the scene it is in with a traceback.
+    """
+    found: list[str] = []
+    unknown = sorted(set(condition) - _KNOWN_TRIGGER_KEYS)
+    if unknown:
+        found.append(f"{about} on {', '.join(unknown)}, which is not something it can ask")
+    for fact_id in _named_facts(condition):
+        if fact_id not in world.facts:
+            found.append(f"{about} on {fact_id}, which is not a fact")
+    for key in ("character_at", "character_not_at"):
+        for character_id, room in (condition.get(key) or {}).items():
+            if character_id not in characters:
+                found.append(f"{about} on {character_id}, who does not exist")
+            elif room not in world.rooms:
+                found.append(f"{about} on {character_id} being in {room}, which is not a room")
+    return found
 
 
 def complaints(world_dir: Path) -> list[str]:
@@ -161,13 +188,9 @@ def complaints(world_dir: Path) -> list[str]:
             found.append(f"pressure {pressure.id} fires in a room that does not exist")
         if effect.get("actor") and effect["actor"] not in characters:
             found.append(f"pressure {pressure.id} acts as somebody who does not exist")
-        for fact_id in _named_facts(pressure.trigger):
-            if fact_id not in world.facts:
-                found.append(f"pressure {pressure.id} triggers on {fact_id}, which is not a fact")
-        for key in ("character_at", "character_not_at"):
-            for cid, room in (pressure.trigger.get(key) or {}).items():
-                if cid not in characters or room not in world.rooms:
-                    found.append(f"pressure {pressure.id} triggers on {cid} in {room}")
+        found += _condition(
+            pressure.trigger, f"pressure {pressure.id} triggers", world, characters
+        )
 
     # --- Scenes ---------------------------------------------------------
     for scene in scenes.values():
@@ -185,9 +208,9 @@ def complaints(world_dir: Path) -> list[str]:
         for cid, room in scene.starting_positions.items():
             if cid not in characters or room not in world.rooms:
                 found.append(f"scene {scene.id} starts {cid} in {room}")
-        for fact_id in _named_facts(scene.end_condition):
-            if fact_id not in world.facts:
-                found.append(f"scene {scene.id} ends on {fact_id}, which is not a fact")
+        found += _condition(
+            scene.end_condition, f"scene {scene.id} ends", world, characters
+        )
         # An arrival pressure naming somebody outside the room can only
         # fire if the scene said they might turn up; otherwise it appends
         # an event with an actor nobody in the scene has heard of.
@@ -207,9 +230,9 @@ def complaints(world_dir: Path) -> list[str]:
                 found.append(f"scene {scene.id} leads to {following}, which is not a scene")
             elif following == scene.id and not successor.get("when"):
                 found.append(f"scene {scene.id} leads to itself unconditionally")
-            for fact_id in _named_facts(successor.get("when") or {}):
-                if fact_id not in world.facts:
-                    found.append(f"scene {scene.id} branches on {fact_id}, which is not a fact")
+            found += _condition(
+                successor.get("when") or {}, f"scene {scene.id} branches", world, characters
+            )
 
     return found
 

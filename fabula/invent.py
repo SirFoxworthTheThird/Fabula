@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import timedelta
 from pathlib import Path
 
 import yaml
@@ -39,10 +40,16 @@ import yaml
 from fabula.discovery import slug
 from fabula.inspect import complaints, words_in
 from fabula.llm import LLMClient
+from fabula.loader import Scene
 from fabula.world import mentions_fact
 
 # How many rewrites a piece of prose gets before it is dropped instead.
 REPAIRS = 2
+
+# When a generated story starts. Taken from the loader's own default so
+# the two do not drift: the aftermath scenes are this plus the hours the
+# model asked for, and that arithmetic has to be against the real value.
+BEGINS = Scene.model_fields["start_time"].default
 
 
 # The names in the example the model is shown. Small models hand the
@@ -200,6 +207,37 @@ Rules that matter:
 - Two or three pressures, one or two intentions."""
 
 
+# Where the story goes once the secret is out. The branch is not asked
+# for — the engine names the two situations and the model writes the
+# prose for each, because a condition is a thing this file can build and
+# a morning is not.
+AFTERMATH_SYSTEM = """You write what happens the morning after, for a roleplaying story engine. You are given a scene that ends when a secret is finally said out loud, and you write the two scenes that could follow it. Answer with one JSON object and nothing else, in the same shape as this one:
+
+{
+  "heard": {
+    "title": "The morning after",
+    "premise": "Whatever was said last night, everyone woke up in the same house.",
+    "opening": "Morning, and the kettle is on. Nobody has mentioned last night. Maria went into the study before you came down and has not come out of it.",
+    "positions": {"Elena Rey": "the kitchen", "Tomas Rey": "the kitchen", "Maria Rey": "the study"},
+    "hours_later": 13
+  },
+  "unheard": {
+    "title": "Nobody said a word",
+    "premise": "It kept. Breakfast, as though the evening had not happened.",
+    "opening": "Breakfast, all three of you at the table, and the evening behind you filed away as though it had gone the way these evenings usually go. It did not.",
+    "positions": {"Elena Rey": "the kitchen", "Tomas Rey": "the kitchen", "Maria Rey": "the kitchen"},
+    "hours_later": 13
+  }
+}
+
+Rules that matter:
+- Same place, same people, later. Nobody new, nowhere new: you are writing a morning, not a sequel.
+- The difference between the two is who was standing there. You are told whose presence decides it; write `heard` as the morning after they were, and `unheard` as the morning after they were not — in that one they still do not know, and are the only person at the table who does not.
+- An opening is read by the player and by nobody else, so it may say what only they would know. It must never contain the secret's exact words: each scene counts the subject as unraised until somebody says it out loud in that scene.
+- Say what is different about the morning, not what anybody is thinking or has decided.
+- `hours_later` is how long after the first scene this one begins."""
+
+
 def _traits(character: dict) -> dict:
     def number(key: str, fallback: float) -> float:
         try:
@@ -288,6 +326,34 @@ def invent(
         # the part that escalates it would be the wrong trade.
         built["extras"] = {}
         built["quiet"] = True
+
+    # And where it goes once the secret is out. Asked last, because it is
+    # the only call that needs to know both what the scene ends on and
+    # whose being in the room decides what that costs.
+    ends_on = _ends_on(scene, built["facts"])
+    built["witness"] = witness(built, ends_on)
+    if ends_on and built["witness"]:
+        seen = built["cast"][built["witness"]]
+        try:
+            built["after"] = _ask(
+                llm,
+                AFTERMATH_SYSTEM,
+                f"The story: {premise}\n\n"
+                f"Rooms: {rooms}\n"
+                f"Who is in it: {who}\n"
+                f"The player is {built['player_name']}.\n"
+                f"The scene ends when {ends_on.replace('_', ' ')} is finally said out "
+                f"loud, in {built['rooms'][built['cast'][built['player_id']]['location_id']]['name']}.\n"
+                f"Whether {seen['name']} was standing there when it came out is what "
+                f"decides which of the two mornings gets played.\n\n"
+                "Write both mornings.",
+                key="invent:aftermath",
+            )
+        except CannotInvent:
+            # Same trade as the complications: a story that stops after
+            # one scene is smaller than the one asked for, and still a
+            # story. Losing the world over its second act is not.
+            built["after"] = {}
 
     made = _write(world_dir, built, scene, premise)
     if not made.opening:
@@ -650,6 +716,181 @@ def _intentions(built: dict, repaired: list, dropped: list) -> dict[str, list[di
     return theirs
 
 
+def _positions(named: dict | None, built: dict) -> dict[str, str]:
+    """Who starts where, by name, resolved to ids that exist.
+
+    Anybody the model forgot starts where their own file puts them, and
+    the player never opens on an empty room: a first scene with nobody in
+    it is the app asking somebody to entertain themselves.
+    """
+    positions: dict[str, str] = {}
+    for name, room_name in (named or {}).items():
+        person = next(
+            (
+                cid
+                for cid, c in built["cast"].items()
+                if c["name"].strip().lower() == str(name).strip().lower()
+            ),
+            None,
+        )
+        room = next(
+            (
+                rid
+                for rid, r in built["rooms"].items()
+                if r["name"].strip().lower() == str(room_name).strip().lower()
+            ),
+            None,
+        )
+        if person and room:
+            positions[person] = room
+    for person_id, person in built["cast"].items():
+        positions.setdefault(person_id, person["location_id"])
+    player_room = positions[built["player_id"]]
+    if all(room != player_room for cid, room in positions.items() if cid != built["player_id"]):
+        other = next(cid for cid in positions if cid != built["player_id"])
+        positions[other] = player_room
+    return positions
+
+
+def _ends_on(scene: dict, facts: dict) -> str | None:
+    """The secret this scene is over the moment somebody says out loud."""
+    said = str(scene.get("ends_when") or "").strip().lower()
+    return next(
+        (
+            fact_id
+            for fact_id in facts
+            if fact_id == slug(said)
+            or said in [k.lower() for k in facts[fact_id]["keywords"]]
+        ),
+        next(iter(facts), None),
+    )
+
+
+def witness(built: dict, ends_on: str | None) -> str | None:
+    """Whose being in the room decides which morning this becomes.
+
+    The point of difference is that the same sentence lands differently
+    depending on who heard it, and this is where that pays a story back
+    rather than only a projection: the branch is *who was standing there*.
+
+    So: somebody who is neither the player nor the person keeping it —
+    they are the one it is news to — and preferably somebody who does not
+    start in the room, because then their being there at the end is
+    something that happened rather than something that was set up.
+    """
+    cast, player_id = built["cast"], built["player_id"]
+    here = cast[player_id]["location_id"]
+    others = [
+        cid for cid in cast
+        if cid != player_id and (ends_on is None or ends_on not in cast[cid]["protects"])
+    ]
+    elsewhere = [cid for cid in others if cast[cid]["location_id"] != here]
+    if elsewhere:
+        return elsewhere[0]
+    if others:
+        return others[0]
+    # A two-hander: nobody but the person keeping it. Then the question
+    # is whether they were still standing there when it came out, or had
+    # walked off first.
+    return next((cid for cid in cast if cid != player_id), None)
+
+
+def _after(
+    world_dir: Path,
+    built: dict,
+    first: str,
+    positions: dict,
+    ends_on: str | None,
+    premise: str,
+    repaired: list,
+    dropped: list,
+) -> list[dict]:
+    """The mornings after, and the branch between them.
+
+    A story goes somewhere; a scene stops. Until this existed a generated
+    world was one room's worth of conversation and then nothing, which is
+    the shape of a character-chat app and not of a story.
+
+    The branch is built here and never asked for. `character_at` reads
+    where somebody is standing when the scene is over, which is a proxy
+    for who was there when it came out — the same proxy the hand-written
+    worlds use, and the only one the condition language can see.
+    """
+    after, cast = built.get("after") or {}, built["cast"]
+    if not ends_on or not after:
+        # Nothing to be the morning *after*: a scene with no ending has no
+        # sequel, and a branch on a fact this world does not have would be
+        # a successor nobody could reach.
+        return []
+    heard = _one_morning(world_dir, built, after.get("heard"), first, 1, repaired, dropped)
+    unheard = _one_morning(world_dir, built, after.get("unheard"), first, 2, repaired, dropped)
+    who = built.get("witness")
+    if heard and unheard and who and who != built["player_id"]:
+        # Tried in order, first match winning, so the specific branch has
+        # to come before the fallback.
+        return [
+            {"scene": heard, "when": {"character_at": {who: positions[built["player_id"]]}}},
+            {"scene": unheard},
+        ]
+    # One morning is still somewhere to go. Unconditional, because a
+    # branch with only one side is a condition that decides nothing.
+    only = heard or unheard
+    if only:
+        dropped.append("one of the two mornings — the story goes the same way either way")
+        return [{"scene": only}]
+    return []
+
+
+def _one_morning(
+    world_dir: Path,
+    built: dict,
+    drafted: dict | None,
+    first: str,
+    which: int,
+    repaired: list,
+    dropped: list,
+) -> str:
+    """One aftermath scene, or "" if it could not be made into one."""
+    if not isinstance(drafted, dict):
+        return ""
+    title = " ".join(str(drafted.get("title") or "").split())
+    if not title or title.lower() in EXEMPLAR:
+        title = f"After — {which}"
+    scene_id = slug(title) or f"after_{which}"
+    if scene_id == first:
+        scene_id = f"{scene_id}_after_{which}"
+    opening = _clean(
+        str(drafted.get("opening") or ""), built["facts"], built["llm"],
+        f"the opening of {scene_id}", repaired,
+    )
+    if not opening:
+        # A morning that cannot say what is different about it is not a
+        # scene, it is the same room again with the clock moved.
+        dropped.append(f"the morning after, {title!r}, which kept naming the secret")
+        return ""
+    later = _clamp(drafted.get("hours_later"), 1, 48, 13)
+    _save(
+        world_dir / "scenes" / f"{scene_id}.yaml",
+        {
+            "id": scene_id,
+            "world": world_dir.name,
+            "title": title,
+            "premise": " ".join(str(drafted.get("premise") or built["blurb"]).split()),
+            "opening": opening,
+            # Sandbox: there is no third act to escalate toward, and an
+            # arc with no end condition is a sandbox that pushes for
+            # nothing.
+            "mode": "sandbox",
+            "cast": list(built["cast"]),
+            "starting_positions": _positions(drafted.get("positions"), built),
+            "start_time": BEGINS + timedelta(hours=later),
+            "turn_budget": 6,
+            "max_consecutive_agent_turns": 3,
+        },
+    )
+    return scene_id
+
+
 def _write(world_dir: Path, built: dict, scene: dict, premise: str) -> Invented:
     """Write it out as the YAML an author would have written."""
     llm, facts = built["llm"], built["facts"]
@@ -709,54 +950,21 @@ def _write(world_dir: Path, built: dict, scene: dict, premise: str) -> Invented:
             },
         )
 
-    positions = {}
-    for name, room_name in (scene.get("positions") or {}).items():
-        person = next(
-            (
-                cid
-                for cid, c in built["cast"].items()
-                if c["name"].strip().lower() == str(name).strip().lower()
-            ),
-            None,
-        )
-        room = next(
-            (
-                rid
-                for rid, r in built["rooms"].items()
-                if r["name"].strip().lower() == str(room_name).strip().lower()
-            ),
-            None,
-        )
-        if person and room:
-            positions[person] = room
-    for person_id, person in built["cast"].items():
-        positions.setdefault(person_id, person["location_id"])
-    # Somebody to talk to. A first scene that opens on an empty room is
-    # the app asking the player to entertain themselves.
-    player_room = positions[built["player_id"]]
-    if all(room != player_room for cid, room in positions.items() if cid != built["player_id"]):
-        other = next(cid for cid in positions if cid != built["player_id"])
-        positions[other] = player_room
+    positions = _positions(scene.get("positions"), built)
 
     opening = _clean(str(scene.get("opening") or ""), facts, llm, "the opening", repaired)
     if not opening:
         dropped.append("the scene's opening")
-    ends_on = next(
-        (
-            fact_id
-            for fact_id in facts
-            if fact_id == slug(str(scene.get("ends_when") or ""))
-            or str(scene.get("ends_when") or "").strip().lower() in
-            [k.lower() for k in facts[fact_id]["keywords"]]
-        ),
-        next(iter(facts), None),
-    )
+    ends_on = _ends_on(scene, facts)
     title = " ".join(str(scene.get("title") or "").split())
     if not title or title.lower() in EXEMPLAR:
         # Same leak, in the scene's name: the 3B called its heist "The
         # Dinner", which is what the example's scene is called.
         title = built["title"]
     scene_id = slug(title) or "the_first_scene"
+    onward = _after(
+        world_dir, built, scene_id, positions, ends_on, premise, repaired, dropped
+    )
     _save(
         world_dir / "scenes" / f"{scene_id}.yaml",
         {
@@ -768,14 +976,18 @@ def _write(world_dir: Path, built: dict, scene: dict, premise: str) -> Invented:
             "mode": "arc" if ends_on else "sandbox",
             "cast": list(built["cast"]),
             "starting_positions": positions,
+            "start_time": BEGINS,
             "turn_budget": 6,
             "max_consecutive_agent_turns": 3,
             "end_condition": {"fact_spoken": ends_on} if ends_on else {},
+            "next": onward,
         },
     )
 
     if built.get("quiet"):
         dropped.append("the complications — nothing happens on its own here")
+    if not onward:
+        dropped.append("everything after the first scene — the story stops when it ends")
     return Invented(
         world_dir=world_dir,
         title=built["title"],

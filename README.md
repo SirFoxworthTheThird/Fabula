@@ -196,6 +196,40 @@ alone — and the machinery is built here:
   runs on the people in it, and the CLI says so: `dropped: the complications — nothing
   happens on its own here`.
 
+And it writes **where the story goes from there**, which is the difference between a story
+and a menu of scenes. The first scene is over the moment the secret is finally said out
+loud; what follows is the morning after, and there are two of them:
+
+```yaml
+next:
+  - scene: what_the_freezer_knew
+    when: {character_at: {ines_cardoso: the_kitchen}}
+  - scene: service_as_usual
+```
+
+The branch is built here and never asked for — a condition is a thing this file can build
+and a morning is not. The engine picks the **witness** (somebody who is neither the player
+nor the person keeping it, preferably somebody who does not start in the room, so their
+being there at the end is something that *happened* rather than something that was set up),
+names both situations to the model in plain words, and the model writes the two mornings.
+Which is the one place the asymmetry pays a *story* back rather than only a projection:
+the same sentence lands differently depending on who was standing there.
+
+`character_at` reads where somebody is when the scene is over, which is a proxy for who
+heard it — the same proxy the hand-written worlds use, and the only one the condition
+language can see. If only one morning survives the prose repair it becomes the
+unconditional successor, because a branch with one side is a condition that decides
+nothing; if the call fails, the story stops after one scene and the CLI says so. The
+shelf marks both mornings as chapters rather than starting points, derived from the
+`next` that names them, so nobody is offered chapter three cold.
+
+While generated worlds were getting branches, `inspect.py` learned to check every authored
+condition — a pressure trigger, a scene's ending, a branch — in one place: that its keys
+are ones the evaluator knows, and that the people and rooms it names exist. The unknown key
+is the sharp one, because `evaluate_trigger` raises on it rather than quietly passing, so
+an author who invents `after_turns` had written a world that ends the scene it is in with a
+traceback instead of a morning.
+
 Cost is a handful of calls, once, when the world is made: not per turn, not per character.
 
 Measured on local models, because a generator is exactly the kind of thing that works on
