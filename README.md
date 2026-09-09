@@ -481,7 +481,7 @@ the HTTP wire.
 |---|---|---|
 | `world.py` | Rooms, adjacency, who perceives what | **None, ever** |
 | `memory.py` | Projection, tiering, decay, retrieval | Summarization only |
-| `director.py` | Speaker selection, pressures, time, turn budget | No — arbitration is argmax over bids |
+| `director.py` | Speaker selection, pressures, time, turn budget | Only to pick a beat from the offered ids |
 | `beats.py` | What the room could use next, from a closed set | **None, ever** |
 | `narrator.py` | Describes perceivable action; renders pressures | Yes |
 | `agents.py` | Bids to speak; generates utterances | Yes |
@@ -516,12 +516,20 @@ from a closed set, plus something anybody standing there can already see:
 | `alone` | the player spoke and nobody is there | — |
 | `arrival` / `departure` / `time_skip` | the story moved | — |
 
-Chosen by code in `beats.py` from the event log and the world — never from beliefs,
-trust, goals or what anybody protects, and never by a model, so it costs nothing and is
-the same every time. Atmosphere beats wait for `COOLDOWN` events of quiet in *that room*;
-an arrival never waits, because losing it is worse than one paragraph too many. And every
-narration is checked before it lands: one that names a world fact is dropped, because it
-would raise the subject in front of the room and end an arc nobody had spoken in.
+Which beats are *available* is decided by code in `beats.py` from the event log and the
+world — never from beliefs, trust, goals or what anybody protects. Which one the moment
+wants is a judgement, so the director asks the model: it answers with one id, the id has
+to be one it was offered, and anything else falls back to the engine's order. It cannot
+invent a beat, write an instruction, or reach past the closed vocabulary, and what it is
+shown is what the room can see, because its whole job is picking between three labels.
+That call is made only once the narrator has won the turn and only when more than one
+beat is available — 1 to 2 extra calls across four player lines, measured. `--no-direct`,
+or the checkbox in the settings panel, takes them in the engine's order instead.
+
+Atmosphere beats wait for `COOLDOWN` events of quiet in *that room*; an arrival never
+waits, because losing it is worse than one paragraph too many. And every narration is
+checked before it lands: one that names a world fact is dropped, because it would raise
+the subject in front of the room and end an arc nobody had spoken in.
 
 And a turn always answers. If nobody bids and no beat is due, the room takes the turn
 rather than nobody having it — *perceived*, not merely appended, because a pressure firing

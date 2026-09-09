@@ -88,6 +88,7 @@ class Session:
         store: EventStore | None = None,
         workers: int = DEFAULT_WORKERS,
         player: Player | None = None,
+        direct_beats: bool = True,
     ) -> Session:
         world, characters, scene = load_scenario(world_dir, scene_name, player)
         called = None
@@ -145,6 +146,7 @@ class Session:
             interpret_beliefs=interpret_beliefs,
             waiting=waiting,
             workers=workers,
+            direct_beats=direct_beats,
         )
 
         # Characters are durable: with a real db path they arrive carrying
@@ -279,6 +281,7 @@ class Session:
         llm: LLMClient | None,
         workers: int | None = None,
         interpret_beliefs: bool | None = None,
+        direct_beats: bool | None = None,
     ) -> None:
         """Change which model answers, mid-story.
 
@@ -297,6 +300,8 @@ class Session:
             self.director.workers = workers
         if interpret_beliefs is not None:
             self.director.interpret_beliefs = interpret_beliefs
+        if direct_beats is not None:
+            self.director.direct_beats = direct_beats
 
     def close(self) -> None:
         """Settle the scene and let go of the database.
@@ -421,6 +426,7 @@ class Session:
             interpret_beliefs=self.director.interpret_beliefs,
             store=self.store,
             workers=self.director.workers,
+            direct_beats=self.director.direct_beats,
         )
 
     def items_here(self) -> list[Item]:

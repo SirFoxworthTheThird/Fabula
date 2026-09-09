@@ -598,6 +598,12 @@
           <span class="hint">— most of a turn's calls, and what makes a memory more than an echo</span>
         </span>
       </label>
+      <label class="check">
+        <input type="checkbox" id="direct">
+        <span>Let the director choose what gets narrated
+          <span class="hint">— one call per narration, when the moment could be more than one thing</span>
+        </span>
+      </label>
       <div class="save">
         <button type="button" class="primary" id="save-settings">Save</button>
         <span class="notice" id="settings-notice"></span>
@@ -1243,6 +1249,7 @@ async function showSettings() {
   el("api-base").value = current.api_base;
   el("workers").value = current.workers;
   el("interpret").checked = current.interpret;
+  el("direct").checked = current.direct;
 
   const state = el("model-state");
   state.classList.toggle("warn", current.placeholder || Boolean(current.unreachable));
@@ -1261,7 +1268,7 @@ async function showSettings() {
     state.textContent = "Stories run on whatever your environment implies. Name a model to be sure.";
   }
 
-  for (const id of ["model", "api-base", "workers", "interpret", "save-settings"]) {
+  for (const id of ["model", "api-base", "workers", "interpret", "direct", "save-settings"]) {
     el(id).disabled = current.pinned;
   }
 
@@ -1299,6 +1306,7 @@ el("save-settings").onclick = async () => {
       api_base: el("api-base").value,
       workers: Number(el("workers").value) || 1,
       interpret: el("interpret").checked,
+      direct: el("direct").checked,
     });
     await showSettings();
     notice.textContent = "Saved.";

@@ -74,6 +74,11 @@ issuing them after each event — in-scene beliefs are only read back by the rev
 the guard on a reading itself, so a turn's readings could be one batch rather than eight.
 That one changes when a belief becomes durable within a turn, so it is not free.
 
+The narration beats cost one call each, and the director choosing between them costs one
+more per narration — measured at 1 to 2 extra calls across four player lines, because the
+choice is only made once the narrator has won the turn and only when the moment could be
+more than one thing.
+
 The rule to carry: a feature that adds a per-character or per-moment model call is
 spending somebody's money and somebody's patience. Decide how it will be paid for while
 designing it, not afterwards. `--no-interpret` is a symptom of not having done that.

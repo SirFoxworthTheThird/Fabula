@@ -218,6 +218,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Skip the per-memory reading — most of a scene's model calls",
     )
+    parser.add_argument(
+        "--no-direct",
+        action="store_true",
+        help="Take beats in the engine's order instead of asking the model to choose",
+    )
     parser.add_argument("--port", type=int, default=8000, help="Where the app listens")
     parser.add_argument(
         "--no-browser",
@@ -250,6 +255,7 @@ def main(argv: list[str] | None = None) -> None:
     interpret = settings.interpret and not args.no_interpret
     opening = {
         "interpret_beliefs": interpret,
+        "direct_beats": settings.direct and not args.no_direct,
         "workers": args.workers if args.workers is not None else settings.workers,
     }
 

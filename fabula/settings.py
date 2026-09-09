@@ -47,6 +47,10 @@ class Settings:
     # The per-memory reading. It is most of a scene's model calls, so it
     # is the one knob that visibly changes what a turn costs.
     interpret: bool = True
+    # Whether the director chooses which beat the narrator writes, rather
+    # than taking them in the order the engine offers. One call per
+    # narration, and only when the moment could be more than one thing.
+    direct: bool = True
     # How many of a turn's independent calls may be in flight at once.
     workers: int = DEFAULT_WORKERS
 
@@ -92,6 +96,7 @@ def describe(settings: Settings) -> dict:
         "model": settings.model,
         "api_base": settings.api_base,
         "interpret": settings.interpret,
+        "direct": settings.direct,
         "workers": settings.workers,
         # What a story started right now would actually run on.
         "using": settings.model or ("a model from the environment" if keys_present() else ""),

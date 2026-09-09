@@ -126,7 +126,13 @@ def test_a_saved_choice_is_on_disk_and_has_no_credential_in_it(client, settings_
 
     assert saved.status_code == 200
     stored = json.loads(settings_file.read_text())
-    assert stored == {"model": "gpt-4o-mini", "api_base": "", "interpret": False, "workers": 2}
+    assert stored == {
+        "model": "gpt-4o-mini",
+        "api_base": "",
+        "interpret": False,
+        "direct": True,
+        "workers": 2,
+    }
     assert "not-a-real-key" not in settings_file.read_text()
 
 

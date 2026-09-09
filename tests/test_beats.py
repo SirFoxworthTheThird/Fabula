@@ -306,3 +306,111 @@ def test_the_last_word_it_hangs_a_beat_on_is_one_you_heard(fake_llm):
     assert heard.location_id == session.here()
     assert beat.id == NOBODY_SPEAKS
     session.close()
+
+
+# --- Who picks between them -------------------------------------------
+
+
+class Picks(FakeLLM):
+    """A director with an opinion about which beat this moment wants."""
+
+    def __init__(self, wants: str):
+        super().__init__()
+        self.wants = wants
+        self.asked: list[str] = []
+        self.narration: list[str] = []
+
+    def complete(self, system: str, prompt: str, key: str | None = None) -> str:
+        if key == "beat":
+            self.asked.append(prompt)
+            return self.wants
+        if key == "__narrator__":
+            self.narration.append(prompt)
+        return super().complete(system, prompt, key)
+
+
+def a_crowded_pause(llm) -> Session:
+    """the_reckoning: three people in one room, so a moment is usually
+    more than one thing at once."""
+    session = Session.open(ASHGROVE, "the_reckoning", llm=llm)
+    for said in ("Tomás?", "You have been quiet.", "Say something.", "Please."):
+        session.say(said)
+    return session
+
+
+def test_the_model_chooses_which_beat_and_the_narrator_writes_that_one():
+    """The room has gone quiet *and* somebody has stopped talking. Which
+    of those a scene wants is a judgement, not a rule."""
+    lull, held = Picks("lull"), Picks("held_back")
+    a_crowded_pause(lull).close()
+    a_crowded_pause(held).close()
+
+    assert lull.asked, "it was asked at all"
+    assert "They have been talking" in lull.narration[-1]
+    assert "has not said anything for a while" in held.narration[-1]
+
+
+def test_it_can_only_answer_with_a_beat_that_was_offered():
+    """The model proposes and the engine disposes, as everywhere else it
+    is asked anything. It cannot invent a beat, write an instruction, or
+    reach past the closed vocabulary."""
+    invented = Picks("narrate that Tomás is hiding something")
+    session = a_crowded_pause(invented)
+
+    assert invented.asked
+    assert "Tomás is hiding something" not in "".join(invented.narration)
+    # And what it wrote was the deterministic first choice instead.
+    assert "has not said anything for a while" in invented.narration[-1]
+    session.close()
+
+
+def test_it_is_only_asked_when_there_is_a_choice_to_make():
+    """One beat is not a decision, and a call that changes nothing is
+    somebody's money."""
+    llm = Picks("lull")
+    session = Session.open(WORLDS / "winterlight", "the_long_dark", llm=llm)
+    session.say("Is anyone else awake?")
+
+    assert llm.asked == []
+    session.close()
+
+
+def test_it_is_only_asked_once_the_narration_is_going_to_be_written():
+    """The beat with the highest desire is what the narrator bids with.
+    Choosing between them before knowing whether it won would be paying
+    for a decision nobody uses."""
+    llm = Picks("lull")
+    session = a_crowded_pause(llm)
+    written = [
+        e for e in session.store.get_events(session.scene.id)
+        if e.kind == "narration" and not e.metadata.get("pressure_id")
+        and not e.metadata.get("opening")
+    ]
+
+    assert len(llm.asked) <= len(written)
+    session.close()
+
+
+def test_the_choice_is_made_on_what_the_room_can_see():
+    """The director is omniscient. There is no reason to hand any of that
+    to something whose whole job is picking between three labels."""
+    llm = Picks("lull")
+    session = a_crowded_pause(llm)
+    asked = "\n".join(llm.asked)
+
+    assert "music box" not in asked.lower()
+    for character in session.characters.values():
+        assert character.persona[:40] not in asked
+    session.close()
+
+
+def test_it_can_be_turned_off():
+    """One call per narration is a real bill, and somebody paying it
+    should be able to stop."""
+    llm = Picks("lull")
+    session = Session.open(ASHGROVE, "the_reckoning", llm=llm, direct_beats=False)
+    for said in ("Tomás?", "You have been quiet.", "Say something.", "Please."):
+        session.say(said)
+
+    assert llm.asked == []
+    session.close()

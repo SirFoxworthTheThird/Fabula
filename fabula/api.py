@@ -162,6 +162,7 @@ class NewSettings(BaseModel):
     model: str = ""
     api_base: str = ""
     interpret: bool = True
+    direct: bool = True
     workers: int = DEFAULT_WORKERS
 
 
@@ -309,6 +310,7 @@ def create_app(
             "llm": llm if pinned else settings.client(),
             "workers": workers if workers is not None else settings.workers,
             "interpret_beliefs": settings.interpret,
+            "direct_beats": settings.direct,
         }
 
     def get_live(session_id: str) -> _LiveSession:
@@ -557,6 +559,7 @@ def create_app(
             model=body.model.strip(),
             api_base=body.api_base.strip(),
             interpret=body.interpret,
+            direct=body.direct,
             workers=max(1, min(body.workers, 32)),
         )
         unreachable = wanted.unreachable()
@@ -566,13 +569,16 @@ def create_app(
         settings.model = wanted.model
         settings.api_base = wanted.api_base
         settings.interpret = wanted.interpret
+        settings.direct = wanted.direct
         settings.workers = wanted.workers
         settings.save(settings_file)
         # A story already open changes model too. Nothing about it moves:
         # the log, the beliefs and the trust are the engine's; the model
         # is only who gets asked next.
         for entry in live.values():
-            entry.session.use(settings.client(), settings.workers, settings.interpret)
+            entry.session.use(
+                settings.client(), settings.workers, settings.interpret, settings.direct
+            )
         return dict(describe(settings), pinned=pinned)
 
     @app.get("/catalogue")

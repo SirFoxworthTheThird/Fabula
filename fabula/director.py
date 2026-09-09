@@ -47,6 +47,7 @@ from fabula.persistence import (
 )
 from fabula.models import Belief, Bid, Character, Event, Intention, Pressure, ProjectedEvent
 from fabula.beats import NOBODY_SPEAKS, Beat
+from fabula.beats import available as available_beats
 from fabula.beats import choose as choose_beat
 from fabula.narrator import NARRATOR_ID, Narrator, as_bid
 from fabula.pressures import scene_state, select_pressure
@@ -136,6 +137,7 @@ class Director:
         waiting: dict[str, Character] | None = None,
         classify_reports: bool = True,
         workers: int = DEFAULT_WORKERS,
+        direct_beats: bool = True,
     ):
         self.store = store
         self.world = world
@@ -150,6 +152,11 @@ class Director:
         # Reading a line for what it reports costs a model call, but only
         # for a line that names one of the world's facts — almost none do.
         self.classify_reports = classify_reports
+        # Whether the model gets to choose which beat the narrator
+        # writes. One call per narration, and only when there is more
+        # than one thing the moment could be; off, the first of the
+        # offered beats is taken, which is the deterministic order.
+        self.direct_beats = direct_beats
         # How many of the independent calls in a turn — the bids, the
         # readings — may be in flight at once. Somebody else's endpoint
         # is on the other end of them; 1 is the old sequential engine.
@@ -265,7 +272,7 @@ class Director:
             # id from a closed set plus something anybody standing there
             # can already see — never a sentence, and never anything read
             # from beliefs or trust.
-            beat = choose_beat(
+            offered = available_beats(
                 last_event,
                 all_events,
                 self.world,
@@ -273,6 +280,7 @@ class Director:
                 protagonist_id=self.protagonist_id(),
                 alone=not candidates,
             )
+            beat = offered[0] if offered else None
             bids: list[Bid] = in_parallel(
                 [bid_for(character) for character in candidates], self.workers
             )
@@ -344,6 +352,13 @@ class Director:
                     )
                     == last_event.location_id
                 ]
+                # Which of the moments this could be is a judgement, not
+                # a rule — the room has gone quiet *and* somebody has
+                # stopped talking *and* there is a letter nobody has
+                # picked up. Asked only now, once the narrator has won
+                # the turn, so the call is paid for by a narration that
+                # is definitely being written.
+                beat = self.pick_beat(offered, last_event, here) or beat
                 content = self.narrator.generate(
                     last_event, all_events, self.world, beat=beat, present=here
                 )
@@ -387,6 +402,46 @@ class Director:
                 break
 
         return events_this_turn
+
+    def pick_beat(
+        self, offered: list[Beat], last_event: Event, here: list[str]
+    ) -> Beat | None:
+        """Which of the available beats this moment wants.
+
+        The model proposes and the engine disposes, exactly as everywhere
+        else it is asked anything: it answers with one id, the id has to
+        be one of the ids offered, and anything else falls back to the
+        deterministic first choice. It cannot invent a beat, cannot write
+        an instruction, and cannot reach past the closed vocabulary.
+
+        What it is shown is what the room can see — the same material the
+        narrator gets. The director is omniscient; there is no reason to
+        hand any of that to something whose whole job is picking between
+        three labels.
+        """
+        if self.llm is None or not self.direct_beats or len(offered) < 2:
+            return None
+        options = "\n".join(f"- {beat.id}: {beat.label}" for beat in offered)
+        system = (
+            "You direct a scene in an interactive story. You are choosing what the "
+            "narrator should give a beat to next — not writing it. Answer with one id "
+            "from the list and nothing else."
+        )
+        prompt = (
+            f"Location: {self.world.room_name(last_event.location_id)}\n"
+            + (f"Who is here: {', '.join(here)}\n" if here else "")
+            + f"The last thing that happened ({last_event.kind}): {last_event.content}\n\n"
+            f"What could take the beat:\n{options}\n\n"
+            "Which one does this moment want? Answer with the id alone."
+        )
+        answer = self.llm.complete(system=system, prompt=prompt, key="beat")
+        wanted = (answer or "").strip().strip(".\"'`").lower()
+        for beat in offered:
+            if beat.id == wanted:
+                return beat
+        # A model that answered with a sentence, or with a beat nobody
+        # offered, has said nothing. The scene takes the first one.
+        return None
 
     def _reaches_user(self, event: Event) -> bool:
         """Did the player perceive any of that, at any fidelity?"""

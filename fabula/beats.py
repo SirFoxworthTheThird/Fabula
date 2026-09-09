@@ -60,6 +60,22 @@ QUIET_FOR = 4
 NOBODY_SPEAKS = "nobody_speaks"
 
 
+# How each beat reads to the director choosing between them. Short on
+# purpose: the choice is between kinds of moment, not between sentences.
+LABELS: dict[str, str] = {
+    "the_room": "describe the room itself",
+    "lull": "give the room a beat of its own while they talk",
+    "after_deflection": "hold on the pause where somebody did not answer",
+    "held_back": "put {subject}, who has gone quiet, in the frame",
+    "object": "give {subject} in this room a beat",
+    "alone": "the silence of a room with nobody in it to answer",
+    "nobody_speaks": "the pause where nobody had anything to say",
+    "arrival": "somebody arriving",
+    "departure": "somebody leaving",
+    "time_skip": "the room now that time has moved",
+}
+
+
 @dataclass(frozen=True)
 class Beat:
     """One thing the narrator could do next, and how much it wants to."""
@@ -70,6 +86,10 @@ class Beat:
     # A name, an item, a room: always something already perceivable by
     # anybody standing there. Never a fact, a belief or a motive.
     subject: str = ""
+
+    @property
+    def label(self) -> str:
+        return LABELS.get(self.id, self.reason).format(subject=self.subject)
 
 
 def _spoke_recently(events: list[Event], character_id: str, window: int) -> bool:
@@ -89,14 +109,38 @@ def choose(
     protagonist_id: str | None = None,
     alone: bool = False,
 ) -> Beat | None:
-    """The beat this moment wants, or None to leave the room alone."""
+    """The beat this moment wants most, or None to leave the room alone.
+
+    The first of `available`, which is the deterministic answer and the
+    fallback for every path that cannot or will not ask a model.
+    """
+    offered = available(event, events, world, characters, protagonist_id, alone)
+    return offered[0] if offered else None
+
+
+def available(
+    event: Event,
+    events: list[Event],
+    world: World,
+    characters: dict[str, Character] | None = None,
+    protagonist_id: str | None = None,
+    alone: bool = False,
+) -> list[Beat]:
+    """Everything this moment could take, best first.
+
+    More than one is common — the room has gone quiet *and* somebody has
+    stopped talking *and* there is a letter on the table nobody has
+    picked up — and which of those a scene wants is a judgement rather
+    than a rule. The list is the closed vocabulary; who chooses from it
+    is the caller's business.
+    """
     if not events:
-        return Beat("the_room", 0.9, "establish the scene")
+        return [Beat("the_room", 0.9, "establish the scene")]
 
     # Never gild prose that is already prose: a narration, or a pressure's
     # effect, which the narrator itself just rendered.
     if event.kind == "narration" or event.metadata.get("pressure_id"):
-        return None
+        return []
 
     settled = _recent_narration(events, event.location_id)
 
@@ -107,26 +151,26 @@ def choose(
     # them, and the silence after they speak is not them either.
     if protagonist_id and event.actor_id == protagonist_id:
         if event.kind == "arrival":
-            return Beat("the_room", 0.6, "describe the room they walked into")
+            return [Beat("the_room", 0.6, "describe the room they walked into")]
         if alone:
             # Nobody is here to answer, so refusing to narrate means the
             # turn produces nothing at all. A room that never responds is
             # not a story.
-            return Beat("alone", 0.55, "nobody is here to answer them")
-        return None if settled else _atmosphere(event, events, world, characters)
+            return [Beat("alone", 0.55, "nobody is here to answer them")]
+        return [] if settled else _atmosphere(event, events, world, characters)
 
     if event.kind in ("arrival", "departure", "time_skip"):
-        return Beat(event.kind, 0.7, f"describe the {event.kind}")
+        return [Beat(event.kind, 0.7, f"describe the {event.kind}")]
 
     if settled:
-        return None
+        return []
 
+    offered = _atmosphere(event, events, world, characters)
     # Somebody has just visibly not answered. The room notices a pause
     # like that, and it is the moment most worth holding on.
     if event.metadata.get("withheld"):
-        return Beat("after_deflection", 0.5, "hold on the moment nobody answered")
-
-    return _atmosphere(event, events, world, characters)
+        offered.insert(0, Beat("after_deflection", 0.5, "hold on the moment nobody answered"))
+    return offered
 
 
 def _recent_narration(events: list[Event], room: str) -> bool:
@@ -147,9 +191,10 @@ def _atmosphere(
     events: list[Event],
     world: World,
     characters: dict[str, Character] | None,
-) -> Beat | None:
-    """The beats that are nobody's turn: the room, the people not talking
-    in it, the things in it."""
+) -> list[Beat]:
+    """The beats that are nobody's turn: the people not talking in the
+    room, the room itself, the things in it. Best first."""
+    offered: list[Beat] = []
     here = [e for e in events if e.location_id == event.location_id]
 
     # Somebody standing there who has not said anything for a while. That
@@ -171,18 +216,21 @@ def _atmosphere(
             and not _spoke_recently(here, character.id, QUIET_FOR)
         ]
         if silent and len(here) > QUIET_FOR:
-            return Beat(
-                "held_back", 0.45, "somebody in the room has not spoken", silent[0].name
+            offered.append(
+                Beat("held_back", 0.45, "somebody in the room has not spoken", silent[0].name)
             )
 
     talk = here[-LULL_WINDOW:]
     if len(talk) >= LULL_WINDOW and all(e.kind == "utterance" for e in talk):
-        return Beat("lull", 0.4, "the scene has been nothing but dialogue")
+        offered.append(Beat("lull", 0.4, "the scene has been nothing but dialogue"))
 
     # Something in the room nobody has looked at yet. Items are placed by
     # the author and visible to anybody standing there.
     for item in world.items_in(event.location_id):
         if not _mentioned(events, item.name):
-            return Beat("object", 0.3, "there is something here nobody has looked at", item.name)
+            offered.append(
+                Beat("object", 0.3, "there is something here nobody has looked at", item.name)
+            )
+            break
 
-    return None
+    return offered
