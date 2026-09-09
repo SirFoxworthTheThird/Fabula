@@ -108,8 +108,19 @@ world has to satisfy are now code (`fabula/inspect.py`) rather than tests: nothi
 disk that has not been read, and what cannot be made playable is deleted rather than
 offered. Measured: a 1.5B cannot design one and refuses; a 3B can.
 
+It writes the complications too — pressures and intentions, the parts that make a scene
+escalate rather than converse. Asked for in plain words; the trigger vocabulary never
+leaves `invent.py`, because the evaluator raises on a key it does not recognise, so a
+made-up one is a world that cannot be played rather than a pressure that misfires. A
+generated pressure only ever narrates, a generated intention is never the player's, and a
+complications call that fails loses the complications rather than the world.
+
+What a generated world still does not have against a hand-written one: **one scene, and
+nothing after it.** No successors, no goals, no items — so it converses and escalates and
+then stops, where the shipped worlds go somewhere.
+
 The first dent: **the character you play is yours.** A name and a line about how
 you come across, chosen where you pick the story, with the name substituted through every
 piece of authored prose that used the old one and the line becoming something the room
 actually perceives. Everyone *else* is still somebody the author wrote — a cast you can
-name yourself, or a story you thought of, is still ahead.
+name yourself is still ahead.

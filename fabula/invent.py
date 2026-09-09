@@ -169,6 +169,37 @@ def _distinctive(keyword: str, rooms: dict) -> bool:
     return True
 
 
+# What makes a scene escalate rather than converse. Both are asked for in
+# plain words — a sentence, a room, a person, a number of turns — and the
+# machinery is built here: the trigger vocabulary is never shown to the
+# model, because an unrecognised key would make a pressure always
+# eligible, which is the worst authoring failure there is.
+COMPLICATIONS_SYSTEM = """You add the complications to a story somebody else has designed. Answer with one JSON object and nothing else, in the same shape as this one:
+
+{
+  "pressures": [
+    {"what": "A pan is set down harder than it needed to be, and nobody looks up.",
+     "where": "the kitchen", "after_turns": 5, "while_unsaid": "the broken music box",
+     "how_hard": 0.45, "at_most": 2},
+    {"what": "The light in the hall goes off on its timer, and somebody has to get up.",
+     "where": "the hall", "after_turns": 12, "while_unsaid": null,
+     "how_hard": 0.35, "at_most": 1}
+  ],
+  "intentions": [
+    {"who": "Tomas Rey", "what": "checks the seam where he glued it, and puts it back",
+     "where": "the kitchen", "after_minutes": 20, "alone": true}
+  ]
+}
+
+Rules that matter:
+- A pressure is something that happens *to* the room: a noise, a light, a door, the weather. Never somebody speaking, and never anybody's thoughts.
+- `what` must never contain a secret's exact words. It can make the subject harder to avoid without naming it.
+- `while_unsaid` is the name of a secret, or null: the pressure only fires while nobody has said it out loud.
+- An intention is something one person does when nobody is watching, in one room, at a set time. `alone: true` means it waits for the room to empty.
+- Never give the player an intention. They are played by somebody who is here.
+- Two or three pressures, one or two intentions."""
+
+
 def _traits(character: dict) -> dict:
     def number(key: str, fallback: float) -> float:
         try:
@@ -237,6 +268,27 @@ def invent(
         "Write the opening scene.",
         key="invent:scene",
     )
+    # What makes a scene escalate rather than converse. Asked for after
+    # the scene, so it can be about a story that already exists.
+    try:
+        built["extras"] = _ask(
+            llm,
+            COMPLICATIONS_SYSTEM,
+            f"The story: {premise}\n\n"
+            f"Rooms: {rooms}\n"
+            f"Who is in it: {who}\n"
+            f"The player is {built['player_name']}, and gets no intention.\n"
+            f"Secrets: {secrets}\n\n"
+            "Write the complications.",
+            key="invent:complications",
+        )
+    except CannotInvent:
+        # A world with no complications is quieter, not broken: the
+        # scene runs on the people in it. Losing the whole world over
+        # the part that escalates it would be the wrong trade.
+        built["extras"] = {}
+        built["quiet"] = True
+
     made = _write(world_dir, built, scene, premise)
     if not made.opening:
         # The opening is the first thing anybody reads, and one that had
@@ -495,6 +547,109 @@ def _fact(fact: dict):
     return Fact(id=fact["id"], keywords=fact["keywords"])
 
 
+def _clamp(value, low, high, fallback):
+    try:
+        number = type(fallback)(value)
+    except (TypeError, ValueError):
+        return fallback
+    return max(low, min(high, number))
+
+
+def _pressures(built: dict, repaired: list, dropped: list) -> list[dict]:
+    """Complications, with the trigger written here rather than there.
+
+    The model gets plain words — a sentence, a room, how many turns, and
+    which secret it is about — and the vocabulary that decides when a
+    pressure is eligible never leaves this file. An unrecognised trigger
+    key would make a pressure always eligible, and a scene that escalates
+    on turn one is worse than one that never does.
+    """
+    facts, rooms = built["facts"], built["rooms"]
+    by_room = {room["name"].strip().lower(): room_id for room_id, room in rooms.items()}
+    # A secret answers to its id, its id read as words, or anything it is
+    # recognised by out loud — because the model is naming it from
+    # memory, in whatever words it used two calls ago.
+    by_fact: dict[str, str] = {}
+    for fact_id, fact in facts.items():
+        for said in [fact_id, fact_id.replace("_", " "), *fact["keywords"]]:
+            by_fact.setdefault(said.strip().lower(), fact_id)
+    written: list[dict] = []
+    taken: set[str] = set()
+
+    for drafted in (built.get("extras") or {}).get("pressures") or []:
+        if not isinstance(drafted, dict):
+            continue
+        what = _clean(
+            str(drafted.get("what") or ""), facts, built["llm"],
+            f"pressure {len(written) + 1}", repaired,
+        )
+        if not what:
+            dropped.append("a complication that would not stop naming the secret")
+            continue
+        where = by_room.get(str(drafted.get("where") or "").strip().lower())
+        if where is None:
+            where = next(iter(rooms))
+        trigger: dict = {"turns_elapsed": f"> {_clamp(drafted.get('after_turns'), 2, 20, 5)}"}
+        unsaid = str(drafted.get("while_unsaid") or "").strip().lower()
+        # Matched against the ids this engine made, not the name the
+        # model remembers giving it — and only ever to a fact that
+        # exists. A trigger naming one that does not is a pressure that
+        # can never fire, which reads exactly like one that was never
+        # written.
+        if len(unsaid) > 3:
+            for name, fact_id in by_fact.items():
+                if unsaid in name or name in unsaid:
+                    trigger["fact_unspoken"] = fact_id
+                    break
+        written.append({
+            "id": _unique(" ".join(what.split()[:4]), taken, f"pressure_{len(written) + 1}"),
+            "intent": what,
+            "weight": _clamp(drafted.get("how_hard"), 0.1, 0.9, 0.45),
+            "trigger": trigger,
+            # Narration only. An arrival needs somebody the scene said
+            # might turn up, and a state change needs a scene written
+            # around it; either from a generator is a pressure that fires
+            # into a story nobody wrote.
+            "effect": {"kind": "narration", "location": where},
+            "cooldown_turns": _clamp(drafted.get("cooldown"), 4, 30, 10),
+            "max_fires": _clamp(drafted.get("at_most"), 1, 3, 2),
+        })
+    return written
+
+
+def _intentions(built: dict, repaired: list, dropped: list) -> dict[str, list[dict]]:
+    """What somebody does when nobody is watching, per character."""
+    facts, rooms, cast = built["facts"], built["rooms"], built["cast"]
+    by_room = {room["name"].strip().lower(): room_id for room_id, room in rooms.items()}
+    by_name = {person["name"].strip().lower(): pid for pid, person in cast.items()}
+    theirs: dict[str, list[dict]] = {}
+
+    for drafted in (built.get("extras") or {}).get("intentions") or []:
+        if not isinstance(drafted, dict):
+            continue
+        person_id = by_name.get(str(drafted.get("who") or "").strip().lower())
+        # Never the player: they are played by somebody who is here, and
+        # an intention is what happens while they are not.
+        if person_id is None or person_id == built["player_id"]:
+            continue
+        what = _clean(
+            str(drafted.get("what") or ""), facts, built["llm"],
+            f"{person_id}'s intention", repaired,
+        )
+        if not what:
+            dropped.append(f"something {cast[person_id]['name']} meant to do")
+            continue
+        where = by_room.get(str(drafted.get("where") or "").strip().lower())
+        theirs.setdefault(person_id, []).append({
+            "id": f"intention_{len(theirs.get(person_id, [])) + 1}",
+            "description": what,
+            "location_id": where or cast[person_id]["location_id"],
+            "ready_after_minutes": _clamp(drafted.get("after_minutes"), 5, 120, 25),
+            "private": bool(drafted.get("alone", True)),
+        })
+    return theirs
+
+
 def _write(world_dir: Path, built: dict, scene: dict, premise: str) -> Invented:
     """Write it out as the YAML an author would have written."""
     llm, facts = built["llm"], built["facts"]
@@ -524,6 +679,11 @@ def _write(world_dir: Path, built: dict, scene: dict, premise: str) -> Invented:
     }
     _save(world_dir / "world.yaml", world, f"Made from: {premise}")
 
+    pressures = _pressures(built, repaired, dropped)
+    if pressures:
+        _save(world_dir / "pressures.yaml", pressures)
+    intentions = _intentions(built, repaired, dropped)
+
     for person_id, person in built["cast"].items():
         persona = person["persona"]
         # A persona may name what its own character protects and nothing
@@ -542,6 +702,7 @@ def _write(world_dir: Path, built: dict, scene: dict, premise: str) -> Invented:
                 "persona": persona,
                 "traits": person["traits"],
                 "protects": person["protects"],
+                "intentions": intentions.get(person_id, []),
                 "relationships": person["relationships"],
                 "location_id": person["location_id"],
                 "is_user": person["is_user"],
@@ -613,6 +774,8 @@ def _write(world_dir: Path, built: dict, scene: dict, premise: str) -> Invented:
         },
     )
 
+    if built.get("quiet"):
+        dropped.append("the complications — nothing happens on its own here")
     return Invented(
         world_dir=world_dir,
         title=built["title"],
@@ -623,7 +786,7 @@ def _write(world_dir: Path, built: dict, scene: dict, premise: str) -> Invented:
     )
 
 
-def _save(path: Path, data: dict, note: str = "") -> None:
+def _save(path: Path, data, note: str = "") -> None:
     header = f"# {note}\n# Made by fabula, not by hand. Edit it like anything else.\n" if note else ""
     path.write_text(
         header + yaml.safe_dump(data, allow_unicode=True, sort_keys=False),

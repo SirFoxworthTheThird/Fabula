@@ -19,6 +19,9 @@ import pytest
 from fabula.inspect import complaints
 from fabula.invent import CannotInvent, invent
 from fabula.llm import FakeLLM
+from fabula.loader import load_characters, load_pressures, load_scene, load_world
+from fabula.models import Event
+from fabula.pressures import _KNOWN_TRIGGER_KEYS, is_eligible, scene_state
 from fabula.session import Session
 
 from tests.conftest import ASHGROVE
@@ -59,14 +62,32 @@ SCENE = {
 }
 
 
+EXTRAS = {
+    "pressures": [
+        {"what": "The shutter rattles once in the wind and settles again.",
+         "where": "the loading bay", "after_turns": 5,
+         "while_unsaid": "the second key", "how_hard": 0.45, "at_most": 2},
+        {"what": "A pan is set down harder than it needed to be.",
+         "where": "the kitchen", "after_turns": 9, "while_unsaid": None,
+         "how_hard": 0.35, "at_most": 1},
+    ],
+    "intentions": [
+        {"who": "Ruben Ott", "what": "checks his coat pocket without taking anything out",
+         "where": "the kitchen", "after_minutes": 20, "alone": True},
+    ],
+}
+
+
 class Scripted(FakeLLM):
     """A model that answers the two design questions, and whatever else
     the engine asks, with something readable."""
 
-    def __init__(self, world=None, scene=None, repair="A room, and nothing in it to say."):
+    def __init__(self, world=None, scene=None, repair="A room, and nothing in it to say.",
+                 extras=None):
         super().__init__()
         self.world = WORLD if world is None else world
         self.scene = SCENE if scene is None else scene
+        self.extras = EXTRAS if extras is None else extras
         self.repair = repair
 
     def complete(self, system: str, prompt: str, key: str | None = None) -> str:
@@ -74,6 +95,8 @@ class Scripted(FakeLLM):
             return "```json\n" + json.dumps(self.world) + "\n```"
         if key == "invent:scene":
             return json.dumps(self.scene)
+        if key == "invent:complications":
+            return json.dumps(self.extras)
         if key == "invent:repair":
             return self.repair
         return super().complete(system, prompt, key)
@@ -409,3 +432,268 @@ def test_a_name_that_leaked_out_of_the_example_is_left_out(root):
     assert "elena_rey" not in written
     assert made.scene != "the_dinner"
     assert complaints(made.world_dir) == []
+
+
+# --- What makes a scene escalate rather than converse ------------------
+#
+# A generated world with nobody but its cast in it is a conversation.
+# Pressures are the room having its own opinion about how long this can
+# go on; intentions are what somebody does while nobody is watching.
+# Both are asked for in plain words, and both are built here — the model
+# never sees the trigger vocabulary, because an unrecognised key makes a
+# pressure always eligible.
+
+
+def test_a_generated_world_has_something_that_happens_on_its_own(root):
+    made = invent("a heist in a hotel kitchen", Scripted(), worlds_root=root)
+
+    pressures = load_pressures(made.world_dir)
+    characters = load_characters(made.world_dir)
+
+    assert pressures, "the room has its own opinion about how long this goes on"
+    assert any(c.intentions for c in characters.values()), "somebody means to do something"
+    assert complaints(made.world_dir) == []
+
+
+def test_a_pressure_from_a_generator_only_ever_narrates(root):
+    """An arrival needs somebody the scene said might turn up, and a state
+    change needs a scene written around it. Either from a generator is a
+    pressure firing into a story nobody wrote."""
+    extras = {
+        "pressures": [
+            {"what": "The shutter rattles.", "where": "the loading bay",
+             "after_turns": 4, "kind": "arrival", "who": "Inês Cardoso"},
+        ],
+        "intentions": [],
+    }
+
+    made = invent("a heist", Scripted(extras=extras), worlds_root=root)
+
+    for pressure in load_pressures(made.world_dir):
+        assert pressure.effect["kind"] == "narration"
+        assert "actor" not in pressure.effect
+
+
+def test_a_pressure_triggers_only_on_words_the_engine_knows(root):
+    """The vocabulary never leaves `invent`. A key the evaluator does not
+    recognise raises rather than passing, so a made-up one would be a
+    world that cannot be played at all."""
+    made = invent("a heist", Scripted(), worlds_root=root)
+    world = load_world(made.world_dir)
+    # A scene nobody has said anything in yet.
+    state = scene_state([], load_characters(made.world_dir), world)
+
+    for pressure in load_pressures(made.world_dir):
+        assert set(pressure.trigger) <= _KNOWN_TRIGGER_KEYS
+        # Every fact it waits on is one this world actually has — an id
+        # that does not resolve makes the trigger unsatisfiable rather
+        # than raising, which is a pressure nobody can tell is broken.
+        waits_on = pressure.trigger.get("fact_unspoken")
+        assert waits_on is None or waits_on in world.facts
+        # And it answers rather than raising, which an unrecognised key
+        # would not.
+        assert is_eligible(pressure, state, world.facts) is False, "not on turn zero"
+
+
+def test_a_pressure_waits_on_the_secret_the_model_named(root):
+    """It names the secret in the words it used two calls ago, not the id
+    this engine made out of it."""
+    made = invent("a heist", Scripted(), worlds_root=root)
+
+    triggers = [p.trigger for p in load_pressures(made.world_dir)]
+
+    assert {"fact_unspoken": "the_second_key"}.items() <= triggers[0].items()
+    assert "fact_unspoken" not in triggers[1], "the one that said null waits on nothing"
+
+
+def test_a_secret_the_model_misremembers_is_not_waited_on(root):
+    """A trigger naming a fact that does not exist can never fire, which
+    reads exactly like a pressure nobody wrote."""
+    extras = {
+        "pressures": [{"what": "The fridge cycles off.", "where": "the kitchen",
+                       "after_turns": 5, "while_unsaid": "the missing ledger"}],
+        "intentions": [],
+    }
+
+    made = invent("a heist", Scripted(extras=extras), worlds_root=root)
+
+    trigger = load_pressures(made.world_dir)[0].trigger
+    assert "fact_unspoken" not in trigger
+    assert complaints(made.world_dir) == []
+
+
+def test_a_pressure_in_a_room_that_does_not_exist_lands_somewhere_real(root):
+    extras = {
+        "pressures": [{"what": "Rain starts.", "where": "the roof garden", "after_turns": 6}],
+        "intentions": [],
+    }
+
+    made = invent("a heist", Scripted(extras=extras), worlds_root=root)
+    world = load_world(made.world_dir)
+
+    assert load_pressures(made.world_dir)[0].effect["location"] in world.rooms
+
+
+def test_the_numbers_are_clamped_rather_than_taken(root):
+    """A pressure that fires on turn one, forever, is worse than one that
+    never fires at all."""
+    extras = {
+        "pressures": [{"what": "A door closes.", "where": "the kitchen",
+                       "after_turns": 0, "how_hard": 9.0, "at_most": 40}],
+        "intentions": [{"who": "Ruben Ott", "what": "counts the coats", "after_minutes": 0}],
+    }
+
+    made = invent("a heist", Scripted(extras=extras), worlds_root=root)
+
+    pressure = load_pressures(made.world_dir)[0]
+    assert pressure.trigger["turns_elapsed"] == "> 2"
+    assert pressure.weight <= 0.9
+    assert pressure.max_fires <= 3
+    assert pressure.cooldown_turns >= 4
+
+    ruben = load_characters(made.world_dir)["ruben_ott"]
+    assert ruben.intentions[0].ready_after_minutes >= 5
+
+
+def test_the_player_is_never_given_an_intention(root):
+    """An intention is what happens while nobody is watching, and the
+    player is played by somebody who is here."""
+    extras = {
+        "pressures": [],
+        "intentions": [
+            {"who": "Dessa Vane", "what": "goes back for the van", "after_minutes": 20},
+            {"who": "Ruben Ott", "what": "checks his coat pocket", "after_minutes": 30},
+        ],
+    }
+
+    made = invent("a heist", Scripted(extras=extras), worlds_root=root)
+    characters = load_characters(made.world_dir)
+
+    assert characters["dessa_vane"].is_user
+    assert characters["dessa_vane"].intentions == []
+    assert [i.description for i in characters["ruben_ott"].intentions] == [
+        "checks his coat pocket"
+    ]
+
+
+def test_an_intention_nobody_in_the_cast_owns_is_dropped(root):
+    extras = {
+        "pressures": [],
+        "intentions": [{"who": "The night porter", "what": "locks the bay", "after_minutes": 20}],
+    }
+
+    made = invent("a heist", Scripted(extras=extras), worlds_root=root)
+
+    assert all(not c.intentions for c in load_characters(made.world_dir).values())
+    assert complaints(made.world_dir) == []
+
+
+def test_nobody_is_put_to_sleep_by_a_generator(root):
+    """Somebody put under with nothing to wake them stays under for the
+    rest of the scene, perceiving nothing — which `inspect` refuses, and
+    which is not a shape to arrive at by accident."""
+    extras = {
+        "pressures": [],
+        "intentions": [{"who": "Ruben Ott", "what": "turns in", "after_minutes": 40,
+                        "state": "asleep"}],
+    }
+
+    made = invent("a heist", Scripted(extras=extras), worlds_root=root)
+
+    ruben = load_characters(made.world_dir)["ruben_ott"]
+    assert [i.state for i in ruben.intentions] == [None]
+    assert complaints(made.world_dir) == []
+
+
+def test_a_complication_that_names_the_secret_is_rewritten(root):
+    """A pressure intent reaches the log as narration, so a keyword in one
+    lets the room raise the subject before anybody has said it."""
+    extras = {
+        "pressures": [{"what": "Somebody has left the second key on the bench.",
+                       "where": "the kitchen", "after_turns": 5}],
+        "intentions": [{"who": "Ruben Ott", "what": "moves a copy of the key to his coat",
+                        "after_minutes": 20}],
+    }
+
+    made = invent("a heist", Scripted(extras=extras, repair="Something is out of place."),
+                  worlds_root=root)
+
+    assert "the second key" not in load_pressures(made.world_dir)[0].intent
+    ruben = load_characters(made.world_dir)["ruben_ott"]
+    assert "key" not in ruben.intentions[0].description
+    assert len(made.repaired) >= 2
+    assert complaints(made.world_dir) == []
+
+
+def test_a_complication_that_will_not_stop_naming_it_is_dropped(root):
+    extras = {
+        "pressures": [{"what": "The second key is on the bench.", "where": "the kitchen",
+                       "after_turns": 5}],
+        "intentions": [{"who": "Ruben Ott", "what": "pockets the second key",
+                        "after_minutes": 20}],
+    }
+
+    made = invent(
+        "a heist",
+        # A model that rewrites prose into the same problem, twice.
+        Scripted(extras=extras, repair="He still has the second key."),
+        worlds_root=root,
+    )
+
+    assert load_pressures(made.world_dir) == []
+    assert all(not c.intentions for c in load_characters(made.world_dir).values())
+    assert len(made.dropped) >= 2
+    assert complaints(made.world_dir) == []
+
+
+def test_a_world_whose_complications_failed_is_quieter_not_broken(root):
+    """Losing the whole world over the part that escalates it would be
+    the wrong trade: the scene still runs on the people in it."""
+
+    class NoComplications(Scripted):
+        def complete(self, system, prompt, key=None):
+            if key == "invent:complications":
+                return "I'm sorry, I can't help with that."
+            return super().complete(system, prompt, key)
+
+    made = invent("a heist", NoComplications(), worlds_root=root)
+
+    assert load_pressures(made.world_dir) == []
+    assert any("nothing happens on its own" in note for note in made.dropped)
+    assert complaints(made.world_dir) == []
+
+    session = Session.open(made.world_dir, made.scene, llm=FakeLLM())
+    assert session.present()
+    session.close()
+
+
+def test_a_generated_pressure_becomes_eligible_once_the_scene_has_run(root):
+    """The failure worth catching is a pressure that can never fire: it
+    reads, in play, exactly like a world that has none. So it is not
+    enough that the trigger parses — it has to turn true."""
+    made = invent("a heist", Scripted(), worlds_root=root)
+    world = load_world(made.world_dir)
+    characters = load_characters(made.world_dir)
+    scene = load_scene(made.world_dir, made.scene)
+    first = load_pressures(made.world_dir)[0]
+
+    def after(turns: int, said: str = "Nothing much.") -> object:
+        # One line a turn, in the room the pressure is about, so the
+        # fact-unspoken half of the trigger is exercised too.
+        return scene_state(
+            [
+                Event(
+                    id=seq, scene_id=scene.id, seq=seq, story_time=scene.start_time,
+                    kind="utterance", actor_id="ruben_ott",
+                    location_id=first.effect["location"], content=said, audibility="room",
+                )
+                for seq in range(1, turns + 1)
+            ],
+            characters,
+            world,
+        )
+
+    assert not is_eligible(first, after(2), world.facts), "not while the scene is young"
+    assert is_eligible(first, after(9), world.facts), "and then the room has an opinion"
+    # It waits on the secret, so somebody saying it out loud stops it.
+    assert not is_eligible(first, after(9, "You made a copy of the key."), world.facts)

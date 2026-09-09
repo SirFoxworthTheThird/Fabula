@@ -169,6 +169,33 @@ where it satisfies `fact_spoken` before anybody has spoken. Those come back as c
 each gets one rewrite with the forbidden words spelled out, and what still fails is dropped
 rather than shipped. What it had to rewrite or lose is reported, not buried.
 
+It also writes the parts that make a scene **escalate rather than converse**: pressures,
+which are the room having its own opinion about how long this can go on, and intentions,
+which are what somebody does while nobody is watching. Both are asked for in plain words —
+a sentence, a room, a number of turns, which secret it is about, whether they wait to be
+alone — and the machinery is built here:
+
+* **The trigger vocabulary never leaves `invent.py`.** The evaluator raises on a key it
+  does not recognise, so a made-up one is not a pressure that misfires but a world that
+  cannot be played at all. What the model says is `after_turns: 5`; what is written is
+  `{"turns_elapsed": "> 5"}`.
+* **A generated pressure only ever narrates.** An arrival needs somebody the scene said
+  might turn up and a state change needs a scene written around it; either from a
+  generator fires into a story nobody wrote.
+* **`while_unsaid` is matched to a fact that exists** — by id, by its id read as words, or
+  by anything it is recognised by out loud, because the model is naming it from memory two
+  calls later. A name that resolves to nothing is dropped rather than written, since a
+  trigger waiting on a fact this world does not have reads exactly like a pressure nobody
+  wrote.
+* **The player is never given an intention**, and nobody is put to sleep by a generator:
+  an intention is what happens while nobody is watching, and somebody put under with
+  nothing written to wake them perceives nothing for the rest of the scene.
+* **The numbers are clamped, not taken.** A pressure that fires on turn one, forever, is
+  worse than one that never fires.
+* **A failed complications call loses the complications, not the world.** The scene still
+  runs on the people in it, and the CLI says so: `dropped: the complications — nothing
+  happens on its own here`.
+
 Cost is a handful of calls, once, when the world is made: not per turn, not per character.
 
 Measured on local models, because a generator is exactly the kind of thing that works on
