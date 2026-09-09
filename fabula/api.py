@@ -32,10 +32,12 @@ from fabula.discovery import invents_a_fact
 from fabula.loader import catalogue, load_world
 from fabula.player import Player
 from fabula.settings import DEFAULT_SETTINGS, Settings, describe
+from fabula.invent import CannotInvent, invent
 from fabula.llm import (
     LiteLLMClient,
     LLMClient,
     ModelUnavailable,
+    get_default_llm,
     missing_credentials,
 )
 from fabula.models import ProjectedEvent
@@ -144,6 +146,15 @@ class NewCharacter(BaseModel):
     # room perceives — a private truth put here would be handed to
     # everybody standing there.
     look: str = ""
+
+
+class NewWorld(BaseModel):
+    """A story somebody thought of, rather than one from the shelf."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    premise: str
+    character: "NewCharacter | None" = None
 
 
 class NewStory(BaseModel):
@@ -580,6 +591,43 @@ def create_app(
                 settings.client(), settings.workers, settings.interpret, settings.direct
             )
         return dict(describe(settings), pinned=pinned)
+
+    @app.post("/invent", response_model=SceneState)
+    def invent_world(body: NewWorld) -> SceneState:
+        """Make a world from a sentence and start a story in it.
+
+        The world is written to the same directory the shipped ones live
+        in, as the same YAML, so the shelf lists it beside them and the
+        engine plays it without knowing where it came from. Nothing
+        reaches disk that `fabula.inspect` has not read.
+        """
+        chosen = opening()
+        if chosen["llm"] is None:
+            chosen = dict(chosen, llm=get_default_llm())
+        player = Player(
+            name=(body.character.name if body.character else ""),
+            look=(body.character.look if body.character else ""),
+        )
+        complaint = player.complaint()
+        if complaint:
+            raise HTTPException(status_code=400, detail=complaint)
+        try:
+            made = invent(body.premise, chosen["llm"], worlds_root=worlds_root)
+        except CannotInvent as refused:
+            raise HTTPException(status_code=422, detail=str(refused))
+        except ModelUnavailable as failure:
+            raise HTTPException(
+                status_code=502, detail=f"the model did not answer: {failure}"
+            )
+        try:
+            session = library.start(
+                made.world_dir.name, made.scene, player=player, **chosen
+            )
+        except ModelUnavailable as failure:
+            raise HTTPException(
+                status_code=502, detail=f"the model did not answer: {failure}"
+            )
+        return remember(session)
 
     @app.get("/catalogue")
     def shelf() -> list[dict]:

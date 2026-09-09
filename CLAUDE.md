@@ -100,7 +100,15 @@ YAML. That is right for the parts a story turns on and wrong as a way to *start*
 audience for this app does not write YAML. Any plan that ends with "and then the author
 writes the file" has not finished.
 
-The first dent in that: **the character you play is yours.** A name and a line about how
+The second dent, and the one that finishes the sentence: **a world can be written from a
+sentence.** `fabula --invent "a heist that goes wrong in a hotel kitchen"`, or the box at
+the top of the shelf, writes the same YAML an author would have written and the engine
+plays it without knowing where it came from. What keeps it honest is that the rules a
+world has to satisfy are now code (`fabula/inspect.py`) rather than tests: nothing reaches
+disk that has not been read, and what cannot be made playable is deleted rather than
+offered. Measured: a 1.5B cannot design one and refuses; a 3B can.
+
+The first dent: **the character you play is yours.** A name and a line about how
 you come across, chosen where you pick the story, with the name substituted through every
 piece of authored prose that used the old one and the line becoming something the room
 actually perceives. Everyone *else* is still somebody the author wrote — a cast you can

@@ -190,6 +190,45 @@
   }
   .card.chosen { border-color: var(--accent-dim); border-radius: 10px 10px 0 0; }
 
+  /* The audience for this app does not write YAML. */
+  .invent {
+    background: var(--ground-lift);
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    padding: 15px 18px 14px;
+    margin: 0 0 30px;
+  }
+  .invent .hint {
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--ink-dim);
+    margin: 0 0 12px;
+    line-height: 1.5;
+  }
+  .invent .field { display: flex; gap: 10px; align-items: center; margin-bottom: 9px; }
+  .invent .field:last-of-type { margin-bottom: 0; }
+  .invent label {
+    font-family: var(--sans);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    flex: none;
+  }
+  .invent input {
+    flex: 1;
+    min-width: 0;
+    background: var(--ground);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 15px;
+    padding: 10px 12px;
+  }
+  .invent input:focus { outline: none; border-color: var(--accent-dim); }
+  .invent .notice { display: block; margin-top: 10px; }
+
   .more {
     font-family: var(--sans);
     font-size: 12px;
@@ -572,6 +611,23 @@
     <div class="cards" id="yours"></div>
 
     <h2 class="section" id="new-heading">Begin</h2>
+
+    <form class="invent" id="invent">
+      <p class="hint">Or something of your own. Say what the story is, and one gets
+        written — rooms, people, and something one of them is not saying.</p>
+      <div class="field">
+        <input type="text" id="premise" autocomplete="off"
+               placeholder="a heist that goes wrong in a hotel kitchen">
+        <button class="primary" type="submit" id="make">Make it</button>
+      </div>
+      <div class="field">
+        <label for="invent-name">You are</label>
+        <input type="text" id="invent-name" autocomplete="off"
+               placeholder="optional — a name of your own">
+      </div>
+      <span class="notice" id="invent-notice"></span>
+    </form>
+
     <div id="worlds"></div>
 
     <h2 class="section">Model</h2>
@@ -688,6 +744,7 @@ const api = {
     }),
   stories: () => ask("/stories"),
   startStory: (world, scene, character) => send("/stories", {world, scene, character}),
+  inventWorld: (premise, character) => send("/invent", {premise, character}),
   resumeStory: id => send(`/stories/${id}/resume`),
   dropStory: id => ask(`/stories/${id}`, {method: "DELETE"}),
   state: id => ask(`/sessions/${id}`),
@@ -1314,6 +1371,32 @@ el("save-settings").onclick = async () => {
   } catch (failure) {
     notice.textContent = failure.message;
     notice.classList.add("bad");
+  }
+};
+
+// Making a world is a handful of model calls, once — long enough that
+// the button has to say what is happening, and slow enough that saying
+// "Making a world" is the honest version of a spinner.
+el("invent").onsubmit = async event => {
+  event.preventDefault();
+  const premise = el("premise").value.trim();
+  const notice = el("invent-notice");
+  if (!premise) return;
+  const button = el("make");
+  button.disabled = el("premise").disabled = el("invent-name").disabled = true;
+  button.textContent = "Making…";
+  notice.classList.remove("bad");
+  notice.textContent = "Writing the rooms, the people, and what one of them is not saying.";
+  try {
+    const opened = await api.inventWorld(premise, {name: el("invent-name").value.trim(), look: ""});
+    await enter(Promise.resolve(opened));
+    notice.textContent = "";
+  } catch (failure) {
+    notice.textContent = failure.message;
+    notice.classList.add("bad");
+  } finally {
+    button.disabled = el("premise").disabled = el("invent-name").disabled = false;
+    button.textContent = "Make it";
   }
 };
 

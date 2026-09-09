@@ -28,7 +28,20 @@ from __future__ import annotations
 from pathlib import Path
 
 from fabula.loader import load_characters, load_pressures, load_scene, load_world
-from fabula.world import mentions_fact
+from fabula.world import _fold, mentions_fact
+
+
+def words_in(text: str) -> set[str]:
+    """The words of a phrase, folded and stripped of punctuation.
+
+    Shared with the generator, and the reason it exists is a comma: a
+    description ending "a kettle," put `kettle,` in the set and a
+    keyword check against it quietly passed.
+    """
+    folded = _fold(text or "")
+    return {word for word in "".join(
+        c if c.isalnum() or c.isspace() else " " for c in folded
+    ).split()}
 
 
 def _named_facts(condition: dict) -> list[str]:
@@ -62,6 +75,35 @@ def complaints(world_dir: Path) -> list[str]:
 
     def names(text: str) -> list[str]:
         return [f for f in world.facts if mentions_fact(world.facts[f], text or "")]
+
+    # A fact is recognised in the log by keyword, so a keyword that is
+    # ordinary scenery makes the story end on somebody saying where they
+    # are. Measured: a generated world made "kitchen" the keyword of a
+    # secret, in a world with a kitchen in it. Nothing about that is
+    # visible by reading the world; it shows up as an arc ending on its
+    # own first line.
+    #
+    # Judged against this world's own words rather than a list of common
+    # ones, because the engine speaks no language of its own: what counts
+    # is whether the phrase is already scenery *here*.
+    scenery = {room_id: words_in(room.name) for room_id, room in world.rooms.items()}
+    prose = set().union(
+        *(words_in(room.description) for room in world.rooms.values())
+    ) if world.rooms else set()
+    for fact_id, fact in world.facts.items():
+        for keyword in fact.keywords:
+            said = words_in(keyword)
+            for room_id, name in scenery.items():
+                if said <= name or name <= said:
+                    found.append(
+                        f"{fact_id} is recognised by {keyword!r}, which is what {room_id} "
+                        "is called — anybody saying where they are would raise it"
+                    )
+            if len(said) == 1 and said <= prose:
+                found.append(
+                    f"{fact_id} is recognised by {keyword!r}, which is already scenery "
+                    "in this world"
+                )
 
     if not scenes:
         found.append("there are no scenes to play")

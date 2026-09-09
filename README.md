@@ -145,6 +145,48 @@ Elena> Tomás, you've been strange all evening.
 `the_reckoning` is the same three people with nowhere to hide — one room, and an ending
 the director escalates toward. Swap the scene name to play it.
 
+### Start a story you thought of
+
+```bash
+fabula --invent "a heist that goes wrong in a hotel kitchen"
+```
+
+or the box at the top of the shelf in the browser. A world is written — three or four
+rooms, two to four people, something one of them is not saying — as the same YAML an
+author would have written, into the same directory the shipped worlds live in. The shelf
+then lists it beside them and the engine plays it without knowing where it came from. Edit
+it afterwards like anything else.
+
+What makes it more than a wish is that **the engine disposes**. Ids are made here, not
+taken from the model; references are dropped unless they resolve; exactly one character is
+the player whatever it said, and they protect nothing, because the player is the one who
+does not know. Nothing reaches disk that `inspect.py` has not read, and a world that
+cannot be made playable is deleted rather than offered.
+
+The rule a generator breaks constantly is the one about authored prose naming a fact — it
+writes a room description that says "the second key" and hands the secret to the scenery,
+where it satisfies `fact_spoken` before anybody has spoken. Those come back as complaints,
+each gets one rewrite with the forbidden words spelled out, and what still fails is dropped
+rather than shipped. What it had to rewrite or lose is reported, not buried.
+
+Cost is a handful of calls, once, when the world is made: not per turn, not per character.
+
+Measured on local models, because a generator is exactly the kind of thing that works on
+paper:
+
+* **Qwen2.5-1.5B cannot do it, and says so.** Shown an example of the shape, it hands the
+  example back — Ashgrove, Elena, the music box, in answer to a heist in a hotel kitchen.
+  It is asked once more, plainly; the second copy is refused rather than shipped, which is
+  the right failure.
+* **Qwen2.5-3B can.** The Grand Mercure: a pantry, a main kitchen, a walk-in freezer and a
+  bar, a chef, a thief, and a recipe nobody will name. Six of its descriptions mentioned
+  the secret and were rewritten; none had to be dropped.
+* **The example leaks.** Even when the 3B designed its own world it put one of the
+  example's characters in the cast and borrowed its scene title. Both are stripped by name
+  now. An example is still the only thing that reliably fixes the shape — a model handed
+  `"title": "two or three words"` writes a scene called *two or three words*, measured
+  first time out.
+
 ### Play as somebody of your own
 
 Everything in a world is authored, which is right for the parts a story turns on and
@@ -1084,6 +1126,7 @@ it never enters the stream.
 |---|---|
 | `GET /` | the web client |
 | `GET /worlds` | worlds and their scenes |
+| `POST /invent` | make a world from a sentence and start a story in it |
 | `GET /catalogue` | worlds and their scenes, with the ones a story starts from marked |
 | `GET`/`PUT /settings` | which model answers — never a credential, in either direction |
 | `GET /stories` | your saved stories, most recently played first |

@@ -183,3 +183,38 @@ def test_a_world_that_does_not_load_at_all(world):
     found = complaints(world)
 
     assert len(found) == 1 and "does not load" in found[0]
+
+
+# --- Keywords that are not particular to anything ---------------------
+
+
+def test_a_secret_recognised_by_the_name_of_a_room(world):
+    """Measured on a 1.5B, which made "kitchen" the keyword of a secret
+    in a world with a kitchen in it. Nothing about that is visible by
+    reading the world: it shows up as an arc ending on its own first
+    line, because somebody said where they were."""
+    edit(world / "world.yaml", lambda w: w["facts"].update(
+        {"music_box": {"keywords": ["the kitchen"]}}
+    ))
+
+    assert any("saying where they are" in c for c in complaints(world))
+
+
+def test_a_secret_recognised_by_a_word_already_doing_scenery(world):
+    edit(world / "world.yaml", lambda w: w["facts"].update(
+        {"music_box": {"keywords": ["kettle"]}}
+    ))
+
+    assert any("already scenery" in c for c in complaints(world))
+
+
+def test_a_phrase_particular_to_the_thing_is_fine(world):
+    """Judged against this world's own words rather than a list of common
+    ones, because the engine speaks no language of its own — and a
+    Portuguese world whose rooms are "a cozinha" and "o quintal" must not
+    lose "o barco" to an English article list."""
+    edit(world / "world.yaml", lambda w: w["facts"].update(
+        {"music_box": {"keywords": ["grandmother's music box"]}}
+    ))
+
+    assert playable(world)

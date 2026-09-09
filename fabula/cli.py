@@ -19,7 +19,12 @@ from fabula.library import DEFAULT_ROOT, Library
 from fabula.player import Player
 from fabula.settings import DEFAULT_SETTINGS, Settings
 from fabula.env import load_env
-from fabula.llm import LiteLLMClient, ModelUnavailable, missing_credentials
+from fabula.llm import (
+    LiteLLMClient,
+    ModelUnavailable,
+    get_default_llm,
+    missing_credentials,
+)
 from fabula.models import Character, ProjectedEvent
 from fabula.session import Session
 
@@ -185,6 +190,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--list", action="store_true", help="List your stories and stop")
     parser.add_argument("--resume", metavar="ID", help="Pick a story back up")
     parser.add_argument("--delete", metavar="ID", help="Delete a story and stop")
+    parser.add_argument(
+        "--invent", default=None, metavar="PREMISE",
+        help="Make a world from a sentence and play it",
+    )
     parser.add_argument("--title", default=None, help="Name a new story")
     parser.add_argument(
         "--as", dest="played_as", default=None, metavar="NAME",
@@ -276,7 +285,7 @@ def main(argv: list[str] | None = None) -> None:
     # naming a scene, resuming an id, --terminal — is the developer's
     # door, and stays exactly where it was; but a person who installed a
     # roleplay app and typed its name should get the app, not a REPL.
-    if not (args.resume or args.world or args.terminal):
+    if not (args.resume or args.world or args.terminal or args.invent):
         serve(
             worlds_root=args.worlds,
             port=args.port,
@@ -292,6 +301,10 @@ def main(argv: list[str] | None = None) -> None:
     if args.terminal and not (args.resume or args.world):
         show_library(library)
         return
+
+    if args.invent:
+        world_id, scene_id = _invent(args, llm or get_default_llm(), parser)
+        args.world, args.scene = world_id, scene_id
 
     if args.resume:
         try:
@@ -315,6 +328,27 @@ def main(argv: list[str] | None = None) -> None:
         )
 
     run(session, interpret_beliefs=interpret)
+
+
+def _invent(args, llm, parser) -> tuple[str, str]:
+    """Make a world from a sentence, and say what it cost to make it."""
+    from fabula.invent import CannotInvent, invent
+
+    print(f"Making a world from: {args.invent}")
+    try:
+        made = invent(args.invent, llm, worlds_root=args.worlds)
+    except CannotInvent as refused:
+        parser.error(f"could not make that into a world: {refused}")
+    print(f"  {made.title} — {made.world_dir}")
+    # Said out loud rather than buried: a description that had to be
+    # rewritten, or lost, is the difference between the story you asked
+    # for and the one that is playable.
+    for note in made.repaired:
+        print(f"  rewritten: {note}")
+    for note in made.dropped:
+        print(f"  dropped: {note}")
+    print()
+    return made.world_dir.name, made.scene
 
 
 def _world_dir(worlds_root: Path, world: str) -> Path:
