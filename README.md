@@ -519,7 +519,17 @@ enforceable rather than aspirational.
 
 Supporting modules: `session.py` (the surface both clients use), `chronology.py` (time
 skips, off-screen intentions), `pressures.py`, `persistence.py`, `summaries.py`,
-`db.py`, `loader.py`.
+`db.py`, `loader.py`, `inspect.py`.
+
+`inspect.py` is everything that has to be true of a world before anybody plays it: no
+authored prose naming a fact, no persona naming a secret that is not its own, exactly one
+player per scene, every id resolving, nobody asleep with nothing to wake them, no scene
+leading somewhere that does not exist. Those rules used to be four tests parametrised over
+the four worlds in the repo, which enforced them exactly as often as somebody remembered
+to run pytest. `complaints(world_dir)` returns them as a list, so a world that arrives
+from anywhere — copied in, generated, edited by somebody who has never read this file —
+gets the same reading the shipped ones get. Every rule has a test that breaks a world in
+exactly that way; a validator that never says no is a promise nobody checked.
 
 ### What gets narrated, and who decides
 

@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from fabula.llm import FakeLLM
+from fabula.inspect import complaints
 from fabula.loader import load_characters, load_scenario, load_scene, load_world
 from fabula.memory import project
 from fabula.session import Session
@@ -220,172 +221,18 @@ def test_a_scene_can_start_with_everyone_out_of_earshot():
 ALL_WORLDS = sorted(p.parent for p in WORLDS.glob("*/world.yaml"))
 
 
-def _named_facts(condition: dict) -> list[str]:
-    named = []
-    for key in ("fact_spoken", "fact_unspoken"):
-        value = condition.get(key)
-        named += [value] if isinstance(value, str) else list(value or [])
-    return named
-
-
 @pytest.mark.parametrize("world_dir", ALL_WORLDS, ids=lambda p: p.name)
-def test_no_persona_names_a_secret_that_is_not_its_own(world_dir):
-    """The bug this is here for: Maria's persona once named the music box
-    in the same breath as saying she did not know about it, which handed
-    her agent the secret in every prompt it ever saw. Authored prose is
-    the one place a leak can be written by hand, and the projection
-    cannot catch it because it never passes through one.
+def test_every_shipped_world_is_playable(world_dir):
+    """Every rule a world has to satisfy, applied to every world in the
+    repo. They used to live here as four parametrised tests over the
+    shipped worlds, which enforced them exactly as often as somebody
+    remembered to run pytest — fine while every world was written by
+    hand and read by a person, and useless the moment one arrives from
+    anywhere else. They are `fabula.inspect` now, and what each is for
+    is written there. What is broken when one is broken is in
+    `test_inspect.py`.
     """
-    world = load_world(world_dir)
-
-    for character in load_characters(world_dir).values():
-        named = [f for f in world.facts if mentions_fact(world.facts[f], character.persona)]
-        assert set(named) <= set(character.protects), (
-            f"{character.id}'s persona names {sorted(set(named) - set(character.protects))}"
-        )
-
-
-@pytest.mark.parametrize("world_dir", ALL_WORLDS, ids=lambda p: p.name)
-def test_no_authored_text_names_a_fact(world_dir):
-    """Four kinds of authored prose end up in the log as event content:
-    a room description the narrator is given to describe a place, a
-    pressure's intent that it is given to render, an intention's
-    description, which is materialised as the action itself, and a
-    scene's opening, which is appended as the first thing the player
-    reads.
-
-    The opening is the sharpest of the four. It is perceived in full by
-    the player and by nobody else, so a keyword in it satisfies
-    `fact_spoken` — the subject was raised in front of somebody — before
-    the story has a first line. An arc could end on its own opening
-    paragraph.
-
-    A fact keyword in any of them lets the subject be raised by scenery.
-    Keyword matching is deterministic and cannot tell a confession from a
-    neutral mention, so the cost lands on the author: authored text must
-    evoke a fact without naming it.
-
-    The first version of this test checked only room descriptions. A
-    played scene then ended its own arc, because a pressure intent read
-    "counted down the days to the first flight" and the narration it
-    produced satisfied the scene's `fact_spoken` condition — nobody had
-    said anything.
-    """
-    from fabula.loader import load_pressures
-
-    world = load_world(world_dir)
-
-    def names(text):
-        return [f for f in world.facts if mentions_fact(world.facts[f], text)]
-
-    for room_id, room in world.rooms.items():
-        assert not names(room.description), f"room {room_id}: {names(room.description)}"
-
-    for pressure in load_pressures(world_dir):
-        assert not names(pressure.intent), f"pressure {pressure.id}: {names(pressure.intent)}"
-
-    for character in load_characters(world_dir).values():
-        for intention in character.intentions:
-            named = names(intention.description)
-            assert not named, f"intention {character.id}/{intention.id}: {named}"
-
-    for scene_file in sorted((world_dir / "scenes").glob("*.yaml")):
-        scene = load_scene(world_dir, scene_file.stem)
-        assert not names(scene.opening), f"opening {scene.id}: {names(scene.opening)}"
-
-
-@pytest.mark.parametrize("world_dir", ALL_WORLDS, ids=lambda p: p.name)
-def test_every_world_has_exactly_one_player_per_scene(world_dir):
-    characters = load_characters(world_dir)
-
-    for scene_file in sorted((world_dir / "scenes").glob("*.yaml")):
-        _, cast, scene = load_scenario(world_dir, scene_file.stem)
-        players = [cid for cid in scene.cast if cast[cid].is_user]
-        assert players == [p for p in players], scene.id
-        assert len(players) == 1, f"{scene.id} has players {players}"
-
-
-@pytest.mark.parametrize("world_dir", ALL_WORLDS, ids=lambda p: p.name)
-def test_every_authored_reference_resolves(world_dir):
-    """A typo'd room or fact id fails silently otherwise: a pressure that
-    never fires, an intention nobody can reach, a scene that never ends.
-    """
-    from fabula.loader import load_pressures
-
-    world = load_world(world_dir)
-    characters = load_characters(world_dir)
-
-    for character in characters.values():
-        assert character.location_id in world.rooms, character.id
-        for fact_id in character.protects:
-            assert fact_id in world.facts, f"{character.id} protects {fact_id}"
-        for intention in character.intentions:
-            assert intention.location_id in world.rooms, intention.id
-        # Somebody put under with nothing to wake them stays under for the
-        # rest of the scene, perceiving nothing — almost never what an
-        # author meant, and silent when it is wrong.
-        sleeps = [i for i in character.intentions if i.state == "asleep"]
-        wakes = [i for i in character.intentions if i.state == "awake"]
-        for turning_in in sleeps:
-            assert any(w.ready_after_minutes > turning_in.ready_after_minutes for w in wakes), (
-                f"{character.id} falls asleep at {turning_in.ready_after_minutes}m "
-                "and nothing wakes them"
-            )
-        for goal in character.goals:
-            # A goal naming a fact that does not exist stays open forever
-            # and raises nobody's bid, silently.
-            assert goal.about is None or goal.about in world.facts, (
-                f"{character.id}'s goal {goal.id} is about {goal.about}"
-            )
-        for toward in character.relationships:
-            assert toward in characters, f"{character.id} -> {toward}"
-
-    for pressure in load_pressures(world_dir):
-        effect = pressure.effect
-        if effect.get("location"):
-            assert effect["location"] in world.rooms, pressure.id
-        if effect.get("actor"):
-            assert effect["actor"] in characters, pressure.id
-        for key in ("fact_spoken", "fact_unspoken"):
-            named = pressure.trigger.get(key)
-            for fact_id in [named] if isinstance(named, str) else (named or []):
-                assert fact_id in world.facts, f"{pressure.id} -> {fact_id}"
-        for key in ("character_at", "character_not_at"):
-            for cid, room in (pressure.trigger.get(key) or {}).items():
-                assert cid in characters and room in world.rooms, pressure.id
-
-    for scene_file in sorted((world_dir / "scenes").glob("*.yaml")):
-        _, _, scene = load_scenario(world_dir, scene_file.stem)
-        for cid in scene.cast:
-            assert cid in characters, f"{scene.id} casts {cid}"
-        for cid in scene.may_arrive:
-            assert cid in characters, f"{scene.id} awaits {cid}"
-        assert not set(scene.cast) & set(scene.may_arrive), scene.id
-        # An arrival pressure naming somebody outside the room can only
-        # fire if the scene said they might turn up; otherwise it appends
-        # an event with an actor nobody in the scene has ever heard of.
-        for pressure in load_pressures(world_dir):
-            actor = pressure.effect.get("actor")
-            if pressure.effect.get("kind") == "arrival" and actor not in scene.cast:
-                assert actor in scene.may_arrive, (
-                    f"{scene.id}: {pressure.id} lands {actor}, who is neither cast nor awaited"
-                )
-        for cid, room in scene.starting_positions.items():
-            assert cid in characters and room in world.rooms, scene.id
-        named = scene.end_condition.get("fact_spoken")
-        for fact_id in [named] if isinstance(named, str) else (named or []):
-            assert fact_id in world.facts, f"{scene.id} ends on {fact_id}"
-        # A story that leads somewhere that does not exist stops dead at
-        # the seam, and nothing says so until a player gets there.
-        scenes = {p.stem for p in (world_dir / "scenes").glob("*.yaml")}
-        for successor in scene.next:
-            following = successor.get("scene")
-            assert following in scenes, f"{scene.id} leads to {following}, which is not a scene"
-            assert following != scene.id or successor.get("when"), (
-                f"{scene.id} leads to itself unconditionally"
-            )
-            for fact_id in _named_facts(successor.get("when") or {}):
-                assert fact_id in world.facts, f"{scene.id} branches on {fact_id}"
+    assert complaints(world_dir) == []
 
 
 def test_only_the_cast_is_in_the_scene(tmp_path):
