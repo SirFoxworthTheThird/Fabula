@@ -456,22 +456,89 @@ def test_nobody_says_the_same_line_twice_in_a_row():
     session.close()
 
 
-def test_it_is_the_same_line_that_is_caught_not_a_similar_one():
-    """Saying the same thing twice in a scene is something people do.
-    Saying it twice in a row, identically, is a model looping."""
+def test_the_same_line_again_is_caught_however_it_is_reworded():
+    """Word for word was the whole rule and it was not enough. Measured
+    against a 3B over fourteen player lines, Maria announced the same
+    intention eight times and no two were identical — paraphrase, not
+    repetition, is how a small model loops."""
     session = Session.open(ASHGROVE, "the_reckoning", llm=FakeLLM())
     said = session.store.append_event(
         session.director.build_event("utterance", "tomas", "kitchen", "It was nothing.")
     )
     events = session.store.get_events(session.scene.id)
     assert events[-1].seq == said.seq
+    caught = lambda who, line: session.director._already_said(who, line, events)
 
-    assert session.director._already_said("tomas", "It was nothing.", events)
-    assert session.director._already_said("tomas", "  it was NOTHING!  ", events)
-    assert not session.director._already_said("tomas", "It was nothing much.", events)
+    assert caught("tomas", "It was nothing.")
+    assert caught("tomas", "  it was NOTHING!  ")
+    assert caught("tomas", "It was nothing much."), "the same sentence, started again"
     # And parroting whoever just spoke, which a small model does as
     # readily as it repeats itself.
-    assert session.director._already_said("maria", "It was nothing.", events)
+    assert caught("maria", "It was nothing.")
+    # A different answer is still a different answer.
+    assert not caught("tomas", "I broke it in March.")
+    assert not caught("tomas", "Ask Maria.")
+    session.close()
+
+
+# Maria's actual lines, in order, from a real run against Qwen2.5-3B on
+# `ashgrove/the_dinner`. The first four are a conversation. Everything
+# after is one intention announced over and over, and the word-for-word
+# rule caught none of it, because no two are identical.
+THE_LOOP = [
+    ("I'll take care of these letters, Elena. You're right, I've been neglecting you.", False),
+    ("Elena, I promise to make time for you from now on.", False),
+    ("I've been meaning to talk to you about something important.", False),
+    ("I understand, Elena. I've just... needed some time to myself lately.", False),
+    ("I'll start the letter sorting then.", False),
+    ("I'll begin with the letters then.", True),
+    ("I'll start with the ones that seem urgent.", True),
+    ("I'll start with the oldest letters first.", True),
+    ("I'll start with the ones addressed to you, Elena.", True),
+    ("I'll start by checking the oldest ones, Elena.", True),
+    ("I'll start by checking the oldest letters, Elena.", True),
+    ("I'll start with the oldest letters, Elena.", True),
+]
+
+
+def test_the_loop_the_guard_was_rebuilt_for():
+    """Replayed line by line, as it happened. Not every paraphrase is
+    caught — the first one is not yet a loop, and two of these share
+    almost no vocabulary with anything before them — but the run is
+    broken, which is the difference between a character insisting and
+    the app looking broken."""
+    session = Session.open(ASHGROVE, "the_reckoning", llm=FakeLLM())
+    build = session.director.build_event
+    caught = []
+    for line, looping in THE_LOOP:
+        events = session.store.get_events(session.scene.id)
+        flagged = session.director._already_said("maria", line, events)
+        assert not (flagged and not looping), f"a real line was blocked: {line}"
+        caught.append(flagged)
+        session.store.append_event(build("utterance", "maria", "kitchen", line))
+
+    repeats = [flagged for flagged, (_, looping) in zip(caught, THE_LOOP) if looping]
+    assert sum(repeats) >= 5, f"only {sum(repeats)} of {len(repeats)} caught"
+    session.close()
+
+
+def test_but_a_conversation_about_one_thing_is_not_a_loop():
+    """The false positive worth avoiding: a scene about letters has
+    everybody saying "letters", and that is the scene rather than a
+    model stuck in a groove."""
+    session = Session.open(ASHGROVE, "the_reckoning", llm=FakeLLM())
+    build = session.director.build_event
+    session.store.append_event(
+        build("utterance", "maria", "kitchen", "The letters are in the study.")
+    )
+    events = session.store.get_events(session.scene.id)
+
+    for different in (
+        "Start with the letters from March.",
+        "You never sort anything.",
+        "I'll get my coat.",
+    ):
+        assert not session.director._already_said("maria", different, events), different
     session.close()
 
 

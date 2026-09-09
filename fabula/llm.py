@@ -143,12 +143,27 @@ class FakeLLM:
         self.canned: dict[str, str] = canned or {}
         self.calls: list[tuple[str, str, str | None]] = []
 
+    # A fixed sentence for every character was one line of a fake and one
+    # thing wrong with it: a real cast does not say the same words in the
+    # same order, and pretending otherwise made every generated line look
+    # like a paraphrase of every other. The repeat guard, correctly,
+    # silenced the entire room. Varied by the digest, so it is still a
+    # pure function of the inputs and still invents nothing that was not
+    # already a constant here — which is the property the leak tests rest
+    # on.
+    PLACEHOLDERS = (
+        "(a pause)", "(silence)", "(a beat)", "(nothing)", "(quiet)", "(a shrug)",
+        "(a breath)", "(stillness)", "(a glance)", "(hesitation)", "(a murmur)",
+        "(waiting)",
+    )
+
     def complete(self, system: str, prompt: str, key: str | None = None) -> str:
         self.calls.append((system, prompt, key))
         if key is not None and key in self.canned:
             return self.canned[key]
         digest = hashlib.sha256(f"{system}\n{prompt}".encode()).hexdigest()[:8]
-        return f"(a considered pause) [gen:{digest}]"
+        placeholder = self.PLACEHOLDERS[int(digest, 16) % len(self.PLACEHOLDERS)]
+        return f"{placeholder} [gen:{digest}]"
 
 
 _KEY_ENV_VARS = (

@@ -61,6 +61,43 @@ YIELD_FLOOR = 0.12
 # Long enough that saying it twice in one scene cannot be a coincidence.
 REPEAT_WORDS = 6
 
+# A line is an echo of an earlier one if it starts the same way, or if it
+# is mostly the same words again. Word-for-word was the whole rule and it
+# is not enough: measured against Qwen2.5-3B over fourteen player lines,
+# Maria announced the same intention eight times —
+#
+#   I'll start the letter sorting then. / I'll begin with the letters
+#   then. / I'll start with the ones that seem urgent. / I'll start with
+#   the oldest letters first. / I'll start by checking the oldest ones,
+#   Elena. / I'll start with the oldest letters, Elena.
+#
+# — and the exact-match guard caught none of them, because no two are
+# identical. Paraphrase, not repetition, is how a small model loops.
+#
+# Both numbers were fitted to that transcript and to a set of genuinely
+# different lines that share a topic word, which is the false positive
+# worth avoiding: a scene about letters has everybody saying "letters",
+# and that is a conversation rather than a loop.
+ECHO_OPENING = 3      # words a line may share with its own predecessor's start
+ECHO_SHARE = 0.5      # of the shorter line's content words
+ECHO_FLOOR = 3        # content words before overlap is worth measuring
+ECHO_SHARED = 2       # and at least this many held in common
+ECHO_BACK = 6         # how many of their own recent lines to look at
+
+# Words that carry no subject. English plus the shipped worlds' other
+# language, which is the honest scope: the opening-phrase rule needs no
+# vocabulary at all, so a language this list does not cover is judged by
+# that alone rather than judged wrongly.
+EMPTY_WORDS = frozenset("""
+a an the and or but if then so as at by for from in into of on to with not no nor
+i im ill ive id you youre your he she it its we they them us our their his her my mine
+this that these those there here what who when where how why just about now too very
+is am are was were be been being do does did done have has had will would shall should
+can could may might must one ones thing things some any all other another same than own
+o os as um uma uns umas de do da dos das em no na nos nas por para com sem que se
+nao sim eu tu ele ela nos eles elas meu minha teu tua seu sua isso isto aquilo
+""".split())
+
 
 def _fold(text: str) -> str:
     """Strip diacritics and lowercase, so "Tomas" matches "Tomás"."""
@@ -501,32 +538,67 @@ class Director:
         return None
 
     def _already_said(self, character_id: str, content: str, all_events: list[Event]) -> bool:
-        """Is this the last thing this character said, again?
+        """Is this something this character has already said?
 
-        Word for word once punctuation and spacing are set aside: their
-        own most recent line, the one just said in front of them, or —
-        for anything longer than a few words — anything they have
-        already said in this scene. Short lines repeat honestly ("No."
-        twice is a person); a whole sentence repeated verbatim is a
-        model looping.
+        Three rules, cheapest first, all deterministic — the prompt-level
+        version of "do not repeat yourself" is the one a small model
+        ignores most reliably, and their own lines are already in the
+        context they were given when they wrote this.
+
+        1. **Word for word**, once punctuation and spacing are set aside:
+           their own last line, the one just said in front of them (a
+           small model parrots the previous speaker as readily as
+           itself), or anything of their own this scene once the line is
+           long enough that saying it twice cannot be a coincidence.
+        2. **The same opening.** People do not start consecutive
+           sentences identically; a model announcing what it is about to
+           do does exactly that.
+        3. **Mostly the same words.** Set against the shorter line, so a
+           long restatement of a short line still counts, with a floor on
+           both, because one shared word between two four-word lines is a
+           coincidence and not a loop.
+
+        Short lines are left alone by 2 and 3: "No." twice is a person.
         """
-        def bare(text: str) -> str:
+        def bare(text: str) -> list[str]:
             return "".join(c for c in text.lower() if c.isalnum() or c.isspace()).split()
+
+        def subject(text: str) -> set[str]:
+            """What a line is about, as far as this can tell without
+            knowing the language: its words, less the ones that carry no
+            subject and less everybody's name, since a vocative is not
+            what a line is about."""
+            called = {
+                part.lower()
+                for person in self.characters.values()
+                for part in _fold(person.name).split()
+            }
+            return {
+                word for word in bare(text)
+                if len(word) > 2 and word not in EMPTY_WORDS and word not in called
+            }
 
         words = bare(content)
         spoken = [e for e in all_events if e.kind == "utterance"]
         mine = [e for e in spoken if e.actor_id == character_id]
-        # The last line said in front of them by anybody, and their own
-        # last line: a small model parrots the previous speaker as
-        # readily as it parrots itself.
+
         against = [e.content for e in (mine[-1:] + spoken[-1:])]
-        # And anything of their own from earlier in the scene, once the
-        # line is long enough that saying it twice cannot be a
-        # coincidence. "No." twice is a person; a whole sentence about
-        # the coffee and the herbs, word for word, is a loop.
         if len(words) > REPEAT_WORDS:
             against += [e.content for e in mine]
-        return any(bare(earlier) == words for earlier in against)
+        if any(bare(earlier) == words for earlier in against):
+            return True
+
+        now = subject(content)
+        for earlier in [e.content for e in mine[-ECHO_BACK:]]:
+            if len(words) >= ECHO_OPENING and words[:ECHO_OPENING] == bare(earlier)[:ECHO_OPENING]:
+                return True
+            was = subject(earlier)
+            if len(now) < ECHO_FLOOR or len(was) < ECHO_FLOOR:
+                continue
+            common = now & was
+            if len(common) >= ECHO_SHARED and len(common) / min(len(now), len(was)) >= ECHO_SHARE:
+                return True
+        return False
 
     def _reaches_user(self, event: Event) -> bool:
         """Did the player perceive any of that, at any fidelity?"""
