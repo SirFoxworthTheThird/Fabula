@@ -141,8 +141,10 @@ picture — an `image:` pointing at a file when somebody drew one, and a plate d
 id when nobody did, which is every generated world. That ordering is the point: art is the
 one thing an author cannot write in YAML, so the generated version is the default and the
 file is the override, and no screen is ever an empty frame waiting for something that does
-not exist. What is still missing: rooms have no art, so the scene view is faces and text
-over a plain ground.
+not exist. Rooms deliberately have none: worlds and characters are what a person browsing
+a shelf and sitting in a room actually needs to see, and a picture per room is a third
+asset type, a POV question, and a reason to redraw the view every time somebody walks
+through a door. Asked and settled — do not add it back as a gap.
 
 The first dent: **the character you play is yours.** A name and a line about how
 you come across, chosen where you pick the story, with the name substituted through every
