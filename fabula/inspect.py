@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from fabula.art import authored
 from fabula.loader import load_characters, load_pressures, load_scene, load_world
 from fabula.pressures import _KNOWN_TRIGGER_KEYS
 from fabula.world import _fold, mentions_fact
@@ -134,6 +135,20 @@ def complaints(world_dir: Path) -> list[str]:
 
     if not scenes:
         found.append("there are no scenes to play")
+
+    # Art an author pointed at and did not ship. Silent otherwise: the
+    # service falls back to the drawn plate, so a broken path looks
+    # exactly like a world that never had a picture, and the author is
+    # left wondering why theirs is not showing. The rules are the
+    # server's own, so what passes here is what will actually be served —
+    # inside the world directory, and a type a browser can render.
+    for named, about in [(world.image, "the world's cover")] + [
+        (character.image, f"{character.id}'s picture") for character in characters.values()
+    ]:
+        if named and authored(world_dir, named) is None:
+            found.append(
+                f"{about} points at {named!r}, which is not an image inside this world"
+            )
 
     # --- Prose that reaches the log ------------------------------------
     for room_id, room in world.rooms.items():

@@ -99,6 +99,7 @@ def load_world(world_dir: Path, called: tuple[str, str] | None = None) -> World:
         facts=facts,
         language=data.get("language", "en"),
         discover_rooms=bool(data.get("discover_rooms", False)),
+        image=str(data.get("image") or ""),
         items={
             item_id: Item(id=item_id, **item_data)
             for item_id, item_data in (data.get("items") or {}).items()

@@ -120,6 +120,34 @@
   /* A world is a shelf of its own: its name and what kind of story it
      is, then the scenes a story can begin from. */
   .world { margin-bottom: 34px; }
+
+  /* The cover. Every world has one — the file the author pointed at, or
+     the plate the service draws from the world's id — so this is never
+     an empty frame waiting for art that does not exist. The title sits
+     on it under a scrim, because a caption underneath makes it a
+     decoration and a title on it makes it a book. */
+  .plate {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--edge);
+    margin-bottom: 14px;
+    background: var(--ground-lift);
+  }
+  .plate img {
+    display: block;
+    width: 100%;
+    height: 152px;
+    object-fit: cover;
+  }
+  .plate .over {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: 14px 18px 13px;
+    background: linear-gradient(to top, rgba(12,10,9,.94) 18%, rgba(12,10,9,.55) 62%, rgba(12,10,9,0));
+  }
+  .plate h3 { margin: 0; }
+  .plate .blurb { margin: 2px 0 0; }
   .world h3 {
     font-family: var(--serif);
     font-size: 22px;
@@ -127,6 +155,17 @@
     font-weight: normal;
   }
   .world .blurb { color: var(--ink-dim); margin: 0 0 14px; font-size: 15px; }
+
+  /* A face, everywhere one belongs. Round, because these are people and
+     not thumbnails, and sized in three places: beside a line, in the
+     row of who is here, and on the story you are picking back up. */
+  .face {
+    border-radius: 50%;
+    display: block;
+    flex: none;
+    background: var(--ground-lift);
+    object-fit: cover;
+  }
   .world .lang {
     font-family: var(--sans);
     font-size: 10px;
@@ -244,6 +283,8 @@
      afterthought beside it rather than a second offer. */
   .story { display: flex; align-items: stretch; gap: 8px; }
   .story .card { flex: 1; }
+  .story .card .name { display: flex; align-items: center; gap: 11px; }
+  .story .card .face { width: 34px; height: 34px; border-radius: 7px; }
   .story .drop {
     font-family: var(--sans);
     font-size: 12px;
@@ -338,9 +379,18 @@
     font-family: var(--sans);
     font-size: 13px;
   }
+  header { align-items: center; }
   header .where { font-weight: 600; letter-spacing: .01em; }
   header .who, header .clock { color: var(--ink-dim); }
+  header .who { display: flex; align-items: center; gap: 6px; }
   header .who em { color: var(--ink-soft); font-style: normal; }
+  header .who .face { width: 22px; height: 22px; }
+  /* Who is in the room, as faces. The list is already filtered to what
+     this character can perceive, so the faces ride along on it and
+     cannot show somebody the player cannot see. */
+  header .who .person { display: inline-flex; align-items: center; gap: 5px; }
+  header .pov .face { width: 20px; height: 20px; margin-right: 6px; }
+  header .pov { display: inline-flex; align-items: center; }
   header .spacer { flex: 1; }
   header .pov {
     color: var(--ink-faint);
@@ -379,6 +429,14 @@
     to { opacity: 1; transform: none; }
   }
   @media (prefers-reduced-motion: reduce) { .line { animation: none; } }
+
+  /* An utterance is somebody saying something, so it gets the somebody.
+     Only utterances: narration has no speaker, and a half-heard line
+     through a wall must not be given a face, because attaching one would
+     claim the listener knows who that was. */
+  .line.spoken { display: flex; gap: 11px; align-items: flex-start; }
+  .line.spoken .face { width: 30px; height: 30px; margin-top: 1px; }
+  .line.spoken .body { min-width: 0; }
 
   .line .speaker {
     font-family: var(--sans);
@@ -830,14 +888,19 @@ function setBusy(busy) {
 // nothing in its place if the turn failed and was rolled back.
 function provisionally(text) {
   const line = document.createElement("p");
-  line.className = "line you provisional";
+  line.className = "line you provisional spoken";
   const who = document.createElement("span");
   who.className = "speaker";
   who.textContent = state.character_name || "";
   const said = document.createElement("span");
   said.className = "said";
   said.textContent = text;
-  line.append(who, said);
+  const body = document.createElement("span");
+  body.className = "body";
+  body.append(who, said);
+  // The same face the real line will carry, so the provisional line does
+  // not visibly change shape when the turn lands and replaces it.
+  line.append(faceFor(state.world, state.character, state.character_name), body);
   el("scroll").appendChild(line);
   scroll();
 }
@@ -874,13 +937,20 @@ function render(event) {
     line.append(tag, document.createTextNode(event.content));
   } else if (event.kind === "utterance") {
     if (event.speaker === state.character) line.classList.add("you");
+    line.classList.add("spoken");
     const who = document.createElement("span");
     who.className = "speaker";
     who.textContent = event.speaker_name || "";
     const said = document.createElement("span");
     said.className = "said";
     said.textContent = event.content;
-    line.append(who, said);
+    const body = document.createElement("span");
+    body.className = "body";
+    body.append(who, said);
+    // Only when the engine named a speaker. A line the projection
+    // attributed to nobody must not be given a face by the interface.
+    if (event.speaker) line.appendChild(faceFor(state.world, event.speaker, event.speaker_name));
+    line.appendChild(body);
   } else {
     line.classList.add("prose");
     line.textContent = event.content;
@@ -903,17 +973,25 @@ async function refresh() {
   // A name can be one the narrator invented mid-scene, so it is model
   // output: put it in the page as text, not as markup.
   const who = el("who");
-  who.textContent = state.present.length ? "with " : "alone";
+  who.textContent = state.present.length ? "with" : "alone";
   state.present.forEach((person, i) => {
-    if (i) who.appendChild(document.createTextNode(", "));
+    if (i) who.appendChild(document.createTextNode(","));
+    const holder = document.createElement("span");
+    holder.className = "person";
     const name = document.createElement("em");
     name.textContent = person.name;
-    who.appendChild(name);
+    holder.append(faceFor(state.world, person.id, person.name), name);
+    who.appendChild(holder);
   });
   el("clock").textContent = new Date(state.story_time).toLocaleTimeString([], {
     hour: "numeric", minute: "2-digit",
   });
-  el("pov").textContent = state.character_name + "’s point of view";
+  const pov = el("pov");
+  pov.textContent = "";
+  pov.append(
+    faceFor(state.world, state.character, state.character_name),
+    document.createTextNode(state.character_name + "’s point of view"),
+  );
 
   const rooms = el("rooms");
   rooms.textContent = "";
@@ -1136,6 +1214,35 @@ function named(worldId, sceneId) {
   };
 }
 
+// Every world has a cover and everybody in it has a face, because the
+// service answers both for every world whether or not anybody drew one.
+// So these never need a "did the author supply art" branch, and the page
+// never has an empty frame in it.
+//
+// Ids go through encodeURIComponent: a world id is a directory name and
+// a character id is authored, but a generated world's ids come out of a
+// model, and a name is not a path just because it is usually shaped like
+// one.
+function coverOf(worldId) {
+  return `/worlds/${encodeURIComponent(worldId)}/cover`;
+}
+
+function faceOf(worldId, characterId) {
+  return `/worlds/${encodeURIComponent(worldId)}/faces/${encodeURIComponent(characterId)}`;
+}
+
+function faceFor(worldId, characterId, name) {
+  const face = document.createElement("img");
+  face.className = "face";
+  face.loading = "lazy";
+  face.src = faceOf(worldId, characterId);
+  // A name can be one the player typed or one the narrator invented, so
+  // it goes in as text — alt is an attribute, and that is still a place
+  // markup would be markup.
+  face.alt = name || "";
+  return face;
+}
+
 async function showStories() {
   const stories = await api.stories();
   const list = el("yours");
@@ -1153,6 +1260,14 @@ async function showStories() {
     if (where.scene && where.scene !== story.title) meta.push({text: where.scene});
     meta.push({text: story.turns ? turns : "not started"}, {text: when(story.played_at)});
     const open = card(story.title, "", meta);
+    // The cover, so the shelf of stories you left is a shelf and not a
+    // list of filenames.
+    const mark = document.createElement("img");
+    mark.className = "face";
+    mark.loading = "lazy";
+    mark.src = coverOf(story.world);
+    mark.alt = "";
+    open.querySelector(".name").prepend(mark);
     open.onclick = () => enter(api.resumeStory(story.id));
     const drop = document.createElement("button");
     drop.className = "drop";
@@ -1179,11 +1294,22 @@ async function showWorlds() {
   for (const world of shelf) {
     const section = document.createElement("section");
     section.className = "world";
-    const heading = block(section, "h3", world.title);
+
+    const plate = document.createElement("div");
+    plate.className = "plate";
+    const art = document.createElement("img");
+    art.loading = "lazy";
+    art.src = coverOf(world.id);
+    art.alt = "";
+    const over = document.createElement("div");
+    over.className = "over";
+    const heading = block(over, "h3", world.title);
     if (world.language && !world.language.startsWith("en")) {
       block(heading, "span", world.language, "lang");
     }
-    if (world.blurb) block(section, "p", world.blurb, "blurb");
+    if (world.blurb) block(over, "p", world.blurb, "blurb");
+    plate.append(art, over);
+    section.appendChild(plate);
 
     const openings = world.scenes.filter(scene => scene.opens);
     const rest = world.scenes.filter(scene => !scene.opens);

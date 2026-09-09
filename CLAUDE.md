@@ -136,6 +136,14 @@ and only ever the one shape of story — a secret, and the morning after it came
 premise gets that shape, which is the same mistake as the shipped worlds all being quiet
 literary drama, arrived at from the other direction.
 
+**The client is no longer only prose.** A world has a cover and everybody in it has a
+picture — an `image:` pointing at a file when somebody drew one, and a plate drawn from the
+id when nobody did, which is every generated world. That ordering is the point: art is the
+one thing an author cannot write in YAML, so the generated version is the default and the
+file is the override, and no screen is ever an empty frame waiting for something that does
+not exist. What is still missing: rooms have no art, so the scene view is faces and text
+over a plain ground.
+
 The first dent: **the character you play is yours.** A name and a line about how
 you come across, chosen where you pick the story, with the name substituted through every
 piece of authored prose that used the old one and the line becoming something the room

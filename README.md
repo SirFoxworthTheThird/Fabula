@@ -248,6 +248,58 @@ paper:
   `"title": "two or three words"` writes a scene called *two or three words*, measured
   first time out.
 
+### A cover for every story, a face for everybody in it
+
+The client was prose on a page, which is what a story is and also what a terminal is. The
+shelf this app sits on is one people browse with their eyes, and being the one that is all
+text is not principled, it is bare.
+
+So a world has cover art and everybody in it has a picture, and both are optional:
+
+```yaml
+# world.yaml
+image: art/cover.svg      # relative to the world directory
+
+# characters/tomas.yaml
+image: art/tomas.jpg
+```
+
+**What matters is what happens when nobody drew anything**, because that is every world
+the generator writes and three of the four shipped here. The authored file is the
+*override*; the fallback is a plate drawn from the id — deterministic SVG, no files to
+ship, nothing fetched from anywhere, and no world without a picture. One URL per thing
+(`/worlds/{id}/cover`, `/worlds/{id}/faces/{character}`), always answering, so the client
+never branches on whether art exists.
+
+Two decisions make the drawn plates look deliberate rather than like broken avatars:
+
+* **A cast is spaced around the wheel, not hashed.** Hashing each hue independently clumps
+  — measured, on `winterlight`, which came out as five pinks. Each character takes a slot
+  in a band anchored to the world's own hue, so five people are five colours *and*
+  Ashgrove's cast looks like Ashgrove's cast.
+* **No initials, and no faces.** A letter on a coloured square reads as a placeholder for
+  a picture that never arrives. And a *face* nobody wrote would be a claim about somebody's
+  appearance — this app asks the player for their own line about how they come across
+  rather than inventing one for them, so a figure is the honest amount to say.
+
+`worlds/ashgrove/art/cover.svg` is hand-drawn and is the one in the repo that exercises the
+authored path. SVG because it is the one image format that is text, so it belongs in a repo
+and diffs like everything else here.
+
+A world directory is content, not code — generated here, copied off another machine,
+downloaded from somebody — so the path inside it gets treated the way any other path from
+outside would: resolved, and required to still be inside the world afterwards.
+`image: ../../../etc/passwd` is why `art.authored()` exists rather than a bare
+`world_dir / named`, and only types a browser can render are served. An `image:` that
+points at nothing is a complaint from `inspect.py`, because otherwise it looks exactly like
+a world that never had a picture and the author is left wondering why theirs is not
+showing.
+
+Faces appear beside spoken lines only. Narration has no speaker, and a half-heard line
+through a wall is never given one — attaching a face would claim the listener knows who
+that was, which is the whole thing the perception grading exists to avoid. The row of who
+is here rides on `present`, which is already filtered to what this character can perceive.
+
 ### Play as somebody of your own
 
 Everything in a world is authored, which is right for the parts a story turns on and

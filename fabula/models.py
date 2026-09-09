@@ -95,6 +95,12 @@ class Character(BaseModel):
     protects: list[str] = Field(default_factory=list)
     location_id: str
     is_user: bool = False
+    # A picture of this person, as a path relative to the world
+    # directory. Empty means the plate `fabula.art` draws from their id,
+    # which is what every shipped world uses: art is the one thing an
+    # author cannot write in YAML, so the generated one is the default
+    # and the file is the override.
+    image: str = ""
 
 
 class Belief(BaseModel):

@@ -21,15 +21,16 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import Body, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 from starlette.concurrency import run_in_threadpool
 
 from fabula.env import load_env
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
+from fabula.art import authored, cover, portrait
 from fabula.discovery import invents_a_fact
-from fabula.loader import catalogue, load_world
+from fabula.loader import catalogue, load_characters, load_world
 from fabula.player import Player
 from fabula.settings import DEFAULT_SETTINGS, Settings, describe
 from fabula.invent import CannotInvent, invent
@@ -73,6 +74,9 @@ class Named(BaseModel):
 
 class SceneState(BaseModel):
     session_id: str
+    # Which world this is, so a client can ask for its art. Not a
+    # disclosure: it is the directory the player picked off the shelf.
+    world: str
     scene: str
     mode: str
     character: str
@@ -398,6 +402,7 @@ def create_app(
         events = session.store.get_events(session.scene.id)
         return SceneState(
             session_id=session_id,
+            world=session.world.id,
             scene=session.scene.id,
             mode=session.scene.mode,
             character=session.user_character.id,
@@ -546,6 +551,63 @@ def create_app(
             for world in sorted(worlds_root.iterdir())
             if (world / "world.yaml").is_file()
         }
+
+    # A shelf of prose is a terminal with a stylesheet. The category this
+    # app is in is one people browse with their eyes, so every world has a
+    # cover and everybody in it has a face — the authored file when there
+    # is one, and a plate drawn from the id when there is not, which is
+    # every world here and every world the generator writes.
+    #
+    # One URL per thing, always answering, so the client never has to know
+    # which of the two it is getting.
+    def _art(svg: str) -> Response:
+        return Response(
+            content=svg,
+            media_type="image/svg+xml",
+            # Long enough that the shelf does not refetch a dozen plates
+            # on every render, short enough that an author who drops a
+            # real file in sees it without explaining the cache to
+            # themselves.
+            headers={"Cache-Control": "public, max-age=60"},
+        )
+
+    def _served(world_dir: Path, named: str) -> Response | None:
+        found = authored(world_dir, named)
+        if found is None:
+            return None
+        path, kind = found
+        return Response(
+            content=path.read_bytes(),
+            media_type=kind,
+            headers={"Cache-Control": "public, max-age=60"},
+        )
+
+    @app.get("/worlds/{world}/cover", include_in_schema=False)
+    def world_cover(world: str) -> Response:
+        world_dir = _world_dir(worlds_root, world)
+        try:
+            loaded = load_world(world_dir)
+        except Exception:
+            raise HTTPException(status_code=404, detail=f"no world named {world!r}")
+        return _served(world_dir, loaded.image) or _art(cover(loaded.id, loaded.title))
+
+    @app.get("/worlds/{world}/faces/{character}", include_in_schema=False)
+    def character_face(world: str, character: str) -> Response:
+        world_dir = _world_dir(worlds_root, world)
+        try:
+            loaded = load_world(world_dir)
+            cast = load_characters(world_dir)
+        except Exception:
+            raise HTTPException(status_code=404, detail=f"no world named {world!r}")
+        person = cast.get(character)
+        if person is None:
+            raise HTTPException(status_code=404, detail=f"nobody called {character!r}")
+        # Their place in the cast, which is what keeps a room of five
+        # from being one colour in five shades.
+        order = list(cast)
+        return _served(world_dir, person.image) or _art(
+            portrait(loaded.id, person.id, person.name, among=(order.index(character), len(order)))
+        )
 
     @app.get("/settings")
     def read_settings() -> dict:

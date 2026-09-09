@@ -195,6 +195,9 @@ class World(BaseModel):
     # and a world that never opts in behaves exactly as it always did.
     discover_rooms: bool = False
     items: dict[str, Item] = Field(default_factory=dict)
+    # Cover art, as a path relative to the world directory. Empty means
+    # the plate `fabula.art` draws from the world id.
+    image: str = ""
 
     @property
     def name(self) -> str:

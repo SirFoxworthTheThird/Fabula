@@ -2,6 +2,9 @@ id: ashgrove
 title: Ashgrove
 blurb: >-
   A house, a family, and something one of them has not said out loud.
+# Cover art, relative to this directory. Every world has one
+# either way: without this the service draws a plate from the id.
+image: art/cover.svg
 rooms:
   kitchen:
     name: the kitchen
