@@ -482,6 +482,7 @@ the HTTP wire.
 | `world.py` | Rooms, adjacency, who perceives what | **None, ever** |
 | `memory.py` | Projection, tiering, decay, retrieval | Summarization only |
 | `director.py` | Speaker selection, pressures, time, turn budget | No — arbitration is argmax over bids |
+| `beats.py` | What the room could use next, from a closed set | **None, ever** |
 | `narrator.py` | Describes perceivable action; renders pressures | Yes |
 | `agents.py` | Bids to speak; generates utterances | Yes |
 
@@ -491,6 +492,47 @@ enforceable rather than aspirational.
 Supporting modules: `session.py` (the surface both clients use), `chronology.py` (time
 skips, off-screen intentions), `pressures.py`, `persistence.py`, `summaries.py`,
 `db.py`, `loader.py`.
+
+### What gets narrated, and who decides
+
+The narrator used to be handed the triggering event and asked for "one or two sentences
+of scene-setting narration". It knew what had just happened and nothing about what the
+scene needed, so it fired rarely and wrote whatever the last line suggested. A scene
+played that way is people talking in a white room.
+
+The director says what to narrate now. It is the only omniscient component, which is the
+whole design problem: an instruction written freely from what it knows would be a channel
+from the world log straight into prose everybody in the room perceives — "narrate that
+Tomás is nervous about the music box" is a leak with extra steps. So a **beat** is one id
+from a closed set, plus something anybody standing there can already see:
+
+| beat | when | what it carries |
+|---|---|---|
+| `the_room` | the player walked in | the room's authored description |
+| `lull` | three straight lines of talk | — |
+| `after_deflection` | somebody visibly did not answer | — |
+| `held_back` | somebody present has said nothing for a while | their name |
+| `object` | an authored item nobody has looked at | its name |
+| `alone` | the player spoke and nobody is there | — |
+| `arrival` / `departure` / `time_skip` | the story moved | — |
+
+Chosen by code in `beats.py` from the event log and the world — never from beliefs,
+trust, goals or what anybody protects, and never by a model, so it costs nothing and is
+the same every time. Atmosphere beats wait for `COOLDOWN` events of quiet in *that room*;
+an arrival never waits, because losing it is worse than one paragraph too many. And every
+narration is checked before it lands: one that names a world fact is dropped, because it
+would raise the subject in front of the room and end an arc nobody had spoken in.
+
+And a turn always answers. If nobody bids and no beat is due, the room takes the turn
+rather than nobody having it — *perceived*, not merely appended, because a pressure firing
+two rooms away is the story moving and still silence where the player is standing. The
+beat it falls back on is anchored on the last line they actually heard, in the room they
+are actually in: `last_event` can be two rooms away, and putting that in the prompt would
+narrate their room out of words they never perceived.
+
+Measured on the shipped scenes, four player lines each: 6 narrations to 12 spoken lines in
+`the_dinner`, 7 to 10 in `arrival`, 8 to 10 in `the_manifest` — against 4, 5 and 6 before.
+The extra prose costs a model call each, which is the bill for asking for it.
 
 ### The turn loop
 

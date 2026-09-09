@@ -5,14 +5,50 @@ filtered through the same world model as everything else, so narration
 can never describe what an off-scene character couldn't perceive."""
 from __future__ import annotations
 
+from fabula import beats
 from fabula.llm import LLMClient
 from fabula.models import Bid, Character, Event, Pressure
 from fabula.world import Room, World, write_in
 
 NARRATOR_ID = "__narrator__"
 
-LULL_WINDOW = 5    # consecutive utterances before the room wants describing
-LULL_DESIRE = 0.4  # enough to beat idle chatter, not a character with something to say
+# Kept as a name other modules and tests import; the number lives with
+# the beats now, and it came down from five — which is a long time for a
+# scene to go without the place existing.
+LULL_WINDOW = beats.LULL_WINDOW
+
+# What each beat asks for. The director picks the id; this is the only
+# place that turns one into words, and every line here is written to stay
+# on what anybody standing in the room can see.
+BEATS: dict[str, str] = {
+    "lull": (
+        "They have been talking and nothing has happened around them. Give the room "
+        "a beat of its own: what the place is doing while they talk."
+    ),
+    "after_deflection": (
+        "Somebody has just not answered. Hold on the moment — the pause itself and "
+        "what the room does with it. Never say what anybody is thinking or hiding."
+    ),
+    "held_back": (
+        "{subject} is standing there and has not said anything for a while. Put them "
+        "in the frame: what their hands are doing, where they are looking. Never what "
+        "they feel, and never what they are about to say."
+    ),
+    "object": (
+        "There is {subject} in this room, and nobody has looked at it yet. Give it one "
+        "beat."
+    ),
+    "nobody_speaks": (
+        "Nobody answers. Describe the pause: what the room and the people standing in "
+        "it are doing while nobody speaks. Never say what any of them is thinking."
+    ),
+    "alone": (
+        "There is nobody here to answer. Describe what the room does with the silence."
+    ),
+    "arrival": "Describe the arrival.",
+    "departure": "Describe the departure.",
+    "time_skip": "Describe the room now that the time has moved.",
+}
 
 
 def _manner(character: Character) -> str:
@@ -31,6 +67,15 @@ RESTRAINT = (
     "smells, times of day, or people that have not appeared. Describe the space and "
     "what is happening in it, not anyone's appearance or inner state."
 )
+
+
+def as_bid(beat: beats.Beat | None) -> Bid | None:
+    """A beat, as an offer the director can arbitrate over. Bid rationales
+    stop at the director and never reach an event, so the reason a beat
+    was chosen cannot reach a character's context."""
+    if beat is None:
+        return None
+    return Bid(character_id=NARRATOR_ID, desire=beat.desire, one_line_reason=beat.reason)
 
 
 class Narrator:
@@ -59,59 +104,18 @@ class Narrator:
     def bid(
         self, event: Event, events: list[Event], world: World, alone: bool = False
     ) -> Bid | None:
-        """Bids on a lull, an undescribed physical action, or a scene that
-        needs establishing — never on ordinary dialogue exchange."""
-        if not events:
-            return Bid(character_id=NARRATOR_ID, desire=0.9, one_line_reason="establish the scene")
-        # Never gild prose that is already prose: a narration, or a
-        # pressure's effect, which the narrator itself just rendered.
-        if event.kind == "narration" or event.metadata.get("pressure_id"):
-            return None
-        if self.protagonist_id and event.actor_id == self.protagonist_id:
-            # Never narrate the player's own action back at them: a model
-            # told not to still answers a move with "Elena's light blue
-            # dress caught the dim light", inventing a dress and playing
-            # the one character the player controls. But a room they have
-            # just walked into is not them, and refusing outright left the
-            # most natural moment for scene-setting completely silent.
-            # Describe the place, never the person.
-            if event.kind == "arrival":
-                return Bid(
-                    character_id=NARRATOR_ID,
-                    desire=0.6,
-                    one_line_reason="describe the room they walked into",
-                )
-            if alone:
-                # Nobody is here to answer, so refusing to narrate means
-                # the turn produces nothing at all: the player speaks into
-                # an empty room and the app prints "No one answers." A
-                # room that never responds is not a story. What is
-                # described is still the place and never the person.
-                return Bid(
-                    character_id=NARRATOR_ID,
-                    desire=0.55,
-                    one_line_reason="nobody is here to answer them",
-                )
-            return None
+        """What the narrator would do with this moment, as an offer.
 
-        if event.kind in ("arrival", "departure", "time_skip"):
-            return Bid(
-                character_id=NARRATOR_ID,
-                desire=0.7,
-                one_line_reason=f"describe the {event.kind}",
+        The choosing is `beats.choose` — the director works out what the
+        room could use, and this turns it into something to arbitrate
+        over. Kept as a method so a caller with no cast to hand still
+        gets the shape of the answer.
+        """
+        return as_bid(
+            beats.choose(
+                event, events, world, protagonist_id=self.protagonist_id, alone=alone
             )
-
-        # A lull: nothing but talk for a while. Spec §7 lists this as one
-        # of the narrator's triggers, and without it a scene becomes a
-        # wall of dialogue with no room around it.
-        recent = events[-LULL_WINDOW:]
-        if len(recent) >= LULL_WINDOW and all(e.kind == "utterance" for e in recent):
-            return Bid(
-                character_id=NARRATOR_ID,
-                desire=LULL_DESIRE,
-                one_line_reason="the scene has been nothing but dialogue",
-            )
-        return None
+        )
 
     def render_pressure(self, pressure: Pressure, location_id: str, world: World) -> str:
         """Turn a chosen pressure's authored intent into perceivable prose.
@@ -236,12 +240,26 @@ class Narrator:
         prompt = f"Room: {world.room_name(location_id)}{grounding}\nDescribe the room."
         return self.llm.complete(system=system, prompt=prompt, key=f"place:{location_id}")
 
-    def generate(self, event: Event, events: list[Event], world: World) -> str:
-        if (
+    def generate(
+        self,
+        event: Event,
+        events: list[Event],
+        world: World,
+        beat: beats.Beat | None = None,
+        present: list[str] | None = None,
+    ) -> str:
+        """Write the beat the director asked for.
+
+        With no beat it reads the last event and writes something about
+        it, which is what it used to do everywhere and is still what a
+        caller with nothing to say about the moment gets.
+        """
+        walked_in = (
             self.protagonist_id
             and event.actor_id == self.protagonist_id
             and event.kind == "arrival"
-        ):
+        )
+        if (beat is not None and beat.id == "the_room") or (beat is None and walked_in):
             return self.describe_place(event.location_id, world)
 
         location_name = world.room_name(event.location_id)
@@ -252,9 +270,18 @@ class Narrator:
             "information no one present could observe, never resolve dialogue for a "
             f"character. {RESTRAINT}{write_in(world.language)}{self._hands_off()}"
         )
+        asked = (
+            BEATS[beat.id].format(subject=beat.subject)
+            if beat is not None and beat.id in BEATS
+            else "Write one or two sentences of scene-setting narration."
+        )
+        # Names only, and only of people standing in the room: what the
+        # beat is allowed to know is what anybody there can see.
+        who = f"Who is here: {', '.join(present)}\n" if present else ""
         prompt = (
             f"Location: {location_name}\n"
-            f"Triggering event ({event.kind}): {event.content}\n"
-            "Write one or two sentences of scene-setting narration."
+            f"{who}"
+            f"The last thing that happened ({event.kind}): {event.content}\n\n"
+            f"{asked}"
         )
         return self.llm.complete(system=system, prompt=prompt, key=NARRATOR_ID)

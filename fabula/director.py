@@ -46,7 +46,9 @@ from fabula.persistence import (
     worth_keeping,
 )
 from fabula.models import Belief, Bid, Character, Event, Intention, Pressure, ProjectedEvent
-from fabula.narrator import NARRATOR_ID, Narrator
+from fabula.beats import NOBODY_SPEAKS, Beat
+from fabula.beats import choose as choose_beat
+from fabula.narrator import NARRATOR_ID, Narrator, as_bid
 from fabula.pressures import scene_state, select_pressure
 from fabula.world import World, resolve_perception
 
@@ -206,7 +208,7 @@ class Director:
         if reported is not None:
             events_this_turn.append(reported)
             self._absorb()
-        return events_this_turn + self._loop(stored_user_event)
+        return events_this_turn + self._loop(stored_user_event, must_answer=True)
 
     def open_turn(self, opening: Event) -> list[Event]:
         """Let the room have the first word.
@@ -228,12 +230,17 @@ class Director:
         return self._loop(opening, budget=1, pressures=False)
 
     def _loop(
-        self, last_event: Event, budget: int | None = None, pressures: bool = True
+        self,
+        last_event: Event,
+        budget: int | None = None,
+        pressures: bool = True,
+        must_answer: bool = False,
     ) -> list[Event]:
         """Bid, arbitrate, act, repeat — until somebody yields to the
         player or the scene runs out of budget."""
         events_this_turn: list[Event] = []
         consecutive_agent_turns = 0
+        answered = False
 
         for _ in range(budget if budget is not None else self.scene.turn_budget):
             all_events = self.store.get_events(self.scene.id)
@@ -252,17 +259,24 @@ class Director:
                     character, last_event, level, all_events, self.contexts, self.llm
                 )
 
-            asked = in_parallel(
-                [bid_for(character) for character in candidates]
-                + [
-                    lambda: self.narrator.bid(
-                        last_event, all_events, self.world, alone=not candidates
-                    )
-                ],
-                self.workers,
+            # What the room could use, decided here rather than left to
+            # the narrator to infer from the last line. The director is
+            # the only omniscient component, so what it hands over is one
+            # id from a closed set plus something anybody standing there
+            # can already see — never a sentence, and never anything read
+            # from beliefs or trust.
+            beat = choose_beat(
+                last_event,
+                all_events,
+                self.world,
+                self.characters,
+                protagonist_id=self.protagonist_id(),
+                alone=not candidates,
             )
-            bids: list[Bid] = asked[:-1]
-            narrator_bid = asked[-1]
+            bids: list[Bid] = in_parallel(
+                [bid_for(character) for character in candidates], self.workers
+            )
+            narrator_bid = as_bid(beat)
             pressure_choice = (
                 select_pressure(
                     self.pressures,
@@ -283,7 +297,22 @@ class Director:
             )
 
             if decision.kind == "yield_to_user":
-                break
+                # A turn the player perceives nothing of is the worst
+                # answer the app can give: they say something into a room
+                # with somebody standing in it and get "No one answers."
+                # Nobody bid and no beat was due — so the room takes the
+                # turn rather than nobody having it.
+                #
+                # *Perceived*, not merely appended: a pressure firing two
+                # rooms away is the story moving, and it is still silence
+                # where the player is standing.
+                if not must_answer or answered:
+                    break
+                anchor = self._heard_last(all_events)
+                if anchor is None:
+                    break
+                last_event, beat = anchor
+                decision = Decision(kind="narrate", character_id=NARRATOR_ID, bids=bids)
 
             if decision.kind == "fire_pressure":
                 new_event = self._fire(decision.pressure)
@@ -303,7 +332,30 @@ class Director:
                     metadata={"withheld": True},
                 )
             elif decision.kind == "narrate":
-                content = self.narrator.generate(last_event, all_events, self.world)
+                # Who is standing there, and never the player among
+                # them: naming them is inviting the one thing the
+                # narrator must not do.
+                here = [
+                    character.name
+                    for character in self.characters.values()
+                    if not character.is_user
+                    and location_at_seq(
+                        character.id, character.location_id, all_events, last_event.seq + 1
+                    )
+                    == last_event.location_id
+                ]
+                content = self.narrator.generate(
+                    last_event, all_events, self.world, beat=beat, present=here
+                )
+                named = invents_a_fact(content, self.world)
+                if named:
+                    # A narration that names a fact raises the subject in
+                    # front of everybody in the room — it satisfies
+                    # `fact_spoken` and can end an arc that was waiting
+                    # for somebody to say it out loud. Nobody said it, so
+                    # the beat is dropped and the turn goes on.
+                    consecutive_agent_turns += 1
+                    continue
                 new_event = self.build_event("narration", None, last_event.location_id, content)
             else:
                 character = self.characters[decision.character_id]
@@ -315,6 +367,7 @@ class Director:
 
             last_event = self.store.append_event(new_event)
             events_this_turn.append(last_event)
+            answered = answered or self._reaches_user(last_event)
             self._absorb()
             # Anybody can report having told somebody something, not only
             # the player.
@@ -334,6 +387,39 @@ class Director:
                 break
 
         return events_this_turn
+
+    def _reaches_user(self, event: Event) -> bool:
+        """Did the player perceive any of that, at any fidelity?"""
+        user = next((c for c in self.characters.values() if c.is_user), None)
+        if user is None:
+            return False
+        where = self.current_location(user)
+        return resolve_perception(event, user.id, where, self.world) != "none"
+
+    def _heard_last(self, all_events: list[Event]) -> tuple[Event, Beat] | None:
+        """Something to hang a beat on, in the room the player is in.
+
+        The anchor has to be a line they actually heard: `last_event` may
+        be two rooms away, and putting it in the prompt would narrate
+        their room out of words they never perceived. With nothing heard
+        yet there is still the room itself, which needs no anchor at all.
+        """
+        user = next((c for c in self.characters.values() if c.is_user), None)
+        if user is None:
+            return None
+        where = self.current_location(user)
+        heard = [
+            event
+            for event in all_events
+            if event.location_id == where
+            and resolve_perception(event, user.id, where, self.world) == "full"
+        ]
+        if not heard:
+            return None
+        return heard[-1], Beat(NOBODY_SPEAKS, 1.0, "nobody had anything to say")
+
+    def protagonist_id(self) -> str | None:
+        return next((c.id for c in self.characters.values() if c.is_user), None)
 
     def _addresses_user(self, event: Event) -> bool:
         user = next((c for c in self.characters.values() if c.is_user), None)
