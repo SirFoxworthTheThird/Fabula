@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from fabula.beats import COOLDOWN, LULL_WINDOW, NOBODY_SPEAKS, QUIET_FOR, Beat, choose
-from fabula.director import Director
+from fabula.director import HOLDS_FOR, Director
 from fabula.llm import FakeLLM
 from fabula.models import Event
 from fabula.narrator import BEATS, Narrator, as_bid
@@ -580,4 +580,107 @@ def test_a_narration_that_plays_the_player_is_dropped():
     written = [e.content for e in session.store.get_events(session.scene.id)]
 
     assert not any("Elena's finger" in line for line in written)
+    session.close()
+
+
+# --- and not handing over what you are holding --------------------------
+#
+# Measured against Qwen2.5-3B on `ashgrove/the_dinner`: Tomás answered the
+# first line of the scene with "I heard the music box move." He is the one
+# person alive who knows he broke it, his prompt contains the words he is
+# protecting — it has to, or he cannot behave as somebody keeping them —
+# and a small model will not leave a salient token alone.
+#
+# On a sandbox that costs a scene. On `the_reckoning`, which is over the
+# moment those words are said out loud, it ends the story on turn one.
+
+def a_scene_at(seq: int):
+    """`the_reckoning`, wound forward to a given point in its log."""
+    session = Session.open(ASHGROVE, "the_reckoning", llm=FakeLLM())
+    while (session.store.get_events(session.scene.id) or [None])[-1] is None or \
+            session.store.get_events(session.scene.id)[-1].seq < seq:
+        session.store.append_event(
+            session.director.build_event("utterance", "elena", "kitchen", "Go on.")
+        )
+    return session
+
+
+def test_a_secret_is_not_handed_over_in_the_first_breath():
+    session = a_scene_at(2)
+    events = session.store.get_events(session.scene.id)
+
+    assert session.director._gives_away("tomas", "I heard the music box move.", events)
+    assert not session.director._gives_away("tomas", "It's nothing. Sit down.", events)
+    session.close()
+
+
+def test_but_the_engine_stops_holding_them_back():
+    """A secret nobody can ever say is not a secret, it is a locked door.
+    In ashgrove *nobody else knows*, so a permanent rule would make the
+    reckoning unwinnable — and somebody finally cracking is the thing the
+    scene is built to earn."""
+    session = a_scene_at(HOLDS_FOR + 2)
+    events = session.store.get_events(session.scene.id)
+
+    assert not session.director._gives_away("tomas", "I broke the music box.", events)
+    session.close()
+
+
+def test_nor_once_somebody_else_has_raised_it():
+    """Holding them to it after the room has heard it would be the engine
+    keeping a secret that is already out."""
+    session = a_scene_at(2)
+    session.store.append_event(
+        session.director.build_event("utterance", "maria", "kitchen", "The music box.")
+    )
+    events = session.store.get_events(session.scene.id)
+
+    assert not session.director._gives_away("tomas", "Fine. I broke the music box.", events)
+    session.close()
+
+
+def test_it_is_only_the_secret_they_themselves_keep():
+    """Maria keeps nothing. Nothing she can say is a betrayal of her own
+    confidence, whatever it raises."""
+    session = a_scene_at(2)
+    events = session.store.get_events(session.scene.id)
+
+    assert not session.director._gives_away("maria", "I heard the music box move.", events)
+    assert not session.director._gives_away("elena", "The music box?", events)
+    session.close()
+
+
+def test_holding_on_is_something_the_room_can_see():
+    """Not silence and not a dropped beat: an ordinary event with an
+    actor, perception-filtered like anything else, so the player watches
+    him decline rather than watching nothing happen."""
+    session = Session.open(
+        ASHGROVE, "the_reckoning",
+        llm=FakeLLM(canned={"tomas": "I broke the music box in March."}),
+    )
+    session.say("Tomás, what is it?")
+
+    held = [
+        event for event in session.store.get_events(session.scene.id)
+        if event.metadata.get("held_back")
+    ]
+    assert held, "he reached for it twice and the engine turned it into a withhold"
+    assert held[0].actor_id == "tomas" and held[0].kind == "action"
+    assert "music box" not in held[0].content.lower()
+    session.close()
+
+
+def test_the_line_that_was_parroted_back_a_turn_later():
+    """Measured on a 3B: Tomás said it, the player said something else,
+    and Maria said Tomás's line back word for word. Checking only the
+    previous utterance walked straight past it."""
+    session = Session.open(ASHGROVE, "the_reckoning", llm=FakeLLM())
+    build = session.director.build_event
+    tea = "I'll pour the last of this tea."
+    session.store.append_event(build("utterance", "tomas", "kitchen", tea))
+    session.store.append_event(build("utterance", "elena", "kitchen", "Say it."))
+    session.store.append_event(build("narration", None, "kitchen", "The pots clink softly."))
+    events = session.store.get_events(session.scene.id)
+
+    assert session.director._already_said("maria", tea, events)
     session.close()

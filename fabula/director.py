@@ -52,7 +52,7 @@ from fabula.beats import choose as choose_beat
 from fabula.narrator import NARRATOR_ID, Narrator, as_bid
 from fabula import situations
 from fabula.pressures import scene_state, select_pressure
-from fabula.world import World, resolve_perception
+from fabula.world import World, resolve_perception, mentions_fact
 
 DecisionKind = Literal["speak", "narrate", "yield_to_user", "fire_pressure", "withhold"]
 
@@ -83,6 +83,25 @@ ECHO_SHARE = 0.5      # of the shorter line's content words
 ECHO_FLOOR = 3        # content words before overlap is worth measuring
 ECHO_SHARED = 2       # and at least this many held in common
 ECHO_BACK = 6         # how many of their own recent lines to look at
+
+# How long a character holds a secret they are keeping before the engine
+# stops holding them back.
+#
+# Measured against Qwen2.5-3B on `ashgrove/the_dinner`: Tomás, who is the
+# only person alive who knows he broke it, answered the first line of the
+# scene with "I heard the music box move." His prompt contains the words
+# he is protecting — it has to, or he cannot behave as somebody keeping
+# them — and a small model cannot leave a salient token alone. On the
+# sandbox that costs a scene; on `the_reckoning`, which is over the
+# moment those words are said out loud, it ends the story on turn one.
+#
+# Not a permanent block, because in ashgrove *nobody else knows*: a rule
+# that stopped him ever saying it would make that arc unreachable, and
+# somebody finally cracking is the thing the scene is built to earn. So
+# it is a floor and not a ceiling — in log positions, the unit the
+# authored triggers already use, and roughly the point at which
+# ashgrove's own pressures start firing.
+HOLDS_FOR = 12
 
 # Words that carry no subject. English plus the shipped worlds' other
 # language, which is the honest scope: the opening-phrase rule needs no
@@ -440,6 +459,31 @@ class Director:
                     character.id, character.location_id, all_events, last_event.seq + 1
                 )
                 content = generate_utterance(character, all_events, self.contexts, self.llm)
+                if self._gives_away(character.id, content, all_events):
+                    # One more try, in case it was the salient token and
+                    # not the character. If they reach for it again this
+                    # early, they visibly do not answer instead — which
+                    # is a thing the room can see, and truer to somebody
+                    # holding on than a line they would not have said.
+                    content = generate_utterance(
+                        character, all_events, self.contexts, self.llm
+                    )
+                    if self._gives_away(character.id, content, all_events):
+                        new_event = self.build_event(
+                            "action",
+                            character.id,
+                            location,
+                            self.narrator.render_withholding(
+                                character, self.world, location
+                            ),
+                            metadata={"withheld": True, "held_back": True},
+                        )
+                        last_event = self.store.append_event(new_event)
+                        events_this_turn.append(last_event)
+                        answered = answered or self._reaches_user(last_event)
+                        self._absorb()
+                        consecutive_agent_turns += 1
+                        continue
                 if self._already_said(character.id, content, all_events):
                     # Word for word what they last said. Their own lines
                     # are in the context they were given, and a small
@@ -582,9 +626,17 @@ class Director:
         spoken = [e for e in all_events if e.kind == "utterance"]
         mine = [e for e in spoken if e.actor_id == character_id]
 
+        # Word for word: their own last line and the one just said in
+        # front of them at any length, and — once the line is long enough
+        # that saying it twice cannot be a coincidence — anything of
+        # their own this scene and anything recently said in the room.
+        # Measured on a 3B: Tomás said "I'll pour the last of this tea"
+        # and Maria said it back, identically, one turn later with the
+        # player's line in between, which checking only the previous
+        # utterance walked straight past. "No." twice is still a person.
         against = [e.content for e in (mine[-1:] + spoken[-1:])]
         if len(words) > REPEAT_WORDS:
-            against += [e.content for e in mine]
+            against += [e.content for e in (mine + spoken[-ECHO_BACK:])]
         if any(bare(earlier) == words for earlier in against):
             return True
 
@@ -598,6 +650,44 @@ class Director:
             common = now & was
             if len(common) >= ECHO_SHARED and len(common) / min(len(now), len(was)) >= ECHO_SHARE:
                 return True
+        return False
+
+    def _gives_away(self, character_id: str, content: str, all_events: list[Event]) -> bool:
+        """Is this character handing over the thing they are keeping,
+        before the scene has given them any reason to?
+
+        `protects` is authored and the keywords are exact, so this is the
+        same deterministic shape as the narrator's `invents_a_fact` — and
+        it is needed for the same reason. The prompt tells them what they
+        are sitting on and tells them not to raise it; that rule holds on
+        a capable model and does not hold on a small one, and prompts
+        that only sometimes hold are not what this engine rests on.
+
+        It expires, deliberately. A secret nobody can ever say is not a
+        secret, it is a locked door: in ashgrove nobody but Tomás knows,
+        so a permanent rule would make `the_reckoning` unwinnable. Once
+        the scene has actually run, or once somebody else has raised the
+        subject, he is on his own.
+        """
+        character = self.characters.get(character_id)
+        if character is None or character.is_user or not character.protects:
+            return False
+        turn = all_events[-1].seq if all_events else 0
+        if turn > HOLDS_FOR:
+            return False
+        for fact_id in character.protects:
+            fact = self.world.facts.get(fact_id)
+            if fact is None or not mentions_fact(fact, content):
+                continue
+            # Already out, by somebody. Holding them to it now would be
+            # the engine keeping a secret the room has heard.
+            if any(
+                mentions_fact(fact, event.content)
+                for event in all_events
+                if event.actor_id != character_id
+            ):
+                continue
+            return True
         return False
 
     def _reaches_user(self, event: Event) -> bool:
