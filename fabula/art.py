@@ -26,7 +26,10 @@ Two things make it look deliberate rather than like a broken avatar:
 """
 from __future__ import annotations
 
+import base64
 import hashlib
+import struct
+import zlib
 from pathlib import Path
 
 # Deliberately not `hash()`: that is salted per process, so the same
@@ -100,6 +103,35 @@ def cover(world_id: str, title: str = "") -> str:
     )
 
 
+def _figure(world_id: str, character_id: str, among: tuple[int, int] | None) -> dict:
+    """The plate's numbers, before anybody decides how to draw them.
+
+    Shared by the SVG the app shows and the raster a character card
+    carries, so somebody's picture is the same picture wherever it turns
+    up.
+    """
+    grain = _seed("face", world_id, character_id)
+    place, cast = among or (0, 1)
+    # A band of the wheel starting well clear of the world's own hue, so
+    # nobody is the colour of the sky behind them, walked evenly and then
+    # nudged a little so a cast does not look like a paint chart.
+    step = 300 / max(cast, 1)
+    hue = (
+        _hue("world", world_id) + 40 + step * (place % max(cast, 1))
+        + _spread(grain[0], -step / 5, step / 5)
+    ) % 360
+    return {
+        "back": (hue, _spread(grain[1], 14, 30), _spread(grain[2], 22, 34)),
+        "figure": (hue, _spread(grain[3], 20, 40), _spread(grain[4], 58, 74)),
+        "rim": ((hue + 30) % 360, 45.0, 80.0),
+        "head": _spread(grain[5], 15, 19),
+        "neck": _spread(grain[6], 44, 50),
+        "shoulders": _spread(grain[7], 30, 40),
+        "lean": _spread(grain[8], -5, 5),
+        "top": _spread(grain[9], 30, 36),
+    }
+
+
 def portrait(
     world_id: str,
     character_id: str,
@@ -120,25 +152,10 @@ def portrait(
     them around a band instead guarantees the separation the whole point
     of the plate depends on: telling at a glance who just spoke.
     """
-    grain = _seed("face", world_id, character_id)
-    place, cast = among or (0, 1)
-    # A band of the wheel starting well clear of the world's own hue, so
-    # nobody is the colour of the sky behind them, walked evenly and then
-    # nudged a little so a cast does not look like a paint chart.
-    step = 300 / max(cast, 1)
-    hue = (
-        _hue("world", world_id) + 40 + step * (place % max(cast, 1))
-        + _spread(grain[0], -step / 5, step / 5)
-    ) % 360
-    back = _tone(hue, _spread(grain[1], 14, 30), _spread(grain[2], 22, 34))
-    figure = _tone(hue, _spread(grain[3], 20, 40), _spread(grain[4], 58, 74))
-    rim = _tone((hue + 30) % 360, 45, 80)
-
-    head = _spread(grain[5], 15, 19)
-    neck = _spread(grain[6], 44, 50)
-    shoulders = _spread(grain[7], 30, 40)
-    lean = _spread(grain[8], -5, 5)
-    top = _spread(grain[9], 30, 36)
+    plate = _figure(world_id, character_id, among)
+    back, figure, rim = (_tone(*plate[part]) for part in ("back", "figure", "rim"))
+    head, neck = plate["head"], plate["neck"]
+    shoulders, lean, top = plate["shoulders"], plate["lean"], plate["top"]
 
     return _svg(
         'viewBox="0 0 100 100" role="img"'
@@ -154,6 +171,110 @@ def portrait(
         f'<path d="M{50 - shoulders:.0f} 100 Q 50 {neck:.0f} {50 + shoulders:.0f} 100 Z"'
         f' fill="{figure}"/>'
         f"</g>"
+    )
+
+
+def _rgb(hue: float, saturation: float, lightness: float) -> tuple[int, int, int]:
+    import colorsys
+
+    red, green, blue = colorsys.hls_to_rgb(
+        (hue % 360) / 360, lightness / 100, saturation / 100
+    )
+    return round(red * 255), round(green * 255), round(blue * 255)
+
+
+def raster(
+    world_id: str,
+    character_id: str,
+    among: tuple[int, int] | None = None,
+    size: int = 256,
+) -> bytes:
+    """The same plate, as pixels, for a card that has to be a PNG.
+
+    Drawn by evaluating the two shapes per pixel rather than by pulling
+    in an imaging library: the figure is a circle and a filled quadratic,
+    both of which answer "is this point inside you" in one line, and a
+    dependency for one picture would be a poor trade in an app whose
+    install story is already the weak part.
+    """
+    plate = _figure(world_id, character_id, among)
+    back, figure, rim = (_rgb(*plate[part]) for part in ("back", "figure", "rim"))
+    head, neck = plate["head"], plate["neck"]
+    shoulders, lean, top = plate["shoulders"], plate["lean"], plate["top"]
+
+    rows = bytearray()
+    for row in range(size):
+        rows.append(0)  # no filter on this scanline
+        y = row * 100 / size
+        for column in range(size):
+            x = column * 100 / size - lean
+            # The light, falling where the SVG's gradient puts it.
+            glow = max(
+                0.0, 1.0 - (((x - 40) ** 2 + (y - 30) ** 2) ** 0.5) / 80
+            ) * 0.35
+            pixel = tuple(
+                round(base + (lit - base) * glow) for base, lit in zip(back, rim)
+            )
+            if (x - 50) ** 2 + (y - top) ** 2 <= head * head:
+                pixel = figure
+            elif abs(x - 50) <= shoulders:
+                # The shoulder, which is the SVG's quadratic solved
+                # rather than guessed at. For a Bézier from (50-w, 100)
+                # through the control point (50, neck) to (50+w, 100),
+                # x is linear in t — x = 50 + w(2t - 1) — so the curve's
+                # height at a column is one substitution, and the filled
+                # path is everything below it.
+                t = (x - 50 + shoulders) / (2 * shoulders)
+                edge = 100 - 2 * t * (1 - t) * (100 - neck)
+                if y >= edge:
+                    pixel = figure
+            rows += bytes(pixel)
+    return _png(size, size, bytes(rows))
+
+
+def _chunk(kind: bytes, body: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(body)) + kind + body
+        + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+    )
+
+
+def _png(width: int, height: int, rows: bytes, text: dict[str, bytes] | None = None) -> bytes:
+    """A PNG, by hand. Colour type 2 is plain RGB with no palette and no
+    alpha, which is all a portrait plate needs."""
+    out = [b"\x89PNG\r\n\x1a\n"]
+    out.append(_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)))
+    for keyword, value in (text or {}).items():
+        out.append(_chunk(b"tEXt", keyword.encode("latin-1") + b"\x00" + value))
+    out.append(_chunk(b"IDAT", zlib.compress(rows, 9)))
+    out.append(_chunk(b"IEND", b""))
+    return b"".join(out)
+
+
+def carded(
+    world_id: str,
+    character_id: str,
+    payload: bytes,
+    among: tuple[int, int] | None = None,
+    size: int = 256,
+) -> bytes:
+    """This character's plate, with a character card inside it.
+
+    Which is what the rest of the shelf trades in: the picture is the
+    file, and the description rides along in a text chunk that every
+    reader in the category knows to look for.
+    """
+    plate = raster(world_id, character_id, among, size)
+    body = plate[8:]
+    # Slot the card in straight after the header, where every reader
+    # expects to find it and before any pixel data.
+    header_end = 8 + 25  # signature + IHDR length/type/body/crc
+    encoded = base64.b64encode(payload)
+    return (
+        plate[:header_end]
+        + _chunk(b"tEXt", b"chara\x00" + encoded)
+        + _chunk(b"tEXt", b"ccv3\x00" + encoded)
+        + plate[header_end:]
     )
 
 

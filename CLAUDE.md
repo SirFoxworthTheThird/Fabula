@@ -160,9 +160,15 @@ content, and the player sees the room take its turn one agent at a time. Do not 
 this into token streaming without first moving those checks somewhere they can run before
 the words are shown.
 
-**Nobody can share anything.** The category runs on character cards — the PNG-embedded v2
-spec that SillyTavern, Chub, Risu and the rest all read. A world here is YAML only this app
-understands: no import, no export, no format anyone else speaks.
+~~**Nobody can share anything.**~~ Done: character cards read and written, `--card` in and
+`--cards` out, PNG and JSON, no new dependency. Two things to keep hold of. **The
+instructions are dropped on the floor** — `system_prompt`, `post_history_instructions` and
+`character_book` are absent from `cards.KEPT`, because a card is a file off the internet
+and those fields exist to reach a model as instructions; the absence *is* the security
+property, so do not add them back for fidelity. And an imported card costs **no model
+call**: it becomes one room with the two of you in it, which means no facts and therefore
+no secrets. That is shallow on purpose. Generating a world around somebody else's character
+would put words in their mouth before the player had met them.
 
 And the thing worth remembering when picking what to do next: the more interesting list is
 not what they have that we lack, but what this design makes possible that one model

@@ -723,6 +723,11 @@
         <input type="text" id="invent-name" autocomplete="off"
                placeholder="optional — a name of your own">
       </div>
+      <div class="field">
+        <label for="card">Or a card</label>
+        <input type="file" id="card" accept=".png,.json,image/png,application/json">
+        <span class="hint">a character card from Chub, SillyTavern, Risu…</span>
+      </div>
       <label class="check">
         <input type="checkbox" id="invent-open-ended">
         <span>Just let it run
@@ -861,6 +866,12 @@ const api = {
   stories: () => ask("/stories"),
   startStory: (world, scene, character, openEnded) =>
     send("/stories", {world, scene, character, open_ended: openEnded}),
+  playCard: (file, name) =>
+    ask(`/cards?name=${encodeURIComponent(name || "")}`, {
+      method: "POST",
+      headers: {"Content-Type": "application/octet-stream"},
+      body: file,
+    }),
   inventWorld: (premise, character, openEnded) =>
     send("/invent", {premise, character, open_ended: openEnded}),
   resumeStory: id => send(`/stories/${id}/resume`),
@@ -1095,7 +1106,13 @@ async function refresh() {
   pov.textContent = "";
   pov.append(
     faceFor(state.world, state.character, state.character_name),
-    document.createTextNode(state.character_name + "’s point of view"),
+    // A card world calls its player "You" when nobody said otherwise,
+    // and "You’s point of view" is not a sentence.
+    document.createTextNode(
+      state.character_name.toLowerCase() === "you"
+        ? "your point of view"
+        : state.character_name + "’s point of view",
+    ),
   );
 
   const rooms = el("rooms");
@@ -1644,6 +1661,28 @@ el("save-settings").onclick = async () => {
   } catch (failure) {
     notice.textContent = failure.message;
     notice.classList.add("bad");
+  }
+};
+
+// A card from somewhere else. No model call at all: what a card
+// describes is a person and a situation, and generating a world around
+// one would put words in a stranger's character's mouth before the
+// player had met them.
+el("card").onchange = async () => {
+  const [file] = el("card").files;
+  if (!file) return;
+  const notice = el("invent-notice");
+  notice.classList.remove("bad");
+  notice.textContent = `Reading ${file.name}…`;
+  try {
+    const opened = await api.playCard(file, el("invent-name").value.trim());
+    notice.textContent = "";
+    await enter(Promise.resolve(opened));
+  } catch (failure) {
+    notice.textContent = failure.message;
+    notice.classList.add("bad");
+  } finally {
+    el("card").value = "";
   }
 };
 

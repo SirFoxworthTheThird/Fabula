@@ -9,3 +9,6 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# Cards are generated from the worlds themselves.
+worlds/*/cards/

@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 from starlette.concurrency import run_in_threadpool
@@ -28,9 +28,16 @@ from starlette.concurrency import run_in_threadpool
 from fabula.env import load_env
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
+import shutil
+
 from fabula.art import authored, cover, portrait
+from fabula.cards import NotACard
+from fabula.cards import as_world as card_world
+from fabula.cards import png as card_png
+from fabula.cards import read as cards_read
+from fabula.inspect import complaints
 from fabula.discovery import invents_a_fact
-from fabula.loader import catalogue, load_characters, load_world
+from fabula.loader import catalogue, load_characters, load_scene, load_world
 from fabula.player import Player
 from fabula.settings import DEFAULT_SETTINGS, Settings, describe
 from fabula.invent import CannotInvent, invent
@@ -710,6 +717,55 @@ def create_app(
                 settings.client(), settings.workers, settings.interpret, settings.direct
             )
         return dict(describe(settings), pinned=pinned)
+
+    @app.post("/cards", response_model=SceneState)
+    async def play_a_card(request: Request, name: str = "") -> SceneState:
+        """Play a character card from somewhere else.
+
+        The file arrives as the raw body rather than as a form, which
+        keeps `python-multipart` out of the install for one upload. What
+        the card is allowed to say — and what it is not, which is
+        anything shaped like an instruction — is `fabula.cards`.
+        """
+        data = await request.body()
+        try:
+            world_dir, scene = card_world(
+                cards_read(data), worlds_root, player_name=name
+            )
+        except NotACard as refused:
+            raise HTTPException(status_code=422, detail=str(refused))
+        complaint = complaints(world_dir)
+        if complaint:
+            shutil.rmtree(world_dir, ignore_errors=True)
+            raise HTTPException(status_code=422, detail="; ".join(complaint[:3]))
+        return remember(
+            library.start(world_dir.name, scene, player=Player(name=name), **opening())
+        )
+
+    @app.get("/worlds/{world}/cards/{character}", include_in_schema=False)
+    def character_card(world: str, character: str) -> Response:
+        """One of this world's people, as a card the rest of the shelf
+        reads — the plate we already draw for them, with the description
+        inside it."""
+        world_dir = _world_dir(worlds_root, world)
+        try:
+            loaded, cast = load_world(world_dir), load_characters(world_dir)
+        except Exception:
+            raise HTTPException(status_code=404, detail=f"no world named {world!r}")
+        person = cast.get(character)
+        if person is None or person.is_user:
+            # The player is whoever is holding them; there is nobody to
+            # hand over.
+            raise HTTPException(status_code=404, detail=f"nobody to export called {character!r}")
+        scenes = sorted((world_dir / "scenes").glob("*.yaml"))
+        scene = load_scene(world_dir, scenes[0].stem) if scenes else None
+        return Response(
+            content=card_png(loaded, person, scene, cast),
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f'attachment; filename="{person.id}.png"',
+            },
+        )
 
     @app.post("/invent", response_model=SceneState)
     def invent_world(body: NewWorld) -> SceneState:

@@ -1,0 +1,18 @@
+id: meeting
+world: nadia_sokolova
+title: Nadia Sokolova
+premise: 78°S, nine months in. Four people, two secrets, and a chain of cold rooms.
+  Four of you awake in a building where sound does not travel the way you think.
+opening: Nine months in, three weeks of dark still to run, and the four of you have
+  stopped being in the same room. You are in the mess with the urn ticking. Ilse is
+  on the radio, Yusuf is down with the generator, Nadia turned in early. You are the
+  station doctor and almost nothing has needed a doctor all winter.
+mode: sandbox
+cast:
+- you
+- nadia_sokolova
+starting_positions:
+  you: here
+  nadia_sokolova: here
+turn_budget: 6
+max_consecutive_agent_turns: 3

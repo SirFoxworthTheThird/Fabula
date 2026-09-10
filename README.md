@@ -439,6 +439,57 @@ is streaming, and removed when the last listener goes.
 Which is also the truest picture of what this engine is doing: the room taking its turn,
 one agent at a time. No application with a single model behind it could honestly draw it.
 
+### Character cards, in and out
+
+The category trades in cards: a PNG with a character's description hidden in a text chunk,
+read by SillyTavern, Chub, Risu and most of the rest. Until now a world here was YAML only
+this app understood, so nothing made with it could be given to anybody and nothing from
+anywhere else could be played in it.
+
+```bash
+fabula --card ~/Downloads/ruth_vale.png      # play somebody else's character
+fabula --cards ashgrove                      # write this world's cast out as cards
+```
+
+or the file picker under the invent box, and `GET /worlds/{world}/cards/{character}` for
+the download. The picture on an exported card is the plate this app already draws for that
+character — the same figure and the same colour, rasterised by evaluating the two shapes
+per pixel rather than by adding an imaging library to an install story that is already the
+weak part.
+
+**Import is a file off the internet, and that is where the care goes.** Three rules:
+
+* **Size and shape.** Capped before it is read, every field taken by name with a type
+  check, and a `zTXt` chunk decompressed against a limit — a few bytes of deflate can be a
+  great many in memory.
+* **It cannot reshape the world.** Card prose becomes authored YAML that is then parsed, so
+  the punctuation `fabula.player` refuses in a name is stripped here too. `{{user}}` and
+  `{{char}}` are removed *before* that, because `{` is itself forbidden and stripping first
+  would leave the bare words sitting in the prose.
+* **The instructions are dropped on the floor.** A v2 card can carry `system_prompt`,
+  `post_history_instructions` and a `character_book`: text whose entire purpose is to reach
+  a model as *instructions*, and a lorebook is a mechanism for injecting text into a prompt
+  on a keyword, which is a description of the attack. Honouring any of it would mean
+  anybody who can get you to open a file can rewrite what the narrator may do and what a
+  character may say. **The import takes the character and never their instructions** — the
+  fields are absent from `KEPT`, so there is nothing to forget to check.
+
+An imported card becomes one room with the two of you in it, the card's `first_mes` as the
+opening, and **no model call at all**. Every other route into a world here generates one;
+generating around a card would put words in a stranger's character's mouth before the
+player had met them. It also means no facts and therefore no secrets — this engine's whole
+mechanism is a thing one character knows and another does not, and a card does not say what
+that would be. The world is playable and shallow, and the honest place to deepen it is the
+YAML it just became.
+
+**On the way out, one thing travels that is worth a warning.** A persona here may name the
+secret its *own* character is keeping — `inspect` allows exactly that and nothing else — so
+Tomás's card says he broke the music box, because his persona does. That is right for a
+card, which is read by an application that needs to play him, and ruinous for a person
+hoping to find out. So it travels, and the card's `creator_notes` says so. Maria's card
+carries nothing of his, because a persona that named a fact which is not its own would not
+have passed `inspect` in the first place.
+
 ### Play as somebody of your own
 
 Everything in a world is authored, which is right for the parts a story turns on and

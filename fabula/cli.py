@@ -26,6 +26,9 @@ from fabula.llm import (
     get_default_llm,
     missing_credentials,
 )
+from fabula.cards import NotACard
+from fabula.cards import as_world as card_world
+from fabula.cards import read as cards_read
 from fabula.models import Character, ProjectedEvent
 from fabula.session import Session
 
@@ -249,6 +252,14 @@ def main(argv: list[str] | None = None) -> None:
         help="Start the app without opening a browser at it",
     )
     parser.add_argument(
+        "--card", default=None, metavar="FILE",
+        help="Play a character card (a .png or .json from Chub, SillyTavern, Risu…)",
+    )
+    parser.add_argument(
+        "--cards", default=None, metavar="WORLD",
+        help="Write everybody in a world out as character cards and stop",
+    )
+    parser.add_argument(
         "--open-ended", action="store_true",
         help="Play to stay in the story rather than to finish it: no endings, no scene "
              "seams, and the engine writes what happens next when the world runs out",
@@ -301,6 +312,21 @@ def main(argv: list[str] | None = None) -> None:
         "direct_beats": settings.direct and not args.no_direct,
         "workers": args.workers if args.workers is not None else settings.workers,
     }
+
+    if args.cards:
+        _export_cards(args, parser)
+        return
+
+    if args.card:
+        try:
+            made, opening_scene = card_world(
+                cards_read(Path(args.card).read_bytes()), args.worlds,
+                player_name=(args.played_as or ""),
+            )
+        except (OSError, NotACard) as refused:
+            parser.error(str(refused))
+        print(f"Imported {made.name} — {made}\n")
+        args.world, args.scene = made.name, opening_scene
 
     if args.delete:
         # A mistyped id is a typo, not a crash: the ids are for people to
@@ -385,6 +411,31 @@ def _invent(args, llm, parser) -> tuple[str, str]:
         print(f"  dropped: {note}")
     print()
     return made.world_dir.name, made.scene
+
+
+def _export_cards(args, parser) -> None:
+    """Everybody in a world, as cards the rest of the shelf can read."""
+    from fabula.cards import png as card_png
+    from fabula.loader import load_characters, load_scene, load_world
+
+    where = _world_dir(args.worlds, args.cards)
+    try:
+        world, cast = load_world(where), load_characters(where)
+    except Exception as unreadable:
+        parser.error(f"could not read {args.cards}: {unreadable}")
+    scenes = sorted((where / "scenes").glob("*.yaml"))
+    scene = load_scene(where, scenes[0].stem) if scenes else None
+    into = where / "cards"
+    into.mkdir(exist_ok=True)
+    for character in cast.values():
+        if character.is_user:
+            # The player is whoever is holding them. There is nobody to
+            # export.
+            continue
+        path = into / f"{character.id}.png"
+        path.write_bytes(card_png(world, character, scene, cast))
+        print(f"  {character.name} — {path}")
+    print()
 
 
 def _world_dir(worlds_root: Path, world: str) -> Path:
