@@ -16,7 +16,7 @@ from fabula.chronology import derive_skip_minutes
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.db import EventStore
 from fabula.director import Director
-from fabula.llm import LLMClient, get_default_llm
+from fabula.llm import LLMClient, Watched, get_default_llm
 from fabula.memory import co_present
 from fabula.loader import Scene, load_pressures, load_scenario, player_name
 from fabula.player import Player
@@ -397,6 +397,21 @@ class Session:
                 if not character.is_user:
                     witnessed_withholding(self.store, character.id, newest)
                 close_reached_goals(self.store, character, projected, self.world)
+
+    def watch(self, watching) -> None:
+        """Be told which agent is being asked something, as it happens.
+
+        A key and nothing else — see `fabula.llm.Watched` for why it can
+        never be the text. Wrapping rather than threading a callback
+        through nine call sites, so the engine below this line does not
+        know anybody is looking.
+        """
+        # Unwrapped first, so watching twice does not nest a wrapper in
+        # a wrapper and report every call once per layer.
+        inner = self.llm.inner if isinstance(self.llm, Watched) else self.llm
+        if inner is None:
+            return
+        self.use(Watched(inner, watching) if watching else inner)
 
     def can_regenerate(self) -> bool:
         return self._last_take is not None

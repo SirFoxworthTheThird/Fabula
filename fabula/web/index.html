@@ -490,6 +490,7 @@
   .line .said { display: block; }
   .line.you .speaker { color: var(--you); }
   .line.provisional { opacity: .55; }
+  .thinking .doing { transition: opacity .2s; }
   .line.you .said { color: #cfe2ea; }
 
   /* What the scene says before anybody speaks: where you are and what
@@ -914,7 +915,11 @@ function setBusy(busy) {
     const line = document.createElement("p");
     line.className = "thinking";
     line.id = "waiting";
-    line.append(document.createTextNode("the room is answering "));
+    const label = document.createElement("span");
+    label.className = "doing";
+    label.textContent = "the room is answering";
+    line.appendChild(label);
+    line.appendChild(document.createTextNode(" "));
     for (let i = 0; i < 3; i++) {
       const dot = document.createElement("i");
       dot.textContent = "·";
@@ -927,6 +932,18 @@ function setBusy(busy) {
     if (waiting) waiting.remove();
     el("say").focus();
   }
+}
+
+// A turn walks the cast — each character in turn, then the narrator —
+// and saying so is both more useful than one undifferentiated dot and a
+// truer picture of what this engine is doing than any app with a single
+// model behind it could draw.
+function working(frame) {
+  const label = document.querySelector("#waiting .doing");
+  if (!label) return;
+  // A name the narrator invented is model output like any other, so it
+  // goes in as text.
+  label.textContent = frame.name ? `${frame.name} is answering` : "the room is answering";
 }
 
 // What the player just typed, on screen before the engine has run the
@@ -1145,6 +1162,11 @@ function listen() {
   stream = new EventSource(`/sessions/${sessionId}/stream`);
   stream.onmessage = message => render(JSON.parse(message.data));
   stream.addEventListener("retake", message => truncate(JSON.parse(message.data).from_seq));
+  // Who the engine is asking, as it asks them. Never what they are
+  // writing: nothing a character says has been checked yet at this
+  // point, and several of the checks exist to stop particular words
+  // reaching the player at all. See `fabula.llm.Watched`.
+  stream.addEventListener("working", message => working(JSON.parse(message.data)));
   stream.onerror = () => note("Reconnecting…");
 }
 

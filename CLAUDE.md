@@ -150,9 +150,15 @@ reads through. What was derived (beliefs, readings) is deleted; what was *moved*
 interaction counts, closed goals) is reset and replayed from the authored values, because
 an increment is not something a delete can undo.
 
-**Nothing streams.** `litellm.completion` blocks and the SSE channel carries finished
-events, so a turn is thirty to ninety seconds of a spinner. Every competitor streams
-tokens. Probably the best effort-to-payoff ratio left in the app.
+**Token streaming is closed off, and it is worth knowing why.** Every competitor streams
+the reply as it is written. This engine checks everything a character says *after* it is
+written and before it becomes an event — the secret-keeping guard, `invents_a_fact`,
+`_plays_the_player`, the repeat guard — so streaming would put words on screen ahead of the
+checks, and retracting them afterwards tells the player anyway. A guard you can read around
+is not a guard. What ships instead is `Watched`: the wire carries a key and a job, never
+content, and the player sees the room take its turn one agent at a time. Do not "improve"
+this into token streaming without first moving those checks somewhere they can run before
+the words are shown.
 
 **Nobody can share anything.** The category runs on character cards — the PNG-embedded v2
 spec that SillyTavern, Chub, Risu and the rest all read. A world here is YAML only this app

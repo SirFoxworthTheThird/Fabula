@@ -127,6 +127,47 @@ class Routed:
         )
 
 
+class Watched:
+    """Reports *that* somebody is being asked, never what they answer.
+
+    A turn is thirty to ninety seconds of a single dot, which is the
+    difference between an app thinking and an app broken. Every other
+    application on this shelf fixes that by streaming the reply token by
+    token as it is written.
+
+    This one cannot, and the reason is worth writing down because it will
+    look like an omission. Everything a character says is checked *after*
+    it is written and before it becomes an event: a line that names the
+    secret its speaker is keeping is refused, a narration that invents a
+    fact or plays the player is dropped, a line that repeats one already
+    said is thrown away and asked for again. Streaming would put the text
+    on the screen before any of those ran — and the sharpest of them
+    exists precisely to stop the words "the music box" reaching a player
+    who has not earned them. Streaming and then retracting would tell
+    them anyway. A guard you can read around is not a guard.
+
+    So what crosses the wire is a key and a job. No content, ever, which
+    is a property of the type rather than a promise about its callers:
+    there is nowhere in a `Working` frame to put a sentence. The player
+    watches the room take its turn — this character, then that one, then
+    the narrator — which also happens to be the truest picture of what
+    this engine does, and one no application with a single model behind
+    it could honestly draw.
+    """
+
+    def __init__(self, inner: LLMClient, watching):
+        self.inner = inner
+        self.watching = watching
+
+    def complete(self, system: str, prompt: str, key: str | None = None) -> str:
+        # Bookkeeping is invisible by design: the readings and summaries
+        # are two thirds of a turn's calls and none of them is somebody
+        # taking a turn in the room.
+        if key and not is_filing(key):
+            self.watching(key)
+        return self.inner.complete(system=system, prompt=prompt, key=key)
+
+
 class FakeLLM:
     """Deterministic, offline stand-in for tests and for running the CLI
     without an API key.

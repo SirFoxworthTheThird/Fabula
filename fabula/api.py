@@ -226,6 +226,8 @@ class _LiveSession:
     def __init__(self, session: Session):
         self.session = session
         self.subscribers: list[asyncio.Queue[StreamEvent]] = []
+        # The loop the queues belong to, learned when somebody subscribes.
+        self.loop: asyncio.AbstractEventLoop | None = None
 
     @property
     def story_id(self) -> str | None:
@@ -236,6 +238,36 @@ class _LiveSession:
         for queue in self.subscribers:
             for event in events:
                 queue.put_nowait(event)
+
+    def publish_soon(self, frame) -> None:
+        """Publish from the worker thread the engine is running on.
+
+        `asyncio.Queue` is not thread-safe and a turn runs in a
+        threadpool, so this hops back to the loop rather than touching
+        the queues where it stands. A frame that arrives after the
+        listener has gone is dropped, which is what a closed tab is.
+        """
+        loop = self.loop
+        if loop is None:
+            return
+        for queue in list(self.subscribers):
+            try:
+                loop.call_soon_threadsafe(queue.put_nowait, frame)
+            except RuntimeError:
+                pass
+
+
+class Working(BaseModel):
+    """Which agent is being asked something, right now.
+
+    A key and a name, and deliberately nowhere to put a sentence: what a
+    character is *writing* has not been checked yet, and half of what
+    this engine checks after the fact exists to stop particular words
+    reaching the player. See `fabula.llm.Watched`.
+    """
+
+    who: str = ""
+    name: str = ""
 
 
 class Retake(BaseModel):
@@ -858,7 +890,22 @@ def create_app(
         entry = get_live(session_id)
         queue: asyncio.Queue[StreamEvent | Retake] = asyncio.Queue()
         if follow:
+            entry.loop = asyncio.get_running_loop()
             entry.subscribers.append(queue)
+            # Only while somebody is looking: a session nobody is
+            # streaming pays nothing for this.
+            entry.session.watch(
+                lambda key: entry.publish_soon(
+                    Working(
+                        who=key,
+                        name=(
+                            entry.session.characters[key].name
+                            if key in entry.session.characters
+                            else ""
+                        ),
+                    )
+                )
+            )
 
         async def frames():
             try:
@@ -869,11 +916,15 @@ def create_app(
                     event = await queue.get()
                     if isinstance(event, Retake):
                         yield f"event: retake\ndata: {event.model_dump_json()}\n\n"
+                    elif isinstance(event, Working):
+                        yield f"event: working\ndata: {event.model_dump_json()}\n\n"
                     else:
                         yield f"data: {event.model_dump_json()}\n\n"
             finally:
                 if queue in entry.subscribers:
                     entry.subscribers.remove(queue)
+                if not entry.subscribers:
+                    entry.session.watch(None)
 
         return StreamingResponse(
             frames(),

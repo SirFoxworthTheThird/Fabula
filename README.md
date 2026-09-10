@@ -400,6 +400,45 @@ and the room says *with Tomás* again: her arrival is undone, not just her line.
 The next take occupies the sequence numbers the withdrawn one had, so nothing downstream
 sees a gap.
 
+### Who is answering
+
+A turn is thirty to ninety seconds, and until now all of it was one
+undifferentiated dot. Every other application on this shelf fixes that by streaming the
+reply token by token as it is written.
+
+**This one cannot, and the reason is the guards.** Everything a character says is checked
+*after* it is written and before it becomes an event: a line naming the secret its speaker
+is keeping is refused, a narration that invents a fact or plays the player is dropped, a
+line repeating one already said is thrown away and asked for again. Streaming would put the
+words on screen ahead of all of that — and the sharpest of those guards exists precisely to
+stop *the music box* reaching a player who has not earned it. Streaming and then retracting
+tells them anyway. A guard you can read around is not a guard.
+
+So what crosses the wire is a key and a job:
+
+```
+event: working
+data: {"who":"tomas","name":"Tomás"}
+event: working
+data: {"who":"__narrator__","name":""}
+event: working
+data: {"who":"maria","name":"Maria"}
+```
+
+and the line under the scene reads *Tomás is answering*, then *the room is answering*, then
+*Maria is answering*. The safety is structural rather than a promise about callers: there
+is nowhere in a `Working` frame to put a sentence, and there is a test that asserts the
+type has exactly two fields.
+
+`fabula.llm.Watched` wraps the client the way `Routed` does, so no call site changes and
+nothing below it knows anybody is looking. It reports only for keys that are somebody
+taking a turn — the readings, summaries and classifications are two thirds of a turn's
+calls and none of them is a person speaking in a room. It is installed only while somebody
+is streaming, and removed when the last listener goes.
+
+Which is also the truest picture of what this engine is doing: the room taking its turn,
+one agent at a time. No application with a single model behind it could honestly draw it.
+
 ### Play as somebody of your own
 
 Everything in a world is authored, which is right for the parts a story turns on and
