@@ -19,7 +19,7 @@ from fabula.llm import FakeLLM
 from fabula.persistence import close_reached_goals, unresolved_goals, wants
 from fabula.session import Session
 
-WORLDS = Path(__file__).parent.parent / "worlds"
+from fabula.shelf import SHIPPED as WORLDS  # noqa: E402
 ASHGROVE = WORLDS / "ashgrove"
 SECRET = "You broke Grandma's music box, didn't you."
 

@@ -1,0 +1,83 @@
+# A second world, deliberately unlike the first. Ashgrove is a warm house,
+# two rooms, one secret, one person holding it. This is a cold building on
+# a plateau, a chain of rooms rather than a pair, and two secrets held by
+# two different people — from each other as much as from anyone.
+#
+# Winterlight Station, 78°S. Nine months in, three weeks before the first
+# aircraft of the season is due.
+id: winterlight
+title: Winterlight Station
+blurb: >-
+  78°S, nine months in. Four people, two secrets, and a chain of cold rooms.
+
+rooms:
+  radio:
+    name: the radio room
+    description: >
+      The warmest room on the station and the smallest. A steel desk, the
+      set, a paper log book weighted down with a spanner. The window is
+      blanked with foil against the dark. Nothing leaves this building
+      except through here.
+    adjacent:
+      mess: adjacent
+
+  mess:
+    name: the mess
+    description: >
+      Where everyone ends up. A long laminate table, six chairs for four
+      people, a whiteboard nobody has wiped since June. The urn, always
+      on. Fuel and stores figures are chalked in a column down the side
+      of the board in Yusuf's handwriting.
+    adjacent:
+      radio: adjacent
+      bunkroom: adjacent
+      generator: adjacent
+
+  bunkroom:
+    name: the bunkroom
+    description: >
+      Four curtained berths, boots lined under the bench, the heating
+      pipe ticking along the wall. Cold enough that people sleep dressed.
+      Two rooms from the radio, which is far enough that you hear nothing
+      from it at all.
+    adjacent:
+      mess: adjacent
+
+  # Deliberately one-way. The mess lists the generator shed, so from the
+  # mess you hear it; the shed lists nothing, because inside it the engine
+  # is all there is to hear. A room you can listen into but not out of —
+  # the perception model already supports this, and nothing in the first
+  # world ever asked it to.
+  generator:
+    name: the generator shed
+    description: >
+      Through the cold porch, so loud you feel it in your teeth. The day
+      tank, the drums stacked against the far wall, the manifold with its
+      handwritten tags. A clipboard on a nail.
+      (Careful with the wording here: a room description reaches the log
+      as narration, so a fact keyword in one lets the narrator raise the
+      subject by describing the room.)
+    adjacent: {}
+
+# Named things the story can turn on. Multi-word and idiomatic on
+# purpose: ashgrove's one fact is a concrete noun ("music box"), which
+# never asked the keyword matcher a hard question.
+facts:
+  the_flight:
+    keywords:
+      - the flight
+      - first flight
+      - flight out
+      - the plane
+      - winfly
+  the_fuel:
+    # Matching is substring, deterministic, and never a model judging
+    # whether a subject came up — so a keyword has to be a phrase that
+    # cannot mean anything else. "the reserve" was in this list until it
+    # matched "the reserve of patience in this room is thin".
+    keywords:
+      - reserve tank
+      - reserve drums
+      - fuel log
+      - transfer valve
+      - six hundred litres

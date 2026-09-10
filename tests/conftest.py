@@ -6,8 +6,9 @@ from fabula.db import EventStore
 from fabula.llm import FakeLLM
 from fabula.loader import load_scenario
 from fabula.memory import ContextBuilder
+from fabula.shelf import SHIPPED
 
-ASHGROVE = Path(__file__).parent.parent / "worlds" / "ashgrove"
+ASHGROVE = SHIPPED / "ashgrove"
 
 
 @pytest.fixture

@@ -103,10 +103,18 @@ designing it, not afterwards. `--no-interpret` is a symptom of not having done t
 
 What being a local *application* does demand, and what is missing:
 
-* **Install without a toolchain.** *Running* is now one word — `fabula` starts the
-  service and opens the browser client, which is one HTML file with no build step. But
-  installing is still `pip install -e .` from a clone, which is a developer's front door.
-  What is missing is a way to get the app onto a machine that has no Python on it.
+* ~~**Install without a toolchain.**~~ Done: `uv tool install git+…` and then `fabula`.
+  uv fetches a Python if the machine has none, so "install it and type its name" is true
+  on a box with no toolchain. What made that possible was not the install line but
+  finding that the app did not work when installed at all: `worlds_root` defaulted to the
+  relative path `worlds`, so a wheel installed anywhere but a clone opened on an empty
+  shelf, and `--invent` wrote a generated world into whatever directory you were standing
+  in. The worlds now ship inside the package and are copied to `~/.fabula/worlds` on
+  first run. The rule that generalises: **a default that is a relative path is a bet that
+  the user is standing in your source tree.** Grep for the others before adding one.
+
+  What is still missing is a single file somebody can double-click — a frozen binary,
+  which means a release pipeline and freezing litellm, and neither is free.
 * ~~**A library of your stories.**~~ Done: one SQLite file per story in
   `~/.fabula/stories`, listed, resumed and deleted from the CLI, the API and the web
   start screen. Sessions still live in memory, but a story no longer depends on one.

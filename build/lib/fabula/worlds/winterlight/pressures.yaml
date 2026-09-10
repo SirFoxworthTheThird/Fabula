@@ -1,0 +1,100 @@
+# Authored complications. The director may only choose among these — it
+# never invents one. Written to press on both secrets independently,
+# because there are two people here with something to lose and a pressure
+# that only ever squeezes one of them turns the other into furniture.
+
+- id: the_radio_window
+  intent: >
+    The scheduled window comes round and the set starts its carrier tone
+    down the corridor. Ilse is expected to be the one who answers it.
+  weight: 0.6
+  trigger:
+    turns_elapsed: "> 3"
+    character_not_at:
+      ilse: radio
+  effect:
+    kind: narration
+    location: radio
+    audibility: building
+  cooldown_turns: 18
+  max_fires: 2
+
+- id: the_generator_changes_note
+  intent: >
+    The engine drops a note and picks it up again, the way it does when
+    the day tank is running low and the float catches.
+  weight: 0.5
+  trigger:
+    fact_unspoken: the_fuel
+    for_turns: "> 6"
+  effect:
+    kind: narration
+    location: generator
+    audibility: building
+  cooldown_turns: 14
+  max_fires: 2
+
+- id: nadia_brings_the_book
+  intent: >
+    Nadia comes through with her own book open at the page where the
+    fuel column was rewritten, and puts it on the table where everyone
+    can see it.
+  weight: 0.6
+  trigger:
+    turns_elapsed: "> 6"
+    character_not_at:
+      nadia: mess
+  effect:
+    kind: arrival
+    actor: nadia
+    location: mess
+    audibility: adjacent
+  cooldown_turns: 20
+  max_fires: 1
+
+- id: the_temperature_drops
+  intent: >
+    The heating pipe stops ticking. Nobody says anything about it for a
+    moment, and then everyone is aware of how cold the room has gone.
+  weight: 0.35
+  trigger:
+    turns_elapsed: "> 10"
+  effect:
+    kind: narration
+    location: mess
+    audibility: building
+  cooldown_turns: 16
+  max_fires: 2
+
+- id: the_date_on_the_board
+  intent: >
+    Somebody has been counting the days down in the corner of the
+    whiteboard since March, and the number is small enough now to read
+    from across the room.
+  weight: 0.45
+  trigger:
+    fact_unspoken: the_flight
+    for_turns: "> 8"
+  effect:
+    kind: narration
+    location: mess
+  cooldown_turns: 12
+  max_fires: 2
+
+- id: petra_comes_in_off_the_line
+  intent: >
+    The porch door bangs and somebody comes in stamping the cold off,
+    still in outdoor layers, having driven in from the far hut without
+    telling anyone she was coming.
+  weight: 0.65
+  trigger:
+    turns_elapsed: "> 8"
+    character_not_at:
+      petra: mess
+  effect:
+    kind: arrival
+    actor: petra
+    location: mess
+    audibility: building
+  cooldown_turns: 30
+  max_fires: 1

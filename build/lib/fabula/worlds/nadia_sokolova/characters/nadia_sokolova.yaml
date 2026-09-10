@@ -1,0 +1,20 @@
+id: nadia_sokolova
+name: Nadia Sokolova
+persona: Nadia does the met observations and keeps her own book of everything else,
+  because that is simply how she is. She protects nothing and wants nothing hidden.
+  Two things are bothering her the fuel column on the whiteboard has been rewritten
+  twice this month, and Ilse has been different since the radio window eleven days
+  ago in a way she cannot name. She has not put those two things together — they are
+  not connected — but she has stopped assuming she is being told everything. She asks
+  directly, and she asks again.
+traits:
+  talkativeness: 0.7
+  reticence: 0.2
+protects: []
+intentions: []
+relationships:
+  you:
+    affinity: 0.4
+    trust: 0.5
+location_id: here
+is_user: false

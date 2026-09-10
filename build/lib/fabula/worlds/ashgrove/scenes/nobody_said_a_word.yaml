@@ -1,0 +1,20 @@
+# And where it goes when it came out with only Elena there to hear it.
+# Tomás got away with it for one more night, which is its own weight.
+id: nobody_said_a_word
+world: ashgrove
+title: Nobody said a word
+premise: >-
+  It kept. Breakfast, as though the evening had not happened.
+opening: >-
+  Breakfast, all three of you at the table, and the evening behind you
+  filed away as though it had gone the way these evenings usually go. It
+  did not. Everyone at this table knows it did not.
+mode: sandbox
+cast: [tomas, maria, elena]
+starting_positions:
+  tomas: kitchen
+  maria: kitchen
+  elena: kitchen
+start_time: 2024-01-02T08:10:00
+turn_budget: 6
+max_consecutive_agent_turns: 3

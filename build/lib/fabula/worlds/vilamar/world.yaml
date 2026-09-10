@@ -1,0 +1,119 @@
+# O terceiro mundo, e o primeiro que não é em inglês.
+#
+# Existe para provar uma coisa: o motor não fala nenhuma língua. Tudo o
+# que uma personagem pode perceber vem daqui — os textos do que se ouve
+# mal, a passagem do tempo, as palavras que o motor ignora ao comparar
+# frases. Nada disso está escrito em Python.
+id: vilamar
+title: Vilamar
+blurb: >-
+  Uma casa à beira-mar, uma família à mesa, e uma coisa que ninguém diz.
+language: pt-PT
+
+rooms:
+  cozinha:
+    name: a cozinha
+    description: >
+      A luz está acesa desde manhã. A mesa comprida, o fogão, a porta das
+      traseiras com o vidro rachado. O cheiro do peixe de ontem ainda não
+      saiu das paredes.
+    adjacent:
+      quintal: adjacent
+
+  quintal:
+    name: o quintal
+    description: >
+      Terra batida e a figueira que ninguém poda. As redes estão
+      estendidas onde o pai as deixou, e não foram tocadas desde então.
+    adjacent:
+      cozinha: adjacent
+
+facts:
+  o_barco:
+    keywords:
+      - o barco
+      - a traineira
+      - a licença
+      - vendeu o barco
+
+# Tudo o que o motor pode pôr dentro da percepção de uma personagem.
+# Sem isto, uma cena em português recebia inglês pelo meio.
+phrasing:
+  degraded:
+    utterance: "vozes abafadas vindas d{location}, palavras indistintas"
+    action: "ruído de movimento vindo d{location}"
+    narration: "algo a acontecer n{location}, fora de vista"
+    arrival: "uma porta algures ao pé d{location}"
+    departure: "passos a afastarem-se d{location}"
+    time_skip: "o tempo passa"
+    state_change: "uma mudança leve sentida d{location}"
+  duration:
+    minute: "um minuto"
+    minutes: "{n} minutos"
+    hour: "uma hora"
+    hours: "{n} horas"
+  time_skip:
+    awake: "({duration} a passar, e sente-se cada um deles)"
+    asleep: "(um vazio — acorda e faltam {duration}, que não sentiu)"
+  transmission: "{speaker} já tinha contado a {recipient} sobre {subject}, antes desta noite."
+
+  # O que o cliente diz pela sua própria voz. Não é texto da história,
+  # mas lê-se no mesmo fôlego — "You are in o quintal" é o mesmo erro,
+  # uma camada mais acima. Os comandos (/go, /wait) ficam em inglês de
+  # propósito: um comando que muda de nome em cada mundo não se documenta.
+  client:
+    you_are: "És a {name}, n{room}."
+    now_in: "Estás n{room}."
+    no_such_room: "Não há nenhum sítio chamado {room}."
+    no_answer: "Ninguém responde."
+    opens: "{name} abre {thing}."
+    things_here: "Aqui: {things}."
+    nothing_here: "Não há aqui nada para ler."
+    no_such_thing: "Não há aqui nenhum {thing}."
+    nothing_changed: "Nada mudou aqui desde a última vez que olhaste."
+    nothing_pending: "Não está nada pendente; o tempo fica onde está."
+    time_stays: "O tempo fica onde está."
+    nothing_played: "Ainda não se jogou nada."
+    nothing_to_take_back: "Não há assim tanto para desfazer."
+    steering: "— o realizador foi avisado: {note} —"
+    no_steering: "Ninguém disse nada ao realizador. /steer <o que queres>."
+    steering_off: "— o realizador não foi avisado de nada em especial —"
+    back_how_many: "Quantas das tuas falas? /back, ou /back 3."
+    taken_back: "— {lines} fala(s) desfeita(s). A cena ficou onde estava. —"
+    model_failed: "O modelo não respondeu, por isso esse momento não aconteceu: {reason}"
+    again: "— outra vez —"
+    ended: "— {scene} chegou ao fim. /reveal para veres o que não pudeste, ou continua a falar."
+    ended_with_next: >-
+      — {scene} chegou ao fim. /next para seguires, /reveal para veres o que
+      não pudeste, ou continua a falar.
+    now_playing: "— {scene} —"
+    no_next: "A história acaba aqui."
+    let_time_pass: "Deixar passar {duration}? [s/N] "
+    help: >-
+      (/go <sítio>, /wait, /look, /read <coisa>, /again para repetir o
+      último momento, /next para seguires, /quit. /reveal estraga a cena quando acabares.
+      Tudo o resto dizes em voz alta.)
+
+  # Palavras demasiado comuns para dizerem que duas frases falam do
+  # mesmo. A lista inglesa não filtrava nada aqui.
+  stopwords:
+    - ainda
+    - aqui
+    - como
+    - depois
+    - desde
+    - então
+    - estar
+    - isso
+    - mais
+    - mesmo
+    - muito
+    - nada
+    - onde
+    - para
+    - pela
+    - pelo
+    - porque
+    - quando
+    - também
+    - todos

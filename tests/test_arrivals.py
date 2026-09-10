@@ -25,7 +25,7 @@ from fabula.loader import load_scenario
 from fabula.session import Session
 from fabula.world import OFFSTAGE
 
-WORLDS = Path(__file__).parent.parent / "worlds"
+from fabula.shelf import SHIPPED as WORLDS  # noqa: E402
 WINTERLIGHT = WORLDS / "winterlight"
 FLIGHT = "The first flight has slipped to December."
 

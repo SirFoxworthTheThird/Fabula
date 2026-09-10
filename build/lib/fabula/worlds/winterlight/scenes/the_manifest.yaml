@@ -1,0 +1,37 @@
+# The arc. Nadia has the stores audit out on the mess table and will not
+# let it go, and both of the people who need it left alone are sitting at
+# it. Over when both things are finally in the room — not one of them.
+id: the_manifest
+world: winterlight
+title: The manifest
+premise: >-
+  Everyone in the mess, and a crate that somebody signed for.
+opening: >-
+  All four of you in the mess at once, which has not happened in a
+  fortnight. A crate was signed for at the last resupply and never came
+  off the sledge, and the paperwork has this station on it. Everybody
+  here has some reason to want it dealt with quietly, including you.
+mode: arc
+cast:
+  - ilse
+  - yusuf
+  - nadia
+  - ana
+# Written for this world, not in the room when it opens.
+may_arrive:
+  - petra
+starting_positions:
+  ilse: mess
+  yusuf: mess
+  nadia: mess
+  ana: mess
+start_time: 2024-08-14T21:40:00
+# Two secrets, so the scene is not over while either is still held. The
+# first world never needed to say this, and the trigger vocabulary could
+# not express it until it did.
+end_condition:
+  fact_spoken:
+    - the_flight
+    - the_fuel
+turn_budget: 6
+max_consecutive_agent_turns: 3

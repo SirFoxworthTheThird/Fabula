@@ -20,7 +20,7 @@ from fabula.loader import load_world
 from fabula.pressures import evaluate_trigger, scene_state
 from fabula.session import Session
 
-WORLDS = Path(__file__).parent.parent / "worlds"
+from fabula.shelf import SHIPPED as WORLDS  # noqa: E402
 ARDENHALL = WORLDS / "ardenhall"
 ASHGROVE = WORLDS / "ashgrove"
 

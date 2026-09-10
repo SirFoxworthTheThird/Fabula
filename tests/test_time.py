@@ -400,12 +400,11 @@ def test_looking_around_before_anything_has_happened(fake_llm):
     and before that the log is empty — which used to index the last event
     of an empty list and crash, in every world, since M4. Every test
     happened to speak before it looked."""
-    from pathlib import Path
-
     from fabula.session import Session
+    from fabula.shelf import SHIPPED
 
     for world, scene in (("ashgrove", "the_dinner"), ("winterlight", "the_long_dark")):
-        session = Session.open(Path("worlds") / world, scene, llm=fake_llm)
+        session = Session.open(SHIPPED / world, scene, llm=fake_llm)
 
         assert session.look() == []
         assert session.director.unmaterialized_here(session.user_character) == []

@@ -41,6 +41,7 @@ from fabula.discovery import slug
 from fabula.inspect import complaints, words_in
 from fabula.llm import LLMClient
 from fabula.loader import Scene
+from fabula.shelf import stocked
 from fabula.world import mentions_fact
 
 # How many rewrites a piece of prose gets before it is dropped instead.
@@ -255,7 +256,7 @@ def _traits(character: dict) -> dict:
 def invent(
     premise: str,
     llm: LLMClient,
-    worlds_root: Path | str = "worlds",
+    worlds_root: Path | str | None = None,
     player_name: str = "",
 ) -> Invented:
     """Make a world from a sentence, and refuse to keep one that is not
@@ -280,6 +281,9 @@ def invent(
         if _is_the_example(drafted):
             raise CannotInvent("the model handed back the example instead of a world")
     world_id = slug(str(drafted.get("title") or premise)[:40]) or "story"
+    # Somewhere that is yours, rather than wherever the process happened
+    # to be started.
+    worlds_root = Path(worlds_root) if worlds_root is not None else stocked()
     world_dir = Path(worlds_root) / world_id
     for suffix in range(2, 40):
         if not world_dir.exists():

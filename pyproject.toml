@@ -31,4 +31,7 @@ build-backend = "setuptools.build_meta"
 include = ["fabula*"]
 
 [tool.setuptools.package-data]
-fabula = ["web/*.html"]
+# The client is one HTML file and the worlds are directories of YAML, and
+# an installed copy needs both: without the worlds, `fabula` anywhere but
+# a clone of this repository opens on an empty shelf.
+fabula = ["web/*.html", "worlds/**/*.yaml", "worlds/**/*.svg"]

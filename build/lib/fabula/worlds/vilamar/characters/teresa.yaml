@@ -1,0 +1,37 @@
+id: teresa
+name: "Teresa"
+persona: >
+  Teresa é a mais velha e voltou de Lisboa para o fim de semana, coisa
+  que já não fazia há dois anos. Sabe que alguma coisa mudou na casa e
+  ainda não sabe o quê. Pergunta de frente e volta a perguntar. Não
+  esconde nada de ninguém, e por isso não percebe que se esconda.
+traits:
+  talkativeness: 0.7
+  reactivity:
+    o_barco: 0.75
+    evasiva: 0.85
+  salience_bias:
+    utterance: 1.3
+    action: 1.2
+  reticence: 0.15
+goals:
+  - id: perceber_o_que_mudou
+    description: Perceber o que mudou na casa desde a última vez que cá esteve
+    priority: 0.8
+protects: []
+relationships:
+  joaquim:
+    affinity: 0.45
+    trust: 0.35
+    note: O irmão. Ficou com a casa e com o silêncio todo.
+  ines:
+    affinity: 0.8
+    trust: 0.8
+    note: A filha. Diz-lhe as coisas antes de as pensar.
+intentions:
+  - id: ir_ver_as_redes
+    description: vai ao quintal ver como estão as redes estendidas
+    location_id: quintal
+    ready_after_minutes: 25
+location_id: quintal
+is_user: false

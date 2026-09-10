@@ -1,0 +1,20 @@
+id: arrival
+world: ardenhall
+title: Arrival
+premise: >-
+  Thirty-one names on the intake list. Yours is the one with the house rubbed out.
+opening: >-
+  You came up on the morning train with one bag and a letter that said
+  which train to take and nothing else. Ardenhall is a school. The hall
+  smells of floor polish, thirty-one trunks are lined along the wall with
+  their labels still on, and somebody is supposed to be meeting you.
+mode: arc
+cast: [vance, pell, rook]
+starting_positions: {vance: office, pell: hall, rook: hall}
+start_time: 2024-09-02T11:15:00
+end_condition:
+  character_at: {rook: office}
+turn_budget: 6
+max_consecutive_agent_turns: 3
+next:
+  - scene: the_interview

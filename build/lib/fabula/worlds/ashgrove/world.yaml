@@ -1,0 +1,31 @@
+id: ashgrove
+title: Ashgrove
+blurb: >-
+  A house, a family, and something one of them has not said out loud.
+# Cover art, relative to this directory. Every world has one
+# either way: without this the service draws a plate from the id.
+image: art/cover.svg
+rooms:
+  kitchen:
+    name: the kitchen
+    description: >
+      Warm, and the only room in the house anyone actually sits in. A long
+      scrubbed table, a kettle, the back door with its glass panel. Their
+      grandmother's things are still on the mantel above the stove.
+    adjacent:
+      study: adjacent
+  study:
+    name: the study
+    description: >
+      Colder, and used as storage since the funeral. Boxes of papers,
+      a desk under the window, the good chairs nobody sits in. Letters
+      in date order across the desk where Maria left them.
+    adjacent:
+      kitchen: adjacent
+
+# Named things the story can turn on. Only the director reads these; they
+# let a pressure trigger on what has and hasn't been said out loud.
+facts:
+  music_box:
+    keywords:
+      - music box

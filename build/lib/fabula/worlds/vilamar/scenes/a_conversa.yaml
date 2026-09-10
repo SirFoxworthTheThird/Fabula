@@ -1,0 +1,24 @@
+# O arco. Os três à mesa, e acaba quando o barco for finalmente dito.
+id: a_conversa
+world: vilamar
+title: A conversa
+premise: >-
+  Já não dá para adiar.
+opening: >-
+  A cozinha, a meio da tarde, e ninguém saiu depois do café. O Joaquim
+  está calado desde ontem e a Teresa já perguntou duas vezes se está tudo
+  bem. Já não dá para fingir que não se passa nada nesta casa.
+mode: arc
+cast:
+  - joaquim
+  - teresa
+  - ines
+starting_positions:
+  joaquim: cozinha
+  teresa: cozinha
+  ines: cozinha
+start_time: 2024-05-18T13:20:00
+end_condition:
+  fact_spoken: o_barco
+turn_budget: 6
+max_consecutive_agent_turns: 3

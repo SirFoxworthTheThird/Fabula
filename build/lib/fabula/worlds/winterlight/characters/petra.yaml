@@ -1,0 +1,54 @@
+# Written for this world and not in the room when either scene opens.
+# `may_arrive` on a scene declares that she might; an authored pressure
+# decides when. She arrives knowing only what she arrives on — not
+# because anything backfills her memory, but because until the arrival
+# event she is nowhere reachable, so every earlier moment resolves to
+# "none" through the ordinary perception path.
+id: petra
+name: "Petra Lindqvist"
+persona: >
+  Petra runs the seismic line out at the far hut and comes in for three
+  days a fortnight. She has been out there since the last radio window,
+  which means she is the only person on the station who has not been in
+  the room for any of this. She is blunt in the way of somebody who
+  spends a fortnight alone and then has three days of talking to do, and
+  she notices the temperature of a room before she notices who is in it.
+traits:
+  talkativeness: 0.8
+  reactivity:
+    evasion: 0.8
+    secret_mentioned: 0.6
+  salience_bias:
+    utterance: 1.2
+    action: 1.1
+    narration: 1.0
+  reticence: 0.15
+goals:
+  - id: find_out_what_i_missed
+    description: Work out what happened here while she was out on the line
+    priority: 0.8
+protects: []
+relationships:
+  ilse:
+    affinity: 0.5
+    trust: 0.55
+    note: Straight with her, always has been. Which is why the silence reads.
+  yusuf:
+    affinity: 0.7
+    trust: 0.5
+    note: Keeps her generator running. Talks more than he says.
+  nadia:
+    affinity: 0.6
+    trust: 0.7
+    note: The only one who writes anything down.
+  ana:
+    affinity: 0.55
+    trust: 0.6
+    note: The doctor. Has not needed her yet, and says so every time.
+intentions:
+  - id: unpack_the_samples
+    description: unpacks the sample tubes onto the mess table and labels them
+    location_id: mess
+    ready_after_minutes: 40
+location_id: mess
+is_user: false

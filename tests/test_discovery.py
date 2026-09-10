@@ -22,7 +22,7 @@ from fabula.loader import load_world
 from fabula.session import Session
 from fabula.world import Room, World, connect, find_room
 
-WORLDS = Path(__file__).parent.parent / "worlds"
+from fabula.shelf import SHIPPED as WORLDS  # noqa: E402
 ARDENHALL = WORLDS / "ardenhall"
 ASHGROVE = WORLDS / "ashgrove"
 

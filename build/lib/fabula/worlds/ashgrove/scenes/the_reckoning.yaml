@@ -1,0 +1,35 @@
+# A bounded arc, where the dinner is a sandbox. Same house, same three
+# people, same secret — but this one is over the moment the music box is
+# finally said out loud, and the director escalates toward that.
+id: the_reckoning
+world: ashgrove
+title: The reckoning
+premise: >-
+  The same three people, one room, and nowhere left to put it.
+opening: >-
+  All three of you in the kitchen this time, and the study door standing
+  open. Whatever your brother has been carrying around since March, there
+  is nowhere left in this house to put it down.
+mode: arc
+cast:
+  - tomas
+  - maria
+  - elena
+starting_positions:
+  tomas: kitchen
+  maria: kitchen
+  elena: kitchen
+# All three in one room from the start: nobody can slip out of earshot,
+# and Tomás has to hold it with his sister at the table.
+end_condition:
+  fact_spoken: music_box
+turn_budget: 6
+max_consecutive_agent_turns: 3
+
+# The same ending leads to two different mornings, and which one is
+# decided by who was standing in the room when it finally came out.
+next:
+  - scene: the_morning_after
+    when:
+      character_at: {maria: kitchen}
+  - scene: nobody_said_a_word

@@ -65,7 +65,27 @@ trusting any of the rest.
 ## Quickstart
 
 ```bash
+uv tool install git+https://github.com/SirFoxworthTheThird/Fabula
+fabula
+```
+
+That is the whole install. [uv](https://docs.astral.sh/uv/) fetches a Python of its own if
+the machine has none, puts the app in an environment that is not shared with anything
+else, and leaves `fabula` on your `PATH` — so "install it and type its name" is true on a
+machine with no toolchain on it. `pipx install git+…` does the same if you already have
+pipx. Everything the app needs travels in the package: the worlds, the client, the art.
+
+The worlds land in `~/.fabula/worlds` the first time you start it, beside the stories in
+`~/.fabula/stories`, and they are ordinary directories of YAML — open one and change it.
+An upgrade adds worlds it has never handed you before and never writes over the copy you
+have, because by then it is yours.
+
+To work on the engine rather than play it, install the checkout instead:
+
+```bash
+git clone https://github.com/SirFoxworthTheThird/Fabula && cd Fabula
 pip install -e ".[dev]"
+pytest
 ```
 
 Python 3.11+. Set a provider key to get real dialogue — without one you get placeholder
@@ -87,11 +107,15 @@ problems and always works:
 
 ```powershell
 $env:OPENAI_API_KEY = "..."
-python -m fabula.playtest worlds/ashgrove the_dinner
-python -m fabula.cli worlds/ashgrove the_dinner
+python -m fabula.playtest fabula/worlds/ashgrove the_dinner
+python -m fabula.cli ashgrove the_dinner
 python -m fabula.api --port 8000          # the service
-python -m fabula.measure worlds/ashgrove the_dinner
+python -m fabula.measure fabula/worlds/ashgrove the_dinner
 ```
+
+`fabula` and `fabula-serve` take a world by *name* and look it up under `--worlds`
+(`~/.fabula/worlds` unless you say otherwise); `fabula-playtest` and `fabula-measure` take
+a path to one, which in a checkout is `fabula/worlds/<name>`.
 
 If those report `No module named fabula`, the install itself did not take — check with
 `python -c "import fabula; print(fabula.__file__)"` and re-run `pip install -e .` from
@@ -114,7 +138,7 @@ If the port is busy (another copy is already open), it takes a free one and says
 
 ```bash
 fabula --terminal                      # your stories, in words
-python -m fabula.cli worlds/ashgrove the_dinner
+python -m fabula.cli ashgrove the_dinner
 ```
 
 You are Elena, in the kitchen with your brother Tomás. Your sister Maria is in the
@@ -282,7 +306,7 @@ Two decisions make the drawn plates look deliberate rather than like broken avat
   appearance — this app asks the player for their own line about how they come across
   rather than inventing one for them, so a figure is the honest amount to say.
 
-`worlds/ashgrove/art/cover.svg` is hand-drawn and is the one in the repo that exercises the
+`fabula/worlds/ashgrove/art/cover.svg` is hand-drawn and is the one in the repo that exercises the
 authored path. SVG because it is the one image format that is text, so it belongs in a repo
 and diffs like everything else here.
 
@@ -643,7 +667,7 @@ playing by hand after every change. This runs a fixed script and prints the tran
 then dumps what each character came away believing:
 
 ```bash
-fabula-playtest worlds/ashgrove the_dinner --model gpt-4o-mini
+fabula-playtest fabula/worlds/ashgrove the_dinner --model gpt-4o-mini
 ```
 
 The belief dump is deliberately omniscient — it is how you check the asymmetry landed,
@@ -820,11 +844,11 @@ with the process it is running in.
 
 ```bash
 export OPENAI_API_KEY=...
-fabula-playtest worlds/ashgrove the_dinner --model gpt-4.1-nano
+fabula-playtest fabula/worlds/ashgrove the_dinner --model gpt-4.1-nano
 
 # against an OpenAI-compatible proxy: prefix the id so litellm speaks that dialect
 export OPENAI_API_KEY=...                       # whatever key the proxy expects
-fabula-playtest worlds/ashgrove the_dinner \
+fabula-playtest fabula/worlds/ashgrove the_dinner \
     --model openai/<their-model-id> --api-base https://<host>/v1
 ```
 
@@ -899,7 +923,7 @@ module to keep it that way.
 
 ```bash
 export OPENAI_API_KEY=<your nano-gpt key>     # yes, that variable — see below
-fabula-playtest worlds/ashgrove the_dinner \
+fabula-playtest fabula/worlds/ashgrove the_dinner \
     --model openai/z-ai/glm-5.3-flash \
     --api-base https://nano-gpt.com/api/v1
 ```
@@ -927,7 +951,7 @@ model. `fabula-measure` runs one scene opening N times under three variants and 
 how often the character raises what they guard:
 
 ```bash
-fabula-measure worlds/ashgrove the_dinner --model gpt-4.1-nano --samples 16
+fabula-measure fabula/worlds/ashgrove the_dinner --model gpt-4.1-nano --samples 16
 ```
 
 On a 1.5B local model the three variants landed at 3/16, 4/16 and 3/16 — the shipped
@@ -1230,7 +1254,7 @@ Everything authored is plain YAML on disk — diffable, shareable, legible to a 
 agent asked to change it.
 
 ```
-worlds/<name>/
+~/.fabula/worlds/<name>/          # yours; fabula/worlds/<name>/ in a checkout
   world.yaml          title, blurb, rooms, adjacency, facts the story can turn on
   characters/*.yaml   persona, traits, goals, intentions, relationships
   pressures.yaml      authored complications
@@ -1270,9 +1294,12 @@ what her brother is sitting on, so her opening does not either. And it must not 
 world fact — the player perceives it in full, so a keyword there satisfies `fact_spoken`
 and an arc can end on its own opening paragraph. Both are tested for every shipped world.
 
-Drop a directory in `worlds/` and every client finds it: the terminal, the playtest
-harness, `/worlds`, the browser picker and the shim's model list all enumerate the
-directory rather than a registry. `winterlight` needed no code.
+Drop a directory in your worlds directory and every client finds it: the terminal, the
+playtest harness, `/worlds`, the browser picker and the shim's model list all enumerate
+the directory rather than a registry. `winterlight` needed no code. A world that ships
+with the app is copied there the first time you run it and is an ordinary file you own
+from then on — `fabula/worlds/` inside the package is where it comes *from*, not where it
+is read.
 
 Personality is mechanical, not only prose. `traits` feed the bid function and encoding
 salience; `persona` feeds the voice. Both are required — if traits live only in the

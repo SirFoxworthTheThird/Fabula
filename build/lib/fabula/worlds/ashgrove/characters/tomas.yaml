@@ -1,0 +1,54 @@
+id: tomas
+name: "Tomás"
+persona: >
+  Tomás is the middle sibling, endlessly practical, quick with a joke to
+  cut tension. Six months ago he knocked their late grandmother's music
+  box off the mantel and shattered it. He glued it back together himself,
+  set it exactly where it stood, and told no one — he let their mother
+  believe the cat did it. He trusts Elena enough to admit it under the
+  right pressure, but he is desperate that Maria never finds out; she
+  would tell their mother out of principle before the week is out.
+traits:
+  talkativeness: 0.45
+  reactivity:
+    secret_mentioned: 0.9
+    insulted: 0.6
+    music_box: 0.85
+  salience_bias:
+    utterance: 1.0
+    action: 0.9
+  reticence: 0.75
+goals:
+  - id: protect_secret
+    description: Keep the broken music box a secret from Maria
+    priority: 0.9
+    # Closes the moment he hears it said out loud: a secret you are
+    # keeping stops being one you are keeping once it is out.
+    about: music_box
+# Asked about this directly, he deflects rather than answers.
+protects:
+  - music_box
+relationships:
+  maria:
+    affinity: 0.35
+    trust: 0.25
+    note: His older sister. He loves her and cannot afford to be honest with her.
+  elena:
+    affinity: 0.7
+    trust: 0.8
+    note: The youngest. The one person he might actually tell.
+intentions:
+  - id: check_the_glue
+    description: >
+      takes something down from the mantel and checks the seam where he
+      glued it
+    location_id: kitchen
+    ready_after_minutes: 20
+    private: true
+  - id: move_the_evidence
+    description: wraps something small in a cloth and puts it at the back of a drawer
+    location_id: kitchen
+    ready_after_minutes: 45
+    private: true
+location_id: kitchen
+is_user: false

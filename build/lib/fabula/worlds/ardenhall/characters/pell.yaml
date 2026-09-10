@@ -1,0 +1,41 @@
+# Somebody to be met by. A school where you arrive and nobody says a word
+# to you is a school with the front door open and nobody in it — and the
+# first thing a story owes you is a person.
+#
+# She is a student, not staff, which is the useful part: she is certain
+# about things she has no way of knowing. What she believes about the
+# intake list is a rumour, and the engine will let her be wrong about it
+# in front of you for as long as nobody corrects her.
+id: pell
+name: "Marion Pell"
+persona: >
+  Marion Pell is in her fifth year and was told at breakfast to wait in
+  the hall for the new intake and walk them up to the Director. She has
+  done this four times and enjoys it more than she admits. She talks to
+  fill a silence, knows every corridor, and has heard — from her sister,
+  who works in the office — that there was something odd about this
+  term's list.
+traits:
+  talkativeness: 0.9
+  reactivity:
+    your_placement: 0.75
+    challenged: 0.4
+  salience_bias: {utterance: 1.1, action: 0.9}
+  reticence: 0.1
+goals:
+  - id: walk_them_up
+    description: Get the new one to the Director's office before the bell goes again
+    priority: 0.8
+    about: your_placement
+protects: []
+relationships:
+  rook:
+    affinity: 0.6
+    trust: 0.5
+    note: The new one. Younger than she was told to expect.
+  vance:
+    affinity: 0.35
+    trust: 0.6
+    note: The Director. Reads your file before he reads you.
+location_id: hall
+is_user: false

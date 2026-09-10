@@ -1,0 +1,22 @@
+# Where the story goes when the music box came out in front of Maria.
+# She has had a night to decide what to do with it, and Tomás has had a
+# night of knowing she has.
+id: the_morning_after
+world: ashgrove
+title: The morning after
+premise: >-
+  Whatever was said last night, everyone woke up in the same house.
+opening: >-
+  Morning, and the kettle is on. Nobody has mentioned last night. Maria
+  went into the study before you came down and has not come out of it.
+mode: arc
+cast: [tomas, maria, elena]
+starting_positions:
+  tomas: kitchen
+  maria: study
+  elena: kitchen
+start_time: 2024-01-02T08:10:00
+end_condition:
+  character_at: {maria: kitchen}
+turn_budget: 6
+max_consecutive_agent_turns: 3

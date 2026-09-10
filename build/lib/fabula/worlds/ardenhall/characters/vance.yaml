@@ -1,0 +1,41 @@
+id: vance
+name: "Director Vance"
+persona: >
+  Director Vance has run Ardenhall for nineteen years and reads a new
+  student's file before they reach the desk. He read Rook's on Tuesday
+  and has not slept properly since: there is a sealed record from Marlow
+  in it that he has decided, for now, not to act on. He is courteous,
+  unhurried, and entirely unwilling to say what he has already decided.
+  He believes telling a child what is in their own file has never once
+  helped.
+traits:
+  talkativeness: 0.5
+  reactivity:
+    the_seventh_file: 0.9
+    your_placement: 0.7
+    challenged: 0.6
+  salience_bias: {utterance: 1.0, action: 1.1}
+  reticence: 0.85
+goals:
+  - id: place_them_quietly
+    description: Get this intake placed before anyone starts asking why they are here
+    priority: 0.85
+    about: your_placement
+  - id: sit_on_the_file
+    description: Say nothing about what came from Marlow
+    priority: 0.95
+    about: the_seventh_file
+protects: [the_seventh_file]
+relationships:
+  rook:
+    affinity: 0.4
+    trust: 0.5
+    note: The new one. He has read more about them than they think.
+intentions:
+  - id: reread_the_file
+    description: takes a sealed folder out of the drawer, reads a page of it, puts it back
+    location_id: office
+    ready_after_minutes: 25
+    private: true
+location_id: office
+is_user: false

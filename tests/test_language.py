@@ -31,7 +31,7 @@ from fabula.world import (
     write_in,
 )
 
-WORLDS = Path(__file__).parent.parent / "worlds"
+from fabula.shelf import SHIPPED as WORLDS  # noqa: E402
 VILAMAR = WORLDS / "vilamar"
 ALL_WORLDS = sorted(p.parent for p in WORLDS.glob("*/world.yaml"))
 

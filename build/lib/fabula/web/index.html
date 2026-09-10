@@ -1,0 +1,1881 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fabula</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128220;</text></svg>">
+<style>
+  /* One character's point of view, and it should feel like reading rather
+     than like using something. Dark on purpose: this is a page somebody
+     sits in front of for an hour reading fiction, not a dashboard. */
+  :root {
+    --ink: #ece6dc;
+    --ink-soft: #b9b0a3;
+    --ink-dim: #8b8377;
+    --ink-faint: #635c53;
+    --ground: #12110e;
+    --ground-lift: #191713;
+    --panel: #1b1915;
+    --edge: #2b2721;
+    --edge-soft: #221f1a;
+    --accent: #d4a83a;
+    --accent-dim: #8a6f28;
+    --you: #9dc3d4;
+    --danger: #d98b8b;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --measure: 38rem;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.62;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: rgba(212, 168, 58, .25); }
+
+  /* --- The shelf ---------------------------------------------------- */
+
+  #start {
+    flex: 1;
+    overflow-y: auto;
+    width: 100%;
+  }
+  .shelf { max-width: 46rem; margin: 0 auto; padding: 9vh 22px 12vh; }
+
+  .wordmark {
+    font-size: 40px;
+    line-height: 1.1;
+    letter-spacing: .015em;
+    margin: 0 0 8px;
+  }
+  .tagline { color: var(--ink-dim); margin: 0 0 40px; font-size: 17px; }
+
+  .section {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .section::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--edge);
+  }
+  .section + .section, h2.section:not(:first-of-type) { margin-top: 44px; }
+
+  .card {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font-family: var(--serif);
+    background: var(--ground-lift);
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    padding: 16px 18px;
+    color: var(--ink);
+    cursor: pointer;
+    transition: border-color .15s, background .15s, transform .15s;
+  }
+  .card:hover:not(:disabled) {
+    border-color: var(--accent-dim);
+    background: #1e1b16;
+  }
+  .card:active:not(:disabled) { transform: translateY(1px); }
+  .card .name { font-size: 19px; display: block; }
+  .card .premise {
+    display: block;
+    color: var(--ink-soft);
+    font-size: 15px;
+    margin-top: 3px;
+  }
+  .card .meta {
+    display: block;
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-top: 9px;
+    letter-spacing: .01em;
+  }
+  .card .meta b { font-weight: 600; color: var(--ink-dim); }
+
+  /* A world is a shelf of its own: its name and what kind of story it
+     is, then the scenes a story can begin from. */
+  .world { margin-bottom: 34px; }
+
+  /* The cover. Every world has one — the file the author pointed at, or
+     the plate the service draws from the world's id — so this is never
+     an empty frame waiting for art that does not exist. The title sits
+     on it under a scrim, because a caption underneath makes it a
+     decoration and a title on it makes it a book. */
+  .plate {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--edge);
+    margin-bottom: 14px;
+    background: var(--ground-lift);
+  }
+  .plate img {
+    display: block;
+    width: 100%;
+    height: 152px;
+    object-fit: cover;
+  }
+  .plate .over {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: 14px 18px 13px;
+    background: linear-gradient(to top, rgba(12,10,9,.94) 18%, rgba(12,10,9,.55) 62%, rgba(12,10,9,0));
+  }
+  .plate h3 { margin: 0; }
+  .plate .blurb { margin: 2px 0 0; }
+  .world h3 {
+    font-family: var(--serif);
+    font-size: 22px;
+    margin: 0 0 2px;
+    font-weight: normal;
+  }
+  .world .blurb { color: var(--ink-dim); margin: 0 0 14px; font-size: 15px; }
+
+  /* A face, everywhere one belongs. Round, because these are people and
+     not thumbnails, and sized in three places: beside a line, in the
+     row of who is here, and on the story you are picking back up. */
+  .face {
+    border-radius: 50%;
+    display: block;
+    flex: none;
+    background: var(--ground-lift);
+    object-fit: cover;
+  }
+  .world .lang {
+    font-family: var(--sans);
+    font-size: 10px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border: 1px solid var(--edge);
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .cards { display: grid; gap: 10px; }
+
+  /* Who you are, asked once, where you chose the story. Under the card
+     rather than over the page: you are still looking at the thing you
+     picked. */
+  .who-form {
+    border: 1px solid var(--accent-dim);
+    border-top: 0;
+    border-radius: 0 0 10px 10px;
+    background: var(--ground-lift);
+    padding: 14px 18px 16px;
+    margin: -4px 0 10px;
+  }
+  .who-form .field {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 9px;
+    flex-wrap: wrap;
+  }
+  .who-form .field label {
+    font-family: var(--sans);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    width: 4.5rem;
+    flex: none;
+  }
+  /* How the story gets played, asked next to who you are in it. A
+     sentence rather than a field label: it is a choice about the whole
+     run, not another blank to fill in. */
+  .who-form .check {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    margin: 13px 0 2px;
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .who-form .check input { flex: none; min-width: 0; accent-color: var(--accent); }
+  .who-form .check .hint { display: inline; font-size: 12px; }
+  .who-form input {
+    flex: 1;
+    min-width: 12rem;
+    background: var(--ground);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 15px;
+    padding: 8px 11px;
+  }
+  .who-form input:focus { outline: none; border-color: var(--accent-dim); }
+  .who-form .go { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .who-form .hint {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin: 0 0 12px;
+    line-height: 1.5;
+  }
+  .card.chosen { border-color: var(--accent-dim); border-radius: 10px 10px 0 0; }
+
+  /* The audience for this app does not write YAML. */
+  .invent {
+    background: var(--ground-lift);
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    padding: 15px 18px 14px;
+    margin: 0 0 30px;
+  }
+  .invent .hint {
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--ink-dim);
+    margin: 0 0 12px;
+    line-height: 1.5;
+  }
+  .invent .field { display: flex; gap: 10px; align-items: center; margin-bottom: 9px; }
+  .invent .field:last-of-type { margin-bottom: 0; }
+  .invent label {
+    font-family: var(--sans);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    flex: none;
+  }
+  .invent input {
+    flex: 1;
+    min-width: 0;
+    background: var(--ground);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 15px;
+    padding: 10px 12px;
+  }
+  .invent input:focus { outline: none; border-color: var(--accent-dim); }
+  .invent .notice { display: block; margin-top: 10px; }
+
+  .more {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-faint);
+    background: none;
+    border: 0;
+    padding: 8px 0 0;
+    cursor: pointer;
+  }
+  .more:hover { color: var(--ink-dim); }
+
+  /* A saved story: the card is the thing you press, delete is a quiet
+     afterthought beside it rather than a second offer. */
+  .story { display: flex; align-items: stretch; gap: 8px; }
+  .story .card { flex: 1; }
+  .story .card .name { display: flex; align-items: center; gap: 11px; }
+  .story .card .face { width: 34px; height: 34px; border-radius: 7px; }
+  .story .drop {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-faint);
+    background: none;
+    border: 1px solid var(--edge-soft);
+    border-radius: 10px;
+    padding: 0 14px;
+    cursor: pointer;
+  }
+  .story .drop:hover { color: var(--danger); border-color: #4a2a2a; }
+
+  /* Which model answers is the player's choice, so it is on the shelf
+     rather than in the flags of whoever started the process. */
+  .panel {
+    background: var(--ground-lift);
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    padding: 16px 18px 14px;
+  }
+  .panel .state { margin: 0 0 14px; color: var(--ink-soft); font-size: 15px; }
+  .panel .state.warn { color: var(--accent); }
+  .panel .field {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .panel label {
+    font-family: var(--sans);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    width: 5.5rem;
+    flex: none;
+  }
+  .panel input[type=text] { font-family: var(--sans); font-size: 14px; padding: 8px 11px; }
+  .panel input[type=number] {
+    width: 5rem;
+    background: var(--ground);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 8px 11px;
+  }
+  .panel .hint { font-family: var(--sans); font-size: 12px; color: var(--ink-faint); }
+  .panel .check {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    width: auto;
+    text-transform: none;
+    letter-spacing: 0;
+    font-family: var(--serif);
+    font-size: 15px;
+    color: var(--ink-soft);
+    margin: 14px 0 4px;
+    cursor: pointer;
+  }
+  .panel .check input { margin-top: 5px; accent-color: var(--accent); }
+  .panel .save { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+  .panel .save .notice { margin: 0; }
+  .panel .keys {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin: 14px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--edge-soft);
+    line-height: 1.5;
+  }
+  .panel code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: var(--ink-dim);
+  }
+
+  /* --- The stage ---------------------------------------------------- */
+
+  header {
+    border-bottom: 1px solid var(--edge);
+    background: var(--panel);
+    padding: 11px 22px;
+    display: flex;
+    gap: 16px;
+    align-items: baseline;
+    flex-wrap: wrap;
+    font-family: var(--sans);
+    font-size: 13px;
+  }
+  header { align-items: center; }
+  header .where { font-weight: 600; letter-spacing: .01em; }
+  header .who, header .clock { color: var(--ink-dim); }
+  header .who { display: flex; align-items: center; gap: 6px; }
+  header .who em { color: var(--ink-soft); font-style: normal; }
+  header .who .face { width: 22px; height: 22px; }
+  /* Who is in the room, as faces. The list is already filtered to what
+     this character can perceive, so the faces ride along on it and
+     cannot show somebody the player cannot see. */
+  header .who .person { display: inline-flex; align-items: center; gap: 5px; }
+  header .pov .face { width: 20px; height: 20px; margin-right: 6px; }
+  header .pov { display: inline-flex; align-items: center; }
+  header .spacer { flex: 1; }
+  header .pov {
+    color: var(--ink-faint);
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    padding: 2px 11px;
+    font-size: 12px;
+  }
+  header .leave {
+    font-family: var(--sans);
+    font-size: 12px;
+    background: none;
+    border: 0;
+    color: var(--ink-faint);
+    cursor: pointer;
+    padding: 2px 0;
+  }
+  header .leave:hover { color: var(--ink-dim); }
+
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 30px 22px 10px;
+  }
+  main { display: flex; flex-direction: column; }
+  .scroll {
+    max-width: var(--measure);
+    width: 100%;
+    margin: 0 auto;
+    margin-top: auto;
+  }
+
+  .line { margin: 0 0 18px; animation: settle .35s ease-out; position: relative; }
+
+  /* Take the story back to before this line. Every other app on this
+     shelf has some version of it, and until now the only recourse for a
+     turn that went wrong was to keep typing into a scene that was
+     already spoiled. Hidden until the line is under the cursor: it is a
+     way out, not part of the reading. */
+  .line .undo {
+    position: absolute;
+    top: -2px;
+    right: -6px;
+    font-family: var(--sans);
+    font-size: 11px;
+    letter-spacing: .06em;
+    background: var(--ground-lift);
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    color: var(--ink-faint);
+    padding: 2px 9px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .12s, color .12s, border-color .12s;
+  }
+  .line:hover .undo, .line .undo:focus { opacity: 1; }
+  .line .undo:hover { color: var(--ink); border-color: var(--accent-dim); }
+  @keyframes settle {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .line { animation: none; } }
+
+  /* An utterance is somebody saying something, so it gets the somebody.
+     Only utterances: narration has no speaker, and a half-heard line
+     through a wall must not be given a face, because attaching one would
+     claim the listener knows who that was. */
+  .line.spoken { display: flex; gap: 11px; align-items: flex-start; }
+  .line.spoken .face { width: 30px; height: 30px; margin-top: 1px; }
+  .line.spoken .body { min-width: 0; }
+
+  .line .speaker {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    display: block;
+    margin-bottom: 1px;
+  }
+  .line .said { display: block; }
+  /* Narration and half-heard lines are already italic, so emphasis inside
+     them has to go the other way to be emphasis at all. */
+  .line em { font-style: italic; }
+  .line.prose em, .line.degraded em, .line.opening em { font-style: normal; }
+  .line.you .speaker { color: var(--you); }
+  .line.provisional { opacity: .55; }
+
+  /* The note to the director. Under the composer and out of the way
+     until it is wanted: it is a thing you set once and forget, not a
+     second place to type at the story. */
+  #steer-form {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  #steer-form label {
+    font-family: var(--sans);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  #steer-form input {
+    flex: 1;
+    min-width: 14rem;
+    background: var(--ground);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 15px;
+    padding: 8px 11px;
+  }
+  #steer-form input:focus { outline: none; border-color: var(--accent-dim); }
+  #steer.on { color: var(--accent); border-color: var(--accent-dim); }
+  .thinking .doing { transition: opacity .2s; }
+  .line.you .said { color: #cfe2ea; }
+
+  /* What the scene says before anybody speaks: where you are and what
+     you have walked into. The author's words, addressed to you and to
+     nobody else in the room, so it is set apart from the things that
+     happen in it. */
+  .line.opening {
+    color: var(--ink-soft);
+    border-left: 2px solid var(--accent-dim);
+    padding: 2px 0 2px 16px;
+    margin-bottom: 24px;
+  }
+
+  /* Narration, arrivals, materialised detail: things observed, not said. */
+  .line.prose {
+    color: var(--ink-soft);
+    font-style: italic;
+    padding-left: 16px;
+    border-left: 2px solid var(--edge);
+  }
+
+  /* Perception is graded, and the interface has to show it. A degraded
+     event is something half-heard through a wall: it must not read as
+     reliable testimony. */
+  .line.degraded {
+    color: var(--ink-faint);
+    font-style: italic;
+    padding-left: 16px;
+    border-left: 2px dashed var(--edge);
+  }
+  .line.degraded .tag {
+    font-family: var(--sans);
+    font-size: 10px;
+    font-style: normal;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border: 1px solid var(--edge);
+    border-radius: 3px;
+    padding: 0 4px;
+    margin-right: 7px;
+  }
+
+  .line.skip {
+    text-align: center;
+    color: var(--accent);
+    font-style: italic;
+    opacity: .85;
+    margin: 26px 0;
+  }
+  .line.skip::before, .line.skip::after { content: "· · ·"; display: block; opacity: .45; }
+
+  /* A note from the client that the scene has reached its declared end.
+     Nobody in the room said this, so it must not look like they did. */
+  .line.ending {
+    text-align: center;
+    color: var(--accent);
+    font-family: var(--sans);
+    font-size: 13px;
+    border-top: 1px solid var(--edge);
+    padding-top: 18px;
+    margin: 28px 0;
+  }
+
+  /* A turn is several model calls and can take a while. Something has to
+     be alive on screen, and it should be the room rather than a spinner. */
+  .thinking {
+    color: var(--ink-faint);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-style: italic;
+    padding-left: 16px;
+    border-left: 2px solid var(--edge-soft);
+    margin: 0 0 18px;
+  }
+  .thinking i {
+    font-style: normal;
+    animation: breathe 1.4s ease-in-out infinite;
+  }
+  .thinking i:nth-child(2) { animation-delay: .2s; }
+  .thinking i:nth-child(3) { animation-delay: .4s; }
+  @keyframes breathe { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+
+  /* The reveal steps outside the story, and has to look like it does. */
+  .reveal {
+    border: 1px solid var(--accent-dim);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin: 28px 0 16px;
+    background: rgba(212, 168, 58, .05);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .reveal h2 {
+    font-family: var(--serif);
+    font-size: 18px;
+    margin: 0 0 10px;
+    color: var(--accent);
+    font-weight: normal;
+  }
+  .reveal h3 {
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 16px 0 4px;
+  }
+  .reveal p { margin: 0 0 4px; color: var(--ink-soft); }
+  .reveal .truth { color: var(--ink-faint); }
+  .reveal .none { color: var(--ink-faint); font-style: italic; }
+
+  /* --- What you do -------------------------------------------------- */
+
+  footer {
+    border-top: 1px solid var(--edge);
+    background: var(--panel);
+    padding: 14px 22px 18px;
+  }
+  .bar { max-width: var(--measure); margin: 0 auto; }
+
+  /* The composer, and only the composer: a bare `form` rule here reached
+     into the who-are-you form on the shelf and laid its labels out in a
+     row. */
+  #say-form { display: flex; gap: 10px; }
+  #say-form input[type=text] {
+    flex: 1;
+    min-width: 0;
+    background: var(--ground);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 16px;
+    padding: 11px 13px;
+  }
+  input[type=text]::placeholder { color: var(--ink-faint); }
+  input[type=text]:focus { outline: none; border-color: var(--accent-dim); }
+
+  button {
+    font-family: var(--sans);
+    font-size: 13px;
+    background: var(--ground);
+    color: var(--ink-dim);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  button:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-faint); }
+  button:disabled { opacity: .35; cursor: default; }
+  button.primary {
+    color: #17150f;
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 600;
+    padding: 8px 20px;
+  }
+  button.primary:hover:not(:disabled) { color: #17150f; background: #e2b747; }
+  button.lit { color: var(--accent); border-color: var(--accent-dim); }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 11px;
+    align-items: center;
+  }
+  .actions .label {
+    font-family: var(--sans);
+    font-size: 10px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .actions .go {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  /* So the room buttons lay out with the label rather than inside a box
+     of their own. */
+  .actions .go > span:last-child { display: contents; }
+
+  .notice {
+    color: var(--ink-faint);
+    font-family: var(--sans);
+    font-size: 12px;
+    margin-top: 10px;
+    min-height: 1.2em;
+  }
+  .notice.bad { color: var(--danger); }
+
+  .hidden, [hidden] { display: none !important; }
+
+  @media (max-width: 620px) {
+    body { font-size: 16px; }
+    .shelf { padding: 6vh 16px 10vh; }
+    .wordmark { font-size: 32px; }
+    main { padding: 20px 16px 6px; }
+    footer { padding: 12px 16px 14px; }
+    header { padding: 9px 16px; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<section id="start">
+  <div class="shelf">
+    <h1 class="wordmark">Fabula</h1>
+    <p class="tagline">Every character knows only what they perceived. So do you.</p>
+
+    <h2 class="section" id="yours-heading" hidden>Continue</h2>
+    <div class="cards" id="yours"></div>
+
+    <h2 class="section" id="new-heading">Begin</h2>
+
+    <form class="invent" id="invent">
+      <p class="hint">Or something of your own. Say what the story is, and one gets
+        written — rooms, people, and something one of them is not saying.</p>
+      <div class="field">
+        <input type="text" id="premise" autocomplete="off"
+               placeholder="a heist that goes wrong in a hotel kitchen">
+        <button class="primary" type="submit" id="make">Make it</button>
+      </div>
+      <div class="field">
+        <label for="invent-name">You are</label>
+        <input type="text" id="invent-name" autocomplete="off"
+               placeholder="optional — a name of your own">
+      </div>
+      <div class="field">
+        <label for="card">Or a card</label>
+        <input type="file" id="card" accept=".png,.json,image/png,application/json">
+        <span class="hint">a character card from Chub, SillyTavern, Risu…</span>
+      </div>
+      <label class="check">
+        <input type="checkbox" id="invent-open-ended">
+        <span>Just let it run
+          <span class="hint">— no endings and no chapters, and the engine makes things
+            happen when the world runs out of them</span>
+        </span>
+      </label>
+      <span class="notice" id="invent-notice"></span>
+    </form>
+
+    <div id="worlds"></div>
+
+    <h2 class="section">Model</h2>
+    <div class="panel" id="settings">
+      <p class="state" id="model-state"></p>
+      <div class="field">
+        <label for="model">Model</label>
+        <input type="text" id="model" placeholder="gpt-4o-mini, anthropic/claude-…, openai/…"
+               autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="api-base">Endpoint</label>
+        <input type="text" id="api-base" placeholder="optional — your own server or a proxy"
+               autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="fast-model">Filing</label>
+        <input type="text" id="fast-model" placeholder="optional — a cheaper model for the calls nobody reads"
+               autocomplete="off" spellcheck="false">
+        <span class="hint">most of a turn is memory readings and summaries nobody sees</span>
+      </div>
+      <div class="field">
+        <label for="fast-api-base">Its endpoint</label>
+        <input type="text" id="fast-api-base" placeholder="optional — where that one lives, if elsewhere"
+               autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="workers">At once</label>
+        <input type="number" id="workers" min="1" max="32">
+        <span class="hint">how many of a turn's calls may be in flight</span>
+      </div>
+      <label class="check">
+        <input type="checkbox" id="interpret">
+        <span>Let characters read back what they remember
+          <span class="hint">— most of a turn's calls, and what makes a memory more than an echo</span>
+        </span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="direct">
+        <span>Let the director choose what gets narrated
+          <span class="hint">— one call per narration, when the moment could be more than one thing</span>
+        </span>
+      </label>
+      <div class="save">
+        <button type="button" class="primary" id="save-settings">Save</button>
+        <span class="notice" id="settings-notice"></span>
+      </div>
+      <p class="keys" id="keys"></p>
+    </div>
+
+    <div class="notice" id="start-notice"></div>
+  </div>
+</section>
+
+<header id="hud" class="hidden">
+  <span class="where" id="where"></span>
+  <span class="who" id="who"></span>
+  <span class="clock" id="clock"></span>
+  <span class="spacer"></span>
+  <span class="pov" id="pov"></span>
+  <button type="button" class="leave" id="leave">Your stories</button>
+</header>
+
+<main id="stage" class="hidden"><div class="scroll" id="scroll"></div></main>
+
+<footer id="controls" class="hidden">
+  <div class="bar">
+    <form id="say-form">
+      <input type="text" id="say" placeholder="Say or do something…" autocomplete="off">
+      <button class="primary" type="submit">Say</button>
+    </form>
+    <div class="actions">
+      <button type="button" id="look">Look around</button>
+      <button type="button" id="wait">Let time pass</button>
+      <button type="button" id="again">Again</button>
+      <button type="button" id="next" hidden>Go on</button>
+      <button type="button" id="reveal">What I missed</button>
+      <button type="button" id="steer">Steer</button>
+      <span class="go">
+        <span class="label" id="rooms-label">Go to</span>
+        <span id="rooms"></span>
+      </span>
+    </div>
+    <!-- Said to the director rather than to the room. It shapes what
+         happens and how it is described, and never what anybody says —
+         a note that steered somebody's dialogue would be the player
+         operating an agent that is supposed to be somebody else. -->
+    <form id="steer-form" hidden>
+      <label for="steer-note">You want</label>
+      <input type="text" id="steer-note" autocomplete="off"
+             placeholder="less banter, more dread — a note to the director, not to the room">
+      <button class="primary" type="submit">Tell them</button>
+      <button type="button" id="steer-off">Nothing in particular</button>
+    </form>
+    <div class="notice" id="notice"></div>
+  </div>
+</footer>
+<script>
+// This client renders one character's projection. Every line it shows
+// arrived over the stream already filtered by the world model, carrying
+// perceived content and its own visibility. There is no world log here to
+// render by mistake.
+
+// Every call goes through here, so a failure has exactly one place to be
+// handled. The service answers 502 when the model does not answer — the
+// take was rolled back and the scene is intact — and saying nothing at
+// all is how that used to look on screen.
+async function ask(url, options) {
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (offline) {
+    throw new Error("The app is not answering. Is it still running?");
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Something went wrong (${response.status}).`);
+  }
+  return response.json();
+}
+
+const send = (url, body) =>
+  ask(url, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body || {}),
+  });
+
+const api = {
+  catalogue: () => ask("/catalogue"),
+  settings: () => ask("/settings"),
+  saveSettings: chosen =>
+    ask("/settings", {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(chosen),
+    }),
+  stories: () => ask("/stories"),
+  startStory: (world, scene, character, openEnded) =>
+    send("/stories", {world, scene, character, open_ended: openEnded}),
+  playCard: (file, name) =>
+    ask(`/cards?name=${encodeURIComponent(name || "")}`, {
+      method: "POST",
+      headers: {"Content-Type": "application/octet-stream"},
+      body: file,
+    }),
+  inventWorld: (premise, character, openEnded) =>
+    send("/invent", {premise, character, open_ended: openEnded}),
+  resumeStory: id => send(`/stories/${id}/resume`),
+  dropStory: id => ask(`/stories/${id}`, {method: "DELETE"}),
+  state: id => ask(`/sessions/${id}`),
+  post: (id, what, body) => send(`/sessions/${id}/${what}`, body),
+  reveal: id => send(`/sessions/${id}/reveal`),
+  steer: (id, note) => send(`/sessions/${id}/steer`, {note}),
+  rewind: (id, seq) => send(`/sessions/${id}/rewind`, {seq}),
+};
+
+let sessionId = null;
+let stream = null;
+const seen = new Set();
+
+const el = id => document.getElementById(id);
+const scroll = () => el("stage").scrollTop = el("stage").scrollHeight;
+
+function say(text) { return act("say", {text}); }
+
+async function act(what, body) {
+  setBusy(true);
+  try {
+    // The stream is the single source of what gets displayed; the
+    // response body is ignored so an event cannot be rendered twice.
+    await api.post(sessionId, what, body);
+    await refresh();
+    note("");
+  } catch (failure) {
+    // The scene is where it was — a failed take is rolled back — so this
+    // is a sentence and a prompt, not the end of the story. The line the
+    // player typed goes with it: it did not happen.
+    clearProvisional();
+    note(failure.message, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+el("steer").onclick = () => {
+  const form = el("steer-form");
+  form.hidden = !form.hidden;
+  if (!form.hidden) el("steer-note").focus();
+};
+
+el("steer-form").onsubmit = async event => {
+  event.preventDefault();
+  await tellTheDirector(el("steer-note").value);
+};
+
+el("steer-off").onclick = () => tellTheDirector("");
+
+async function tellTheDirector(wanted) {
+  try {
+    const given = (await api.steer(sessionId, wanted)).note;
+    el("steer-note").value = given;
+    el("steer").classList.toggle("on", Boolean(given));
+    el("steer-form").hidden = true;
+    note(given ? "The director has been told." : "");
+  } catch (failure) {
+    note(failure.message, true);
+  }
+}
+
+function note(text, bad) {
+  const notice = el("notice");
+  notice.textContent = text;
+  notice.classList.toggle("bad", Boolean(bad));
+}
+
+// A turn is one model call per character who bids, plus the narrator, and
+// it can take a while. Something has to be alive on the screen while it
+// does, and it should be the room rather than a spinner in a corner.
+function setBusy(busy) {
+  for (const node of document.querySelectorAll("footer button, #say")) node.disabled = busy;
+  if (busy) thinking();
+  else {
+    settled();
+    el("say").focus();
+  }
+}
+
+// The dots, and the line they sit on. Split out of `setBusy` because the
+// engine can now be working without the player having asked it anything:
+// a scene opens itself once they are already in it, and the composer
+// stays live through that — a line typed over the opening is played
+// after it rather than refused.
+function thinking() {
+  if (el("waiting")) return el("waiting");
+  const line = document.createElement("p");
+  line.className = "thinking";
+  line.id = "waiting";
+  const label = document.createElement("span");
+  label.className = "doing";
+  label.textContent = "the room is answering";
+  line.appendChild(label);
+  line.appendChild(document.createTextNode(" "));
+  for (let i = 0; i < 3; i++) {
+    const dot = document.createElement("i");
+    dot.textContent = "·";
+    line.appendChild(dot);
+  }
+  el("scroll").appendChild(line);
+  scroll();
+  return line;
+}
+
+function settled() {
+  const waiting = el("waiting");
+  if (waiting) waiting.remove();
+}
+
+// A turn walks the cast — each character in turn, then the narrator —
+// and saying so is both more useful than one undifferentiated dot and a
+// truer picture of what this engine is doing than any app with a single
+// model behind it could draw.
+function working(frame) {
+  const label = thinking().querySelector(".doing");
+  if (!label) return;
+  // A name the narrator invented is model output like any other, so it
+  // goes in as text.
+  label.textContent = frame.name ? `${frame.name} is answering` : "the room is answering";
+}
+
+// What the player just typed, on screen before the engine has run the
+// turn. A turn is several model calls; without this the line they typed
+// disappears for as long as that takes, which reads as the app having
+// eaten it. It is replaced by the real event — the one that came back
+// through the projection — the moment the turn lands, and removed with
+// nothing in its place if the turn failed and was rolled back.
+function provisionally(text) {
+  const line = document.createElement("p");
+  line.className = "line you provisional spoken";
+  const who = document.createElement("span");
+  who.className = "speaker";
+  who.textContent = state.character_name || "";
+  const said = document.createElement("span");
+  said.className = "said";
+  said.append(emphasised(text));
+  const body = document.createElement("span");
+  body.className = "body";
+  body.append(who, said);
+  // The same face the real line will carry, so the provisional line does
+  // not visibly change shape when the turn lands and replaces it.
+  line.append(faceFor(state.world, state.character, state.character_name), body);
+  el("scroll").appendChild(line);
+  scroll();
+}
+
+function clearProvisional() {
+  for (const node of [...el("scroll").querySelectorAll(".provisional")]) node.remove();
+}
+
+// Models in this category write *she looks away*, because every other
+// application in it renders that as an action. We were showing the
+// asterisks.
+//
+// This is deliberately not a markdown parser. The client sets
+// textContent everywhere and never innerHTML, because model output must
+// never become markup — a name the narrator invented is model output,
+// and so is every line a character says. So this returns a fragment
+// built from text nodes and <em> elements, and there is no path through
+// it by which anything else could come out: the only string that ever
+// reaches the DOM does so as textContent.
+const EMPHASIS = /\*(?!\s)([^*\n]+?)\*|_(?!\s)([^_\n]+?)_/g;
+
+function emphasised(text) {
+  const out = document.createDocumentFragment();
+  let at = 0;
+  let found;
+  EMPHASIS.lastIndex = 0;
+  while ((found = EMPHASIS.exec(text)) !== null) {
+    const inner = found[1] !== undefined ? found[1] : found[2];
+    const underscored = found[2] !== undefined;
+    const before = text[found.index - 1] || "";
+    const after = text[found.index + found[0].length] || "";
+    // An underscore inside a word is a word: file_name, snake_case, a
+    // url. Asterisks have no such ambiguity in prose.
+    if (underscored && (/\w/.test(before) || /\w/.test(after))) continue;
+    if (/\s$/.test(inner)) continue;
+    out.append(document.createTextNode(text.slice(at, found.index)));
+    const em = document.createElement("em");
+    em.textContent = inner;
+    out.appendChild(em);
+    at = found.index + found[0].length;
+  }
+  out.append(document.createTextNode(text.slice(at)));
+  return out;
+}
+
+function render(event) {
+  if (seen.has(event.seq)) return;
+  seen.add(event.seq);
+  clearProvisional();
+
+  const line = document.createElement("p");
+  line.className = "line";
+  line.dataset.seq = event.seq;
+
+  if (event.opening) {
+    // The scene's own first words: not something that happened in the
+    // room, and not anybody's line. Set apart so it does not read as
+    // one.
+    line.classList.add("opening");
+    line.append(emphasised(event.content));
+  } else if (event.kind === "time_skip") {
+    line.classList.add("skip");
+    line.textContent = event.content;
+  } else if (event.visibility === "degraded") {
+    // Half-heard. Shown as uncertain, never attributed to a speaker —
+    // the character does not know for certain who that was.
+    line.classList.add("degraded");
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = "unclear";
+    line.append(tag, emphasised(event.content));
+  } else if (event.kind === "utterance") {
+    if (event.speaker === state.character) line.classList.add("you");
+    line.classList.add("spoken");
+    const who = document.createElement("span");
+    who.className = "speaker";
+    who.textContent = event.speaker_name || "";
+    const said = document.createElement("span");
+    said.className = "said";
+    said.append(emphasised(event.content));
+    const body = document.createElement("span");
+    body.className = "body";
+    body.append(who, said);
+    // Only when the engine named a speaker. A line the projection
+    // attributed to nobody must not be given a face by the interface.
+    if (event.speaker) line.appendChild(faceFor(state.world, event.speaker, event.speaker_name));
+    line.appendChild(body);
+  } else {
+    line.classList.add("prose");
+    line.append(emphasised(event.content));
+  }
+
+  // Not on the scene's opening: there is nothing before it to go back
+  // to, and it is the author's words rather than a turn that was played.
+  if (!event.opening) line.appendChild(undoTo(event.seq));
+
+  const waiting = el("waiting");
+  el("scroll").insertBefore(line, waiting);
+  scroll();
+}
+
+function undoTo(seq) {
+  const undo = document.createElement("button");
+  undo.type = "button";
+  undo.className = "undo";
+  undo.textContent = "take back to here";
+  undo.title = "Take the scene back to just before this line and play it differently";
+  undo.onclick = async event => {
+    event.stopPropagation();
+    undo.disabled = true;
+    try {
+      // Everything from this line on goes, so the scene resumes from the
+      // moment before it.
+      const left = await api.rewind(sessionId, seq - 1);
+      redraw(left);
+      await refresh();
+    } catch (failure) {
+      note(failure.message, true);
+      undo.disabled = false;
+    }
+  };
+  return undo;
+}
+
+// The scene is now shorter than what is on screen, so the transcript is
+// rebuilt rather than appended to.
+function redraw(events) {
+  // The "answering" indicator is created on demand and removed again, so
+  // there is nothing to preserve here: clearing the scroll takes it with
+  // it, and `render` appends when it is not there.
+  el("scroll").textContent = "";
+  seen.clear();
+  announcedEnd = false;
+  for (const event of events) render(event);
+}
+
+let state = {};
+let announcedEnd = false;
+
+async function refresh() {
+  const previous = state.scene;
+  state = await api.state(sessionId);
+  if (previous && previous !== state.scene) announcedEnd = false;
+  announceEnd();
+  el("where").textContent = state.location_name;
+  // A name can be one the narrator invented mid-scene, so it is model
+  // output: put it in the page as text, not as markup.
+  const who = el("who");
+  who.textContent = state.present.length ? "with" : "alone";
+  state.present.forEach((person, i) => {
+    if (i) who.appendChild(document.createTextNode(","));
+    const holder = document.createElement("span");
+    holder.className = "person";
+    const name = document.createElement("em");
+    name.textContent = person.name;
+    holder.append(faceFor(state.world, person.id, person.name), name);
+    who.appendChild(holder);
+  });
+  el("steer").classList.toggle("on", Boolean(state.steering));
+  if (el("steer-form").hidden) el("steer-note").value = state.steering || "";
+  el("clock").textContent = new Date(state.story_time).toLocaleTimeString([], {
+    hour: "numeric", minute: "2-digit",
+  });
+  const pov = el("pov");
+  pov.textContent = "";
+  pov.append(
+    faceFor(state.world, state.character, state.character_name),
+    // A card world calls its player "You" when nobody said otherwise,
+    // and "You’s point of view" is not a sentence.
+    document.createTextNode(
+      state.character_name.toLowerCase() === "you"
+        ? "your point of view"
+        : state.character_name + "’s point of view",
+    ),
+  );
+
+  const rooms = el("rooms");
+  rooms.textContent = "";
+  for (const room of state.rooms) {
+    if (room.id === state.location) continue;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = room.name;
+    button.onclick = () => act("move", {room: room.id});
+    rooms.appendChild(button);
+  }
+
+  // Offered once the scene has reached its end and there is somewhere for
+  // the story to go.
+  const onward = el("next");
+  onward.hidden = !(state.ended && state.next_scene);
+  onward.classList.toggle("lit", !onward.hidden);
+
+  const waitButton = el("wait");
+  const pending = state.pending_skip_minutes;
+  waitButton.textContent = pending ? `Let ${describe(pending)} pass` : "Let time pass";
+  waitButton.disabled = pending === null;
+}
+
+// The end condition is advisory: the scene is over in the authored sense,
+// but nothing is locked. Say so once, point at the reveal, and let anyone
+// who wants to keep talking keep talking.
+function announceEnd() {
+  if (!state.ended || announcedEnd) return;
+  announcedEnd = true;
+  const line = document.createElement("p");
+  line.className = "line ending";
+  line.textContent =
+    `${state.scene.replace(/_/g, " ")} has reached its end. ` +
+    (state.next_scene
+      ? "“Go on” takes the story forward — or keep talking."
+      : "“What I missed” shows what you could not — or keep talking.");
+  el("scroll").appendChild(line);
+  scroll();
+  el("reveal").classList.add("lit");
+}
+
+function describe(minutes) {
+  if (minutes >= 60 && minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return hours === 1 ? "an hour" : `${hours} hours`;
+  }
+  return `${minutes} minutes`;
+}
+
+// A retake discarded everything from `from_seq` on, so the transcript has
+// to lose it before the new take arrives — including from `seen`, or the
+// replacement lines would be dropped as duplicates.
+function truncate(fromSeq) {
+  for (const node of [...el("scroll").children]) {
+    const seq = Number(node.dataset.seq);
+    if (Number.isFinite(seq) && seq >= fromSeq) node.remove();
+  }
+  for (const seq of [...seen]) if (seq >= fromSeq) seen.delete(seq);
+}
+
+function listen() {
+  stream = new EventSource(`/sessions/${sessionId}/stream`);
+  stream.onmessage = message => render(JSON.parse(message.data));
+  stream.addEventListener("retake", message => truncate(JSON.parse(message.data).from_seq));
+  // Who the engine is asking, as it asks them. Never what they are
+  // writing: nothing a character says has been checked yet at this
+  // point, and several of the checks exist to stop particular words
+  // reaching the player at all. See `fabula.llm.Watched`.
+  stream.addEventListener("working", message => working(JSON.parse(message.data)));
+  // A scene opens after the page does, so a model that will not answer
+  // has no reply left to fail on. Without this it would be a room that
+  // never says anything, which reads as slowness rather than as a key
+  // that is wrong.
+  stream.addEventListener("trouble", message => note(JSON.parse(message.data).detail, true));
+  // And when it stops. A turn the player asked for stops when its
+  // response comes back; an opening has no response to come back, so it
+  // says so on the stream instead.
+  stream.addEventListener("settled", () => settled());
+  stream.onerror = () => note("Reconnecting…");
+}
+
+async function enter(opening, curtain) {
+  let opened;
+  try {
+    opened = await opening;
+  } catch (failure) {
+    el("start-notice").textContent = failure.message;
+    el("start-notice").classList.add("bad");
+    return;
+  }
+  sessionId = opened.session_id;
+  el("scroll").textContent = "";
+  seen.clear();
+  announcedEnd = false;
+  el("start").classList.add("hidden");
+  for (const id of ["hud", "stage", "controls"]) el(id).classList.remove("hidden");
+  await refresh();
+  // A story that has just begun is still opening itself: the room has to
+  // be described and whoever is standing in it gets to speak first. Said
+  // straight away rather than when the first frame arrives, because the
+  // first of those calls is under way before there is anybody to tell.
+  if (curtain) thinking();
+  listen();
+  el("say").focus();
+}
+
+// Back to the shelf. The story is on disk and the session stays open, so
+// this is putting a book down rather than closing it.
+function leave() {
+  if (stream) { stream.close(); stream = null; }
+  sessionId = null;
+  el("start").classList.remove("hidden");
+  for (const id of ["hud", "stage", "controls"]) el(id).classList.add("hidden");
+  note("");
+  showShelf();
+}
+
+el("say-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const text = el("say").value.trim();
+  if (!text) return;
+  el("say").value = "";
+  provisionally(text);
+  say(text);
+});
+
+function block(parent, tag, text, className) {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  if (className) node.className = className;
+  parent.appendChild(node);
+  return node;
+}
+
+// Deliberately outside the story: shown only when asked for, styled so it
+// cannot be mistaken for something a character said, and never fed back in.
+async function showReveal() {
+  const data = await api.reveal(sessionId);
+  const panel = document.createElement("div");
+  panel.className = "reveal";
+  block(panel, "h2", `What ${data.character} never knew`);
+
+  block(panel, "h3", "Happened without you");
+  if (data.missed.length) {
+    for (const m of data.missed) {
+      block(panel, "p", `in ${m.location} — ${m.speaker ? m.speaker + ": " : ""}${m.content}`);
+    }
+  } else {
+    block(panel, "p", "Nothing happened out of your sight.", "none");
+  }
+
+  if (data.half_heard.length) {
+    block(panel, "h3", "What you half-heard");
+    for (const h of data.half_heard) {
+      block(panel, "p", `you got — ${h.heard}`);
+      block(panel, "p", `it was — ${h.truth}`, "truth");
+    }
+  }
+
+  if (data.regard.length) {
+    block(panel, "h3", "What tonight changed");
+    for (const r of data.regard) {
+      const direction = r.trust < r.started ? "less" : "more";
+      block(panel, "p", `${r.who} trusts ${r.toward} ${direction} than at the start`);
+      block(panel, "p", `${r.started.toFixed(2)} → ${r.trust.toFixed(2)}`, "truth");
+    }
+  }
+
+  for (const [fact, holders] of Object.entries(data.knowledge)) {
+    const knew = Object.entries(holders).filter(([, y]) => y).map(([n]) => n);
+    const not = Object.entries(holders).filter(([, y]) => !y).map(([n]) => n);
+    block(panel, "h3", `Who knew about the ${fact.replace(/_/g, " ")}`);
+    block(panel, "p", `knew — ${knew.join(", ") || "no one"}`);
+    block(panel, "p", `never found out — ${not.join(", ") || "no one"}`, "truth");
+  }
+
+  el("scroll").appendChild(panel);
+  scroll();
+}
+
+el("reveal").onclick = () => {
+  if (confirm("This spoils the scene: it shows what you could not perceive. Continue?")) {
+    showReveal();
+  }
+};
+el("again").onclick = () => act("regenerate");
+// A story, not a scene: the session id survives the seam, so going on is
+// an ordinary action and the transcript starts over from the retake frame.
+el("next").onclick = () => act("next");
+el("look").onclick = () => act("look");
+el("leave").onclick = leave;
+el("wait").onclick = async () => {
+  const minutes = state.pending_skip_minutes;
+  if (minutes === null) return;
+  // Time is something the player should never lose without noticing.
+  if (minutes > 60 && !confirm(`Let ${describe(minutes)} pass?`)) return;
+  await act("wait", {consent: true});
+};
+
+// --- The shelf --------------------------------------------------------
+//
+// Your stories live on this machine, so the first thing the app shows is
+// what is already yours. Underneath it: worlds, and the scenes a story
+// can start from — not every scene there is. Starting cold in chapter
+// three is how a menu of scenes reads, and people came to play a story.
+
+function card(name, premise, meta) {
+  const button = document.createElement("button");
+  button.className = "card";
+  button.type = "button";
+  block(button, "span", name, "name");
+  if (premise) block(button, "span", premise, "premise");
+  if (meta) {
+    const line = block(button, "span", "", "meta");
+    meta.forEach((part, i) => {
+      if (i) line.appendChild(document.createTextNode(" · "));
+      if (part.strong) block(line, "b", part.text);
+      else line.appendChild(document.createTextNode(part.text));
+    });
+  }
+  return button;
+}
+
+function when(iso) {
+  return new Date(iso).toLocaleString([], {
+    day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
+  });
+}
+
+let shelf = [];
+
+function named(worldId, sceneId) {
+  const world = shelf.find(w => w.id === worldId);
+  const scene = world && world.scenes.find(s => s.id === sceneId);
+  return {
+    world: world ? world.title : worldId.replace(/_/g, " "),
+    scene: scene ? scene.title : sceneId.replace(/_/g, " "),
+  };
+}
+
+// Every world has a cover and everybody in it has a face, because the
+// service answers both for every world whether or not anybody drew one.
+// So these never need a "did the author supply art" branch, and the page
+// never has an empty frame in it.
+//
+// Ids go through encodeURIComponent: a world id is a directory name and
+// a character id is authored, but a generated world's ids come out of a
+// model, and a name is not a path just because it is usually shaped like
+// one.
+function coverOf(worldId) {
+  return `/worlds/${encodeURIComponent(worldId)}/cover`;
+}
+
+function faceOf(worldId, characterId) {
+  return `/worlds/${encodeURIComponent(worldId)}/faces/${encodeURIComponent(characterId)}`;
+}
+
+function faceFor(worldId, characterId, name) {
+  const face = document.createElement("img");
+  face.className = "face";
+  face.loading = "lazy";
+  face.src = faceOf(worldId, characterId);
+  // A name can be one the player typed or one the narrator invented, so
+  // it goes in as text — alt is an attribute, and that is still a place
+  // markup would be markup.
+  face.alt = name || "";
+  return face;
+}
+
+async function showStories() {
+  const stories = await api.stories();
+  const list = el("yours");
+  list.textContent = "";
+  el("yours-heading").hidden = stories.length === 0;
+  for (const story of stories) {
+    const row = document.createElement("div");
+    row.className = "story";
+    const turns = `${story.turns} turn${story.turns === 1 ? "" : "s"}`;
+    const where = named(story.world, story.scene);
+    const meta = [{text: where.world, strong: true}];
+    if (story.character) meta.push({text: `as ${story.character}`});
+    // Where the story got to, said only when that is somewhere other
+    // than what the card is already called.
+    if (where.scene && where.scene !== story.title) meta.push({text: where.scene});
+    meta.push({text: story.turns ? turns : "not started"}, {text: when(story.played_at)});
+    const open = card(story.title, "", meta);
+    // The cover, so the shelf of stories you left is a shelf and not a
+    // list of filenames.
+    const mark = document.createElement("img");
+    mark.className = "face";
+    mark.loading = "lazy";
+    mark.src = coverOf(story.world);
+    mark.alt = "";
+    open.querySelector(".name").prepend(mark);
+    open.onclick = () => enter(api.resumeStory(story.id));
+    const drop = document.createElement("button");
+    drop.className = "drop";
+    drop.type = "button";
+    drop.textContent = "Delete";
+    drop.title = `Delete ${story.title}`;
+    drop.onclick = async () => {
+      if (!confirm(`Delete “${story.title}”? This cannot be undone.`)) return;
+      await api.dropStory(story.id);
+      showStories();
+    };
+    row.append(open, drop);
+    list.appendChild(row);
+  }
+}
+
+async function showWorlds() {
+  const list = el("worlds");
+  list.textContent = "";
+  if (!shelf.length) {
+    el("start-notice").textContent = "No worlds found.";
+    return;
+  }
+  for (const world of shelf) {
+    const section = document.createElement("section");
+    section.className = "world";
+
+    const plate = document.createElement("div");
+    plate.className = "plate";
+    const art = document.createElement("img");
+    art.loading = "lazy";
+    art.src = coverOf(world.id);
+    art.alt = "";
+    const over = document.createElement("div");
+    over.className = "over";
+    const heading = block(over, "h3", world.title);
+    if (world.language && !world.language.startsWith("en")) {
+      block(heading, "span", world.language, "lang");
+    }
+    if (world.blurb) block(over, "p", world.blurb, "blurb");
+    plate.append(art, over);
+    section.appendChild(plate);
+
+    const openings = world.scenes.filter(scene => scene.opens);
+    const rest = world.scenes.filter(scene => !scene.opens);
+    const cards = document.createElement("div");
+    cards.className = "cards";
+    for (const scene of openings) cards.appendChild(sceneCard(world, scene));
+    section.appendChild(cards);
+
+    // The chapters are still reachable — an author needs to open scene
+    // three without playing one and two — but they are not the offer.
+    if (rest.length) {
+      const more = document.createElement("button");
+      more.className = "more";
+      more.type = "button";
+      more.textContent = `${rest.length} more scene${rest.length === 1 ? "" : "s"} in this story`;
+      more.onclick = () => {
+        more.remove();
+        for (const scene of rest) cards.appendChild(sceneCard(world, scene));
+      };
+      section.appendChild(more);
+    }
+    list.appendChild(section);
+  }
+}
+
+function sceneCard(world, scene) {
+  const meta = [];
+  if (scene.you) meta.push({text: `you are ${scene.you}`, strong: true});
+  if (scene.with.length) meta.push({text: `with ${scene.with.join(", ")}`});
+  const holder = document.createElement("div");
+  const button = card(scene.title, scene.premise, meta);
+  button.onclick = () => askWho(holder, button, world, scene);
+  holder.appendChild(button);
+  return holder;
+}
+
+// Everything in a world is authored, and that is right for the parts a
+// story turns on. It is wrong for the one person the player is: being
+// handed Rook, or Elena, is being handed somebody else's character to
+// wear. So the last thing between picking a story and playing it is who
+// you are in it — and it is skippable in one click, because sometimes
+// you just want to start.
+function askWho(holder, button, world, scene) {
+  if (holder.querySelector(".who-form")) return closeWho(holder, button);
+  for (const open of document.querySelectorAll(".who-form")) {
+    closeWho(open.parentElement, open.parentElement.querySelector(".card"));
+  }
+  button.classList.add("chosen");
+
+  const form = document.createElement("form");
+  form.className = "who-form";
+  const hint = block(form, "p", "", "hint");
+  hint.textContent = scene.you
+    ? `Play as somebody of your own, or leave it and be ${scene.you}.`
+    : "Play as somebody of your own.";
+
+  const name = field(form, "Name", "who you are", usually.name || scene.you || "");
+  const look = field(
+    form, "Anyone can see", "one line — what the room notices about you", usually.look || ""
+  );
+
+  // How this story gets played, asked where it is chosen. Not a property
+  // of the world: the same house can be a story you finish or one you
+  // stay in, and that is the player's call rather than the author's.
+  const how = document.createElement("label");
+  how.className = "check";
+  const run = document.createElement("input");
+  run.type = "checkbox";
+  const label = document.createElement("span");
+  label.textContent = "Just let it run";
+  const why = document.createElement("span");
+  why.className = "hint";
+  why.textContent = " — no endings and no chapters. It keeps going, and the "
+                  + "engine makes things happen when the world runs out of them.";
+  label.appendChild(why);
+  how.append(run, label);
+  form.appendChild(how);
+
+  const go = document.createElement("div");
+  go.className = "go";
+  const begin = document.createElement("button");
+  begin.className = "primary";
+  begin.type = "submit";
+  begin.textContent = "Begin";
+  const back = document.createElement("button");
+  back.type = "button";
+  back.textContent = "Cancel";
+  back.onclick = () => closeWho(holder, button);
+  const notice = document.createElement("span");
+  notice.className = "notice";
+  go.append(begin, back, notice);
+  form.appendChild(go);
+
+  form.onsubmit = async event => {
+    event.preventDefault();
+    begin.disabled = true;
+    notice.classList.remove("bad");
+    notice.textContent = "";
+    const character = {name: name.value.trim(), look: look.value.trim()};
+    try {
+      const opened = await api.startStory(world.id, scene.id, character, run.checked);
+      await enter(Promise.resolve(opened), true);
+    } catch (failure) {
+      // The story was not started, so this is a correction rather than
+      // an error: they are still standing where they were.
+      notice.textContent = failure.message;
+      notice.classList.add("bad");
+      begin.disabled = false;
+    }
+  };
+
+  holder.appendChild(form);
+  name.focus();
+}
+
+function closeWho(holder, button) {
+  const form = holder && holder.querySelector(".who-form");
+  if (form) form.remove();
+  if (button) button.classList.remove("chosen");
+}
+
+function field(form, label, placeholder, value) {
+  const row = document.createElement("div");
+  row.className = "field";
+  const tag = document.createElement("label");
+  tag.textContent = label;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = placeholder;
+  input.value = value;
+  input.autocomplete = "off";
+  tag.htmlFor = input.id = `who-${label.replace(/\W+/g, "-").toLowerCase()}`;
+  row.append(tag, input);
+  form.appendChild(row);
+  return input;
+}
+
+// Which model answers is the player's choice — the whole pitch is that
+// the application is local and the model is yours — and a choice that
+// lives in the flags of whoever started the process is not theirs.
+//
+// The one thing this panel will not do is take a key. Credentials reach
+// the engine through the environment and nowhere else, so what it does
+// instead is say which ones are there and where to put one that is not.
+let usually = {name: "", look: ""};
+
+async function showSettings() {
+  const current = await api.settings();
+  // Who they usually are, learned from the last story they actually
+  // started. Only ever a suggestion: the boxes are still there.
+  usually = {name: current.player_name || "", look: current.player_look || ""};
+  if (!el("invent-name").value) el("invent-name").value = usually.name;
+  el("model").value = current.model;
+  el("api-base").value = current.api_base;
+  el("fast-model").value = current.fast_model;
+  el("fast-api-base").value = current.fast_api_base;
+  el("workers").value = current.workers;
+  el("interpret").checked = current.interpret;
+  el("direct").checked = current.direct;
+
+  const state = el("model-state");
+  state.classList.toggle("warn", current.placeholder || Boolean(current.unreachable));
+  if (current.pinned) {
+    state.textContent =
+      "The model was set on the command line for this run. Restart without --model to choose it here.";
+  } else if (current.unreachable) {
+    state.textContent = current.unreachable;
+  } else if (current.placeholder) {
+    state.textContent =
+      "No model set and no provider key in the environment, so stories run on placeholder text — " +
+      "everything works, but nobody says anything real.";
+  } else if (current.model) {
+    state.textContent =
+      `Stories run on ${current.model}${current.api_base ? " at " + current.api_base : ""}.` +
+      (current.filing_with
+        ? ` The readings and summaries — most of a turn — go to ${current.filing_with}.`
+        : "");
+  } else {
+    state.textContent = "Stories run on whatever your environment implies. Name a model to be sure.";
+  }
+
+  for (const id of ["model", "api-base", "fast-model", "fast-api-base", "workers",
+                    "interpret", "direct", "save-settings"]) {
+    el(id).disabled = current.pinned;
+  }
+
+  // Names only. The values are never read by the app and never leave the
+  // machine except to the endpoint you chose.
+  const keys = el("keys");
+  keys.textContent = "";
+  if (current.keys_present.length) {
+    keys.append(document.createTextNode("Keys in your environment: "));
+    current.keys_present.forEach((name, i) => {
+      if (i) keys.append(document.createTextNode(", "));
+      const code = document.createElement("code");
+      code.textContent = name;
+      keys.appendChild(code);
+    });
+    keys.append(document.createTextNode(". Your key is never asked for here and never stored by the app."));
+  } else {
+    keys.append(document.createTextNode("No provider key found. Put one in "));
+    const where = document.createElement("code");
+    where.textContent = current.env_file;
+    keys.appendChild(where);
+    keys.append(document.createTextNode(
+      " as OPENAI_API_KEY=… (or export it) and restart. It is never asked for here and never stored by the app."
+    ));
+  }
+}
+
+el("save-settings").onclick = async () => {
+  const notice = el("settings-notice");
+  notice.classList.remove("bad");
+  notice.textContent = "Saving…";
+  try {
+    await api.saveSettings({
+      model: el("model").value,
+      api_base: el("api-base").value,
+      fast_model: el("fast-model").value,
+      fast_api_base: el("fast-api-base").value,
+      workers: Number(el("workers").value) || 1,
+      interpret: el("interpret").checked,
+      direct: el("direct").checked,
+    });
+    await showSettings();
+    notice.textContent = "Saved.";
+    setTimeout(() => { if (notice.textContent === "Saved.") notice.textContent = ""; }, 2500);
+  } catch (failure) {
+    notice.textContent = failure.message;
+    notice.classList.add("bad");
+  }
+};
+
+// A card from somewhere else. No model call at all: what a card
+// describes is a person and a situation, and generating a world around
+// one would put words in a stranger's character's mouth before the
+// player had met them.
+el("card").onchange = async () => {
+  const [file] = el("card").files;
+  if (!file) return;
+  const notice = el("invent-notice");
+  notice.classList.remove("bad");
+  notice.textContent = `Reading ${file.name}…`;
+  try {
+    const opened = await api.playCard(file, el("invent-name").value.trim());
+    notice.textContent = "";
+    await enter(Promise.resolve(opened), true);
+  } catch (failure) {
+    notice.textContent = failure.message;
+    notice.classList.add("bad");
+  } finally {
+    el("card").value = "";
+  }
+};
+
+// Making a world is a handful of model calls, once — long enough that
+// the button has to say what is happening, and slow enough that saying
+// "Making a world" is the honest version of a spinner.
+el("invent").onsubmit = async event => {
+  event.preventDefault();
+  const premise = el("premise").value.trim();
+  const notice = el("invent-notice");
+  if (!premise) return;
+  const button = el("make");
+  button.disabled = el("premise").disabled = el("invent-name").disabled = true;
+  button.textContent = "Making…";
+  notice.classList.remove("bad");
+  notice.textContent = "Writing the rooms, the people, and what one of them is not saying.";
+  try {
+    const opened = await api.inventWorld(
+      premise, {name: el("invent-name").value.trim(), look: ""},
+      el("invent-open-ended").checked,
+    );
+    await enter(Promise.resolve(opened), true);
+    notice.textContent = "";
+  } catch (failure) {
+    notice.textContent = failure.message;
+    notice.classList.add("bad");
+  } finally {
+    button.disabled = el("premise").disabled = el("invent-name").disabled = false;
+    button.textContent = "Make it";
+  }
+};
+
+async function showShelf() {
+  el("start-notice").textContent = "";
+  el("start-notice").classList.remove("bad");
+  try {
+    // The worlds first: a story card is named out of the catalogue.
+    shelf = await api.catalogue();
+    await showStories();
+    await showWorlds();
+    await showSettings();
+  } catch (failure) {
+    el("start-notice").textContent = failure.message;
+    el("start-notice").classList.add("bad");
+  }
+}
+
+showShelf();
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# The player. Arrives knowing less about themselves than the man behind
+# the desk does, which is the shape of the story.
+id: rook
+name: "Rook"
+persona: >
+  Rook arrived this morning with one bag and a letter that said only
+  which train to take. Nobody has told them where they are going, and
+  nobody has mentioned the school they left.
+traits:
+  talkativeness: 0.6
+  reactivity: {evasion: 0.7}
+  salience_bias: {utterance: 1.1, action: 1.0}
+  reticence: 0.2
+goals:
+  - id: find_out_where_i_am_going
+    description: Find out which house you have been placed in, and why
+    priority: 0.8
+    about: your_placement
+protects: []
+relationships:
+  vance:
+    affinity: 0.3
+    trust: 0.4
+    note: The Director. Polite in a way that has not answered anything yet.
+location_id: hall
+is_user: true

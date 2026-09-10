@@ -24,6 +24,7 @@ from fabula.db import EventStore
 from fabula.llm import LLMClient
 from fabula.player import Player
 from fabula.session import Session
+from fabula.shelf import stocked
 
 DEFAULT_ROOT = Path.home() / ".fabula" / "stories"
 
@@ -56,9 +57,16 @@ def default_title(world: str, scene: str) -> str:
 
 
 class Library:
-    def __init__(self, root: Path | str = DEFAULT_ROOT, worlds_root: Path | str = "worlds"):
+    def __init__(
+        self,
+        root: Path | str = DEFAULT_ROOT,
+        worlds_root: Path | str | None = None,
+    ):
         self.root = Path(root)
-        self.worlds_root = Path(worlds_root)
+        # Never the current directory. A relative default is a bet that
+        # the caller is standing in this repository, and everyone who is
+        # not got an empty shelf.
+        self.worlds_root = Path(worlds_root) if worlds_root is not None else stocked()
 
     def _path(self, story_id: str) -> Path:
         # Ids are generated here and never taken from a client, but this

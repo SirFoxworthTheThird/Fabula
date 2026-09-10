@@ -22,7 +22,7 @@ from fabula.persistence import unresolved_goals
 from fabula.pressures import next_scene, scene_state
 from fabula.session import Session
 
-WORLDS = Path(__file__).parent.parent / "worlds"
+from fabula.shelf import SHIPPED as WORLDS  # noqa: E402
 ASHGROVE = WORLDS / "ashgrove"
 SECRET = "I broke Grandma's music box."
 

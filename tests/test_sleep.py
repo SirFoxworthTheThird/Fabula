@@ -18,7 +18,7 @@ from fabula.chronology import render_time_skip, was_asleep
 from fabula.llm import FakeLLM
 from fabula.session import Session
 
-WORLDS = Path(__file__).parent.parent / "worlds"
+from fabula.shelf import SHIPPED as WORLDS  # noqa: E402
 ASHGROVE = WORLDS / "ashgrove"
 SECRET = "I broke Grandma's music box, and I let them blame the cat."
 

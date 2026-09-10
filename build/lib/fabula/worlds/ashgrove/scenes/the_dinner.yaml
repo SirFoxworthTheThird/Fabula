@@ -1,0 +1,21 @@
+id: the_dinner
+world: ashgrove
+title: The dinner
+premise: >-
+  Your brother has been strange all evening, and your sister is in the next room.
+opening: >-
+  Sunday at the house you grew up in. Tomás has been at the kitchen
+  table since six and has said about twenty words, none of them about
+  anything. Maria is in the study with the door not quite shut. Nobody
+  has eaten yet.
+mode: sandbox
+cast:
+  - tomas
+  - maria
+  - elena
+starting_positions:
+  tomas: kitchen
+  maria: study
+  elena: kitchen
+turn_budget: 6
+max_consecutive_agent_turns: 3

@@ -1,0 +1,17 @@
+# Rook got it out of him. Now they both know, and neither has decided
+# what that means.
+id: what_marlow_sent
+world: ardenhall
+title: What Marlow sent
+premise: >-
+  A sealed envelope that came ahead of you, and the person it was sent to.
+opening: >-
+  Something came ahead of you, in an envelope, and it is in this room.
+  The Director has not mentioned it and has not put it away either. You
+  are the only person at Ardenhall who has never been told what is in
+  it.
+mode: sandbox
+cast: [vance, rook]
+starting_positions: {vance: office, rook: office}
+start_time: 2024-09-02T12:05:00
+turn_budget: 6

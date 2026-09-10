@@ -23,7 +23,7 @@ from fabula.classify import Transmission, classify, knows, worth_classifying
 from fabula.llm import FakeLLM
 from fabula.session import Session
 
-WORLDS = Path(__file__).parent.parent / "worlds"
+from fabula.shelf import SHIPPED as WORLDS  # noqa: E402
 ASHGROVE = WORLDS / "ashgrove"
 
 

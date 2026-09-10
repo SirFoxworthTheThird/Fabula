@@ -23,7 +23,7 @@ from fabula.memory import project
 from fabula.session import Session
 from fabula.world import mentions_fact
 
-WORLDS = Path(__file__).parent.parent / "worlds"
+from fabula.shelf import SHIPPED as WORLDS  # noqa: E402
 WINTERLIGHT = WORLDS / "winterlight"
 
 FLIGHT = "the first flight has slipped to December"

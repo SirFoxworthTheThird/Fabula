@@ -1,0 +1,14 @@
+id: you
+name: You
+persona: ''
+traits:
+  talkativeness: 0.6
+  reticence: 0.3
+protects: []
+intentions: []
+relationships:
+  nadia_sokolova:
+    affinity: 0.4
+    trust: 0.5
+location_id: here
+is_user: true

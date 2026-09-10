@@ -1,0 +1,37 @@
+# The player. Like Elena in ashgrove, she holds nothing back — she is the
+# one both liars need on side, which is what makes her worth playing.
+id: ana
+name: "Ana Reyes"
+persona: >
+  Ana is the station doctor, nine months into a posting she took to get
+  away from a year she did not want to talk about. Almost nothing has
+  needed a doctor. She has spent the winter being the person everyone
+  says things to, which means she is the first to notice when they stop.
+traits:
+  talkativeness: 0.6
+  reactivity:
+    evasion: 0.6
+  salience_bias:
+    utterance: 1.1
+    action: 1.0
+  reticence: 0.2
+goals:
+  - id: get_them_through_it
+    description: Get four people to the end of the winter intact
+    priority: 0.8
+protects: []
+relationships:
+  ilse:
+    affinity: 0.6
+    trust: 0.6
+    note: Correct with her, and a little further away every week.
+  yusuf:
+    affinity: 0.75
+    trust: 0.6
+    note: Talks to her constantly. She has begun to notice what about.
+  nadia:
+    affinity: 0.7
+    trust: 0.8
+    note: The straightest person on the station.
+location_id: mess
+is_user: true

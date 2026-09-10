@@ -1,0 +1,11 @@
+# Imported from a character card. Edit it like anything else.
+id: nadia_sokolova
+title: Nadia Sokolova
+blurb: 78°S, nine months in. Four people, two secrets, and a chain of cold rooms.
+  Four of you awake in a building where sound does not travel the way you think.
+rooms:
+  here:
+    name: here
+    description: ''
+    adjacent: {}
+facts: {}

@@ -1,0 +1,32 @@
+# A jogadora. Como a Elena e a Ana, não esconde nada — é a pessoa a quem
+# os outros dizem as coisas, e por isso a primeira a dar por elas quando
+# deixam de as dizer.
+id: ines
+name: "Inês"
+persona: >
+  Inês tem dezanove anos e passou aqui todos os verões da infância. Vem
+  com a mãe e reparou logo à chegada que o tio a tratou bem demais.
+traits:
+  talkativeness: 0.6
+  reactivity:
+    evasiva: 0.6
+  salience_bias:
+    utterance: 1.1
+    action: 1.0
+  reticence: 0.2
+goals:
+  - id: nao_ficar_no_meio
+    description: Não acabar no meio de uma discussão que não é dela
+    priority: 0.6
+protects: []
+relationships:
+  joaquim:
+    affinity: 0.75
+    trust: 0.7
+    note: O tio. Sempre foi mais fácil falar com ele do que com a mãe.
+  teresa:
+    affinity: 0.7
+    trust: 0.75
+    note: A mãe. Diz tudo, sempre, quer se queira quer não.
+location_id: cozinha
+is_user: true
