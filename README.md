@@ -590,7 +590,19 @@ Two fields, and each has to reach the fiction or it is decoration:
   the world's own facts is refused rather than quietly dropped: it would hand a secret to
   the room before a word was spoken.
 
-Both are kept with the story, so resuming it is still your character.
+Both are kept with the story, so resuming it is still your character — and both are
+remembered for the *next* story too. Whoever you played as last is filled into the boxes
+before you have typed anything, and into the invent box on the shelf, so playing four
+stories as the same person is not typing the same two lines four times. It is written
+when a story actually begins rather than from a settings screen, because the useful
+default is the one you used, not one you maintained somewhere else; `--as` and `--look`
+fall back to it, and giving either on the command line replaces it.
+
+Nothing is remembered when nothing was given: skipping the question is an answer, and it
+should not be overwritten by the last person you happened to be. And a remembered line
+still has to clear the world it lands in — a look that names a fact of *this* story is
+refused here exactly as if it had just been typed, because a default is not a
+permission.
 
 ### Your stories
 

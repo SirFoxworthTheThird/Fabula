@@ -131,6 +131,8 @@ def test_a_saved_choice_is_on_disk_and_has_no_credential_in_it(client, settings_
         "api_base": "",
         "fast_model": "",
         "fast_api_base": "",
+        "player_name": "",
+        "player_look": "",
         "interpret": False,
         "direct": True,
         "workers": 2,
@@ -251,3 +253,90 @@ def test_a_flag_still_wins_in_the_terminal(settings_file, tmp_path, monkeypatch,
 
     assert played["session"].llm.model == "gpt-4o"
     played["session"].close()
+
+
+# --- who you usually are -------------------------------------------------
+#
+# The app asked for a name and a line every single time a story was
+# started, which nobody else in the category does and which is pure
+# friction: you decide who you play once and then keep playing them.
+
+def test_starting_a_story_is_how_it_learns(client, settings_file):
+    """Learned from use rather than set on a screen. The useful default
+    is the one they actually used, and asking them to maintain it
+    somewhere else moves the friction rather than removing it."""
+    client.post("/stories", json={
+        "world": "ashgrove", "scene": "the_dinner",
+        "character": {"name": "Wren Halloway", "look": "A tall girl in a borrowed coat."},
+    })
+
+    panel = client.get("/settings").json()
+    assert panel["player_name"] == "Wren Halloway"
+    assert panel["player_look"] == "A tall girl in a borrowed coat."
+    assert json.loads(settings_file.read_text())["player_name"] == "Wren Halloway"
+
+
+def test_skipping_the_question_is_an_answer(client, settings_file):
+    """Somebody who plays the authored character should not have the last
+    person they invented put back in the box."""
+    from fabula.settings import Settings, remember_player
+
+    settings = Settings(player_name="Wren Halloway")
+    remember_player(settings, settings_file, "", "")
+
+    assert settings.player_name == "Wren Halloway"
+    assert not settings_file.exists(), "nothing given, nothing written"
+
+
+def test_the_live_panel_agrees_with_what_just_happened(client):
+    """The file and the object both, so the next start screen does not
+    show what was on disk when the service booted."""
+    before = client.get("/settings").json()["player_name"]
+    assert before == ""
+
+    client.post("/stories", json={
+        "world": "ashgrove", "scene": "the_dinner",
+        "character": {"name": "Wren", "look": ""},
+    })
+
+    assert client.get("/settings").json()["player_name"] == "Wren"
+
+
+def test_it_is_a_suggestion_and_never_the_story_s_own_copy(client):
+    """Each story keeps who was played in it. Changing the default later
+    must not reach back into one already started."""
+    first = client.post("/stories", json={
+        "world": "ashgrove", "scene": "the_dinner",
+        "character": {"name": "Wren", "look": ""},
+    }).json()
+
+    client.post("/stories", json={
+        "world": "ashgrove", "scene": "the_reckoning",
+        "character": {"name": "Rook", "look": ""},
+    })
+
+    assert client.get(f"/sessions/{first['session_id']}").json()["character_name"] == "Wren"
+    assert client.get("/settings").json()["player_name"] == "Rook"
+
+
+def test_the_panel_can_be_told_directly_too(client, settings_file):
+    saved = client.put("/settings", json={
+        "model": "", "player_name": "Wren", "player_look": "In a borrowed coat.",
+    })
+
+    assert saved.status_code == 200
+    assert json.loads(settings_file.read_text())["player_look"] == "In a borrowed coat."
+
+
+def test_a_remembered_look_still_has_to_clear_the_world_it_lands_in(client):
+    """It is prose that becomes something the room perceives, so it goes
+    through the same check as one typed fresh: a look naming a fact would
+    hand a secret to everybody in earshot before a word was spoken."""
+    refused = client.post("/stories", json={
+        "world": "ashgrove", "scene": "the_dinner",
+        "character": {"name": "Wren", "look": "Carrying the music box."},
+    })
+
+    assert refused.status_code == 400
+    assert "turns on" in refused.json()["detail"]
+    assert client.get("/settings").json()["player_name"] == "", "and nothing was learned"

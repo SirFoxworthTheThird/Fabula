@@ -39,7 +39,7 @@ from fabula.inspect import complaints
 from fabula.discovery import invents_a_fact
 from fabula.loader import catalogue, load_characters, load_scene, load_world
 from fabula.player import Player
-from fabula.settings import DEFAULT_SETTINGS, Settings, describe
+from fabula.settings import DEFAULT_SETTINGS, Settings, describe, remember_player
 from fabula.invent import CannotInvent, invent
 from fabula.llm import (
     LiteLLMClient,
@@ -200,6 +200,10 @@ class NewSettings(BaseModel):
     interpret: bool = True
     direct: bool = True
     workers: int = DEFAULT_WORKERS
+    # Who you usually are. A suggestion for the box, never the story's
+    # own copy of who you played.
+    player_name: str = ""
+    player_look: str = ""
 
 
 class NewSession(BaseModel):
@@ -551,6 +555,7 @@ def create_app(
                 body.world, body.scene, title=body.title, player=player,
                 open_ended=body.open_ended, **opening(),
             )
+            remember_player(settings, settings_file, player.called, player.look.strip())
         except FileNotFoundError as missing:
             raise HTTPException(status_code=404, detail=str(missing))
         except ModelUnavailable as failure:
@@ -702,6 +707,8 @@ def create_app(
             api_base=body.api_base.strip(),
             fast_model=body.fast_model.strip(),
             fast_api_base=body.fast_api_base.strip(),
+            player_name=body.player_name.strip(),
+            player_look=body.player_look.strip(),
             interpret=body.interpret,
             direct=body.direct,
             workers=max(1, min(body.workers, 32)),
@@ -714,6 +721,8 @@ def create_app(
         settings.api_base = wanted.api_base
         settings.fast_model = wanted.fast_model
         settings.fast_api_base = wanted.fast_api_base
+        settings.player_name = wanted.player_name
+        settings.player_look = wanted.player_look
         settings.interpret = wanted.interpret
         settings.direct = wanted.direct
         settings.workers = wanted.workers
@@ -741,6 +750,7 @@ def create_app(
             world_dir, scene = card_world(
                 cards_read(data), worlds_root, player_name=name
             )
+            remember_player(settings, settings_file, name.strip(), "")
         except NotACard as refused:
             raise HTTPException(status_code=422, detail=str(refused))
         complaint = complaints(world_dir)
@@ -808,6 +818,7 @@ def create_app(
                 made.world_dir.name, made.scene, player=player,
                 open_ended=body.open_ended, **chosen,
             )
+            remember_player(settings, settings_file, player.called, player.look.strip())
         except ModelUnavailable as failure:
             raise HTTPException(
                 status_code=502, detail=f"the model did not answer: {failure}"

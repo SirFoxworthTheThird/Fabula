@@ -1605,9 +1605,9 @@ function askWho(holder, button, world, scene) {
     ? `Play as somebody of your own, or leave it and be ${scene.you}.`
     : "Play as somebody of your own.";
 
-  const name = field(form, "Name", "who you are", scene.you || "");
+  const name = field(form, "Name", "who you are", usually.name || scene.you || "");
   const look = field(
-    form, "Anyone can see", "one line — what the room notices about you", ""
+    form, "Anyone can see", "one line — what the room notices about you", usually.look || ""
   );
 
   // How this story gets played, asked where it is chosen. Not a property
@@ -1693,8 +1693,14 @@ function field(form, label, placeholder, value) {
 // The one thing this panel will not do is take a key. Credentials reach
 // the engine through the environment and nowhere else, so what it does
 // instead is say which ones are there and where to put one that is not.
+let usually = {name: "", look: ""};
+
 async function showSettings() {
   const current = await api.settings();
+  // Who they usually are, learned from the last story they actually
+  // started. Only ever a suggestion: the boxes are still there.
+  usually = {name: current.player_name || "", look: current.player_look || ""};
+  if (!el("invent-name").value) el("invent-name").value = usually.name;
   el("model").value = current.model;
   el("api-base").value = current.api_base;
   el("fast-model").value = current.fast_model;

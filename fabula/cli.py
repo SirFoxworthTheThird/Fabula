@@ -17,7 +17,7 @@ from fabula.api import serve
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
 from fabula.player import Player
-from fabula.settings import DEFAULT_SETTINGS, Settings
+from fabula.settings import DEFAULT_SETTINGS, Settings, remember_player
 from fabula.env import load_env
 from fabula.llm import (
     LiteLLMClient,
@@ -276,6 +276,12 @@ def main(argv: list[str] | None = None) -> None:
     # doors do not disagree about which model answers. A flag still wins:
     # it is for this run.
     settings = Settings.load(args.settings)
+    # Who they usually are, unless this run says otherwise. Learned from
+    # the last story they actually started rather than set on a screen.
+    if args.played_as is None and settings.player_name:
+        args.played_as = settings.player_name
+    if args.look is None and settings.player_look:
+        args.look = settings.player_look
     if args.fast_model and not args.model:
         parser.error(
             "--fast-model needs --model: it is for the calls the first model "
@@ -387,6 +393,9 @@ def main(argv: list[str] | None = None) -> None:
             parser.error(complaint)
         session = library.start(
             args.world, args.scene, title=args.title, llm=llm, player=player, **opening
+        )
+        remember_player(
+            settings, args.settings, player.called, player.look.strip()
         )
 
     run(session, interpret_beliefs=interpret)

@@ -70,6 +70,15 @@ class Settings:
     direct: bool = True
     # How many of a turn's independent calls may be in flight at once.
     workers: int = DEFAULT_WORKERS
+    # Who you usually are. The app asked for a name and a line every
+    # single time a story was started, which nobody else in the category
+    # does and which is pure friction: you decide who you play once and
+    # then keep playing them. Learned from use rather than set on a
+    # screen — whatever you actually started a story as becomes the
+    # suggestion next time — and always only a suggestion, because the
+    # box is still there and the story keeps its own copy.
+    player_name: str = ""
+    player_look: str = ""
 
     @classmethod
     def load(cls, path: Path | str = DEFAULT_SETTINGS) -> Settings:
@@ -136,6 +145,28 @@ class Settings:
         return f"the second model: {second}" if second else None
 
 
+def remember_player(settings: Settings, path: Path | str, name: str, look: str) -> None:
+    """Keep who somebody just played as, for the next time they start one.
+
+    Written when a story actually begins rather than from a settings
+    screen: the useful default is the one they used, and asking them to
+    maintain it somewhere else is the friction this removes rather than
+    moves. Nothing is remembered when nothing was given — skipping the
+    question is an answer, and it should not be overwritten by the last
+    person you happened to play.
+
+    The live object is updated as well as the file, so the panel and the
+    next start screen agree with what just happened rather than with what
+    was on disk when the service booted.
+    """
+    if not (name.strip() or look.strip()):
+        return
+    if (settings.player_name, settings.player_look) == (name, look):
+        return
+    settings.player_name, settings.player_look = name, look
+    settings.save(path)
+
+
 def keys_present() -> list[str]:
     """Which provider variables this process can see. Names only — the
     values are never read here, and never leave the process at all."""
@@ -152,6 +183,8 @@ def describe(settings: Settings) -> dict:
         "interpret": settings.interpret,
         "direct": settings.direct,
         "workers": settings.workers,
+        "player_name": settings.player_name,
+        "player_look": settings.player_look,
         # What a story started right now would actually run on.
         "using": settings.model or ("a model from the environment" if keys_present() else ""),
         # And what the calls nobody reads would run on, when that is
