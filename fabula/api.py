@@ -99,6 +99,8 @@ class SceneState(BaseModel):
     pending_skip_minutes: int | None
     # Whether the scene has reached its declared end condition.
     ended: bool
+    # The standing note the player gave the director, if any.
+    steering: str = ""
     # The scene the story goes to from here, given what happened in this
     # one. None means the story ends here — and always, when the story is
     # being played open-ended, because there are no seams to cross.
@@ -207,6 +209,12 @@ class NewSession(BaseModel):
 
 class Say(BaseModel):
     text: str
+
+
+class Steer(BaseModel):
+    """What the player wants out of this story, said to the director."""
+
+    note: str = ""
 
 
 class Rewind(BaseModel):
@@ -468,6 +476,7 @@ def create_app(
             cast=list(session.scene.cast),
             pending_skip_minutes=session.pending_skip(),
             ended=session.ended(),
+            steering=session.steering,
             next_scene=session.next_scene(),
             open_ended=session.director.open_ended,
         )
@@ -828,6 +837,18 @@ def create_app(
         """The scene so far, as this character experienced it."""
         entry = get_live(session_id)
         return to_stream_events(entry.session, entry.session.perceived_so_far())
+
+    @app.post("/sessions/{session_id}/steer")
+    def steer(session_id: str, body: Steer) -> dict:
+        """Tell the director what kind of story this is.
+
+        No model call and nothing to fail: it is a standing note read by
+        the two things that decide what happens to a room and how it is
+        described. It never reaches a character, which is the whole
+        design — `fabula.steering` says why.
+        """
+        entry = get_live(session_id)
+        return {"note": entry.session.steer(body.note)}
 
     @app.post("/sessions/{session_id}/rewind", response_model=list[StreamEvent])
     def rewind(session_id: str, body: Rewind) -> list[StreamEvent]:

@@ -223,6 +223,10 @@ class Director:
         # engine writes the next thing that happens instead of the story
         # going quiet for good.
         self.open_ended = open_ended
+        # What the player has asked for, if anything. Reaches the
+        # situation writer and the narrator and nobody else — see
+        # `fabula.steering`.
+        self.steering = ""
         # How many of the independent calls in a turn — the bids, the
         # readings — may be in flight at once. Somebody else's endpoint
         # is on the other end of them; 1 is the old sequential engine.
@@ -1029,6 +1033,7 @@ class Director:
             all_events,
             self.characters,
             self.current_location(player) if player else last_event.location_id,
+            steering=self.steering,
         )
         # Scored like any other pressure, so it competes rather than
         # interrupts: somebody with something to say still wins the turn.

@@ -140,7 +140,11 @@ CREATE TABLE IF NOT EXISTS story (
     -- finish. Kept with the story for the same reason the character is:
     -- it is how *this* story is being played, not a property of the
     -- world, and picking it back up must not silently change it.
-    open_ended INTEGER NOT NULL DEFAULT 0
+    open_ended INTEGER NOT NULL DEFAULT 0,
+    -- What the player asked for out of this story. Kept with the story
+    -- for the same reason the character is: it is about this one, and
+    -- picking it back up must not silently drop it.
+    steering TEXT NOT NULL DEFAULT ''
 );
 
 -- What the player took back. The log is append-only and stays that way:
@@ -220,6 +224,12 @@ class EventStore:
             self._turn_open = False
             self.conn.commit()
             return True
+
+    def set_steering(self, note: str) -> None:
+        """Keep what the player asked for, so a resume does not lose it."""
+        with self._lock:
+            self.conn.execute("UPDATE story SET steering = ?", (note,))
+            self._commit()
 
     def withdraw_after(self, scene_id: str, seq: int) -> list[int]:
         """Take back everything after `seq`, and the memories of it.
@@ -308,6 +318,10 @@ class EventStore:
                 self.conn.execute(
                     f"ALTER TABLE story ADD COLUMN {column} TEXT NOT NULL DEFAULT ''"
                 )
+        if "steering" not in story:
+            self.conn.execute(
+                "ALTER TABLE story ADD COLUMN steering TEXT NOT NULL DEFAULT ''"
+            )
         if "open_ended" not in story:
             # A story saved before this existed was played with scenes and
             # endings, so it resumes that way.

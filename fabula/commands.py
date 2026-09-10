@@ -75,6 +75,20 @@ def _dispatch(
             message=say("now_playing", scene=following.scene.id.replace("_", " ")),
         )
 
+    if line.startswith("/steer"):
+        # Said to the director rather than to the room: it shapes what
+        # happens and how it is described, and never what anybody says.
+        wanted = line[len("/steer"):].strip()
+        if not wanted:
+            standing = session.steering
+            return Outcome(
+                message=say("steering", note=standing) if standing else say("no_steering")
+            )
+        if wanted in ("off", "none", "-"):
+            session.steer("")
+            return Outcome(message=say("steering_off"))
+        return Outcome(message=say("steering", note=session.steer(wanted)))
+
     if line.startswith("/back"):
         # How far back, in things the player said: "/back" is the last
         # one, "/back 3" is three ago. Counted in their own lines because

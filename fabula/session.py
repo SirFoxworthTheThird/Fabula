@@ -20,6 +20,7 @@ from fabula.llm import LLMClient, Watched, get_default_llm
 from fabula.memory import co_present
 from fabula.loader import Scene, load_pressures, load_scenario, player_name
 from fabula.player import Player
+from fabula.steering import cleaned
 from fabula.models import Character, Event, ProjectedEvent
 from fabula.narrator import Narrator
 from fabula.persistence import begin_scene, close_reached_goals, witnessed_withholding
@@ -397,6 +398,25 @@ class Session:
                 if not character.is_user:
                     witnessed_withholding(self.store, character.id, newest)
                 close_reached_goals(self.store, character, projected, self.world)
+
+    @property
+    def steering(self) -> str:
+        return self.director.steering
+
+    def steer(self, note: str) -> str:
+        """Tell the director what you want out of this.
+
+        Not a line anybody says and not a command the engine obeys: a
+        standing preference about tone and pace, read by the two things
+        that decide what happens to a room and how it is described. It
+        never reaches a character — `fabula.steering` says why at length,
+        and it is the most important sentence in this feature.
+        """
+        note = cleaned(note)
+        self.director.steering = note
+        self.director.narrator.steering = note
+        self.store.set_steering(note)
+        return note
 
     def watch(self, watching) -> None:
         """Be told which agent is being asked something, as it happens.

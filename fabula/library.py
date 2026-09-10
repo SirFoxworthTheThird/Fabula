@@ -162,7 +162,7 @@ class Library:
         # The same person they made when they started it. The look is not
         # replayed — it was said once, at the beginning — but the name
         # goes back through every line of authored prose.
-        return Session.open(
+        session = Session.open(
             self.worlds_root / row["world"],
             row["scene"],
             llm=llm,
@@ -174,6 +174,8 @@ class Library:
             open_ended=bool(row["open_ended"]),
             **kwargs,
         )
+        session.steer(row["steering"])
+        return session
 
     def delete(self, story_id: str) -> bool:
         path = self._path(story_id)

@@ -490,6 +490,37 @@
   .line .said { display: block; }
   .line.you .speaker { color: var(--you); }
   .line.provisional { opacity: .55; }
+
+  /* The note to the director. Under the composer and out of the way
+     until it is wanted: it is a thing you set once and forget, not a
+     second place to type at the story. */
+  #steer-form {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  #steer-form label {
+    font-family: var(--sans);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  #steer-form input {
+    flex: 1;
+    min-width: 14rem;
+    background: var(--ground);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 15px;
+    padding: 8px 11px;
+  }
+  #steer-form input:focus { outline: none; border-color: var(--accent-dim); }
+  #steer.on { color: var(--accent); border-color: var(--accent-dim); }
   .thinking .doing { transition: opacity .2s; }
   .line.you .said { color: #cfe2ea; }
 
@@ -815,11 +846,23 @@
       <button type="button" id="again">Again</button>
       <button type="button" id="next" hidden>Go on</button>
       <button type="button" id="reveal">What I missed</button>
+      <button type="button" id="steer">Steer</button>
       <span class="go">
         <span class="label" id="rooms-label">Go to</span>
         <span id="rooms"></span>
       </span>
     </div>
+    <!-- Said to the director rather than to the room. It shapes what
+         happens and how it is described, and never what anybody says —
+         a note that steered somebody's dialogue would be the player
+         operating an agent that is supposed to be somebody else. -->
+    <form id="steer-form" hidden>
+      <label for="steer-note">You want</label>
+      <input type="text" id="steer-note" autocomplete="off"
+             placeholder="less banter, more dread — a note to the director, not to the room">
+      <button class="primary" type="submit">Tell them</button>
+      <button type="button" id="steer-off">Nothing in particular</button>
+    </form>
     <div class="notice" id="notice"></div>
   </div>
 </footer>
@@ -879,6 +922,7 @@ const api = {
   state: id => ask(`/sessions/${id}`),
   post: (id, what, body) => send(`/sessions/${id}/${what}`, body),
   reveal: id => send(`/sessions/${id}/reveal`),
+  steer: (id, note) => send(`/sessions/${id}/steer`, {note}),
   rewind: (id, seq) => send(`/sessions/${id}/rewind`, {seq}),
 };
 
@@ -907,6 +951,31 @@ async function act(what, body) {
     note(failure.message, true);
   } finally {
     setBusy(false);
+  }
+}
+
+el("steer").onclick = () => {
+  const form = el("steer-form");
+  form.hidden = !form.hidden;
+  if (!form.hidden) el("steer-note").focus();
+};
+
+el("steer-form").onsubmit = async event => {
+  event.preventDefault();
+  await tellTheDirector(el("steer-note").value);
+};
+
+el("steer-off").onclick = () => tellTheDirector("");
+
+async function tellTheDirector(wanted) {
+  try {
+    const given = (await api.steer(sessionId, wanted)).note;
+    el("steer-note").value = given;
+    el("steer").classList.toggle("on", Boolean(given));
+    el("steer-form").hidden = true;
+    note(given ? "The director has been told." : "");
+  } catch (failure) {
+    note(failure.message, true);
   }
 }
 
@@ -1099,6 +1168,8 @@ async function refresh() {
     holder.append(faceFor(state.world, person.id, person.name), name);
     who.appendChild(holder);
   });
+  el("steer").classList.toggle("on", Boolean(state.steering));
+  if (el("steer-form").hidden) el("steer-note").value = state.steering || "";
   el("clock").textContent = new Date(state.story_time).toLocaleTimeString([], {
     hour: "numeric", minute: "2-digit",
   });

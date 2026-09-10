@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from fabula import beats
 from fabula.llm import LLMClient
+from fabula.steering import told
 from fabula.models import Bid, Character, Event, Pressure
 from fabula.world import Room, World, write_in
 
@@ -86,6 +87,10 @@ class Narrator:
         protagonist_id: str | None = None,
     ):
         self.llm = llm
+        # A standing note from the player about what they want out of
+        # this. Director-side only — see `fabula.steering` for why it
+        # never reaches a character.
+        self.steering = ""
         # The player's character. The narrator must never move, speak for,
         # or describe them: doing so takes the one character the player
         # controls and plays it for them.
@@ -129,6 +134,7 @@ class Narrator:
             "perceivable action in the given location — what someone standing there would "
             "see or hear. Never explain the beat's purpose, never name it as a device, and "
             f"never state anything no one present could observe. {RESTRAINT}{write_in(world.language)}{self._hands_off()}"
+            + told(self.steering)
         )
         prompt = (
             f"Location: {world.room_name(location_id)}\n"
@@ -236,6 +242,7 @@ class Narrator:
                 else ""
             )
             + write_in(world.language)
+            + told(self.steering)
         )
         prompt = f"Room: {world.room_name(location_id)}{grounding}\nDescribe the room."
         return self.llm.complete(system=system, prompt=prompt, key=f"place:{location_id}")
@@ -269,6 +276,7 @@ class Narrator:
             "given location. Never narrate a character's private thoughts, never state "
             "information no one present could observe, never resolve dialogue for a "
             f"character. {RESTRAINT}{write_in(world.language)}{self._hands_off()}"
+            + told(self.steering)
         )
         asked = (
             BEATS[beat.id].format(subject=beat.subject)

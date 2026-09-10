@@ -44,6 +44,7 @@ import json
 import re
 
 from fabula.discovery import invents_a_fact
+from fabula.steering import told
 from fabula.llm import LLMClient, ModelUnavailable
 from fabula.models import Character, Event, Pressure
 from fabula.world import World
@@ -122,6 +123,7 @@ def compose(
     events: list[Event],
     present: dict[str, Character],
     here: str,
+    steering: str = "",
 ) -> Pressure | None:
     """One thing that happens, or None if nothing usable came back.
 
@@ -139,7 +141,7 @@ def compose(
 
     try:
         answered = llm.complete(
-            system=SYSTEM,
+            system=SYSTEM + told(steering),
             prompt=(
                 f"Rooms: {rooms}\n"
                 f"In the room: {who}, in {world.room_name(here)}\n\n"

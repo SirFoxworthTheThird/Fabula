@@ -170,6 +170,15 @@ call**: it becomes one room with the two of you in it, which means no facts and 
 no secrets. That is shallow on purpose. Generating a world around somebody else's character
 would put words in their mouth before the player had met them.
 
+**The player can steer.** A standing note — `/steer`, or the button under the composer —
+read by the situation writer and the narrator and by nothing else. The line that matters:
+it never reaches a character's prompt, because a note that steered what Maria *said* would
+be the player operating an agent that is supposed to be somebody else, and that is the
+whole thing this engine protects. So it shapes what happens and how it is described, not
+what people say; do not "improve" it by threading it into `generate_utterance`. It needs no
+guard of its own, because the narration it influences is still checked by `invents_a_fact`
+afterwards.
+
 And the thing worth remembering when picking what to do next: the more interesting list is
 not what they have that we lack, but what this design makes possible that one model
 puppeting a cast cannot do — somebody doing something in another room while you are not

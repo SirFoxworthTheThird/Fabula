@@ -490,6 +490,46 @@ hoping to find out. So it travels, and the card's `creator_notes` says so. Maria
 carries nothing of his, because a persona that named a fact which is not its own would not
 have passed `inspect` in the first place.
 
+### Telling the director what kind of story this is
+
+Everything a player could type was either a line their character says out loud or a
+mechanical command. There was no way to say *less banter, more dread* — or *I would rather
+this did not turn into a confession* — without saying it in the room, where the cast hears
+it and answers it.
+
+That gap got sharper the moment the engine started writing its own complications: the
+situation writer picks what happens next when a world runs out of authored pressures, and
+it picked with no input at all from the person it was happening to.
+
+```
+/steer less banter, more dread
+/steer                            # what the director has been told
+/steer off
+```
+
+or the **Steer** button under the composer. It is a standing note, not a one-shot, and it
+costs nothing — no extra model call, just a line in prompts that are already being written.
+
+**Where it goes, and where it must never go.** The note reaches the situation writer and
+the narrator. Both are director-side: one decides what happens to a room, the other
+describes it, and neither is a person with private knowledge.
+
+It does **not** reach any character's prompt. A note that steered what Maria *said* would
+be the player reaching past the projection to operate somebody else's agent — which is the
+one thing this engine exists not to allow, and the reason a character here can be genuinely
+wrong about what is going on. There is a test that plays a turn with a note set and asserts
+the words appear in no prompt keyed to a character.
+
+The honest consequence, worth stating rather than discovering: this steers *what happens*
+and *how it is described*, not what people say. "More dread" changes the weather and the
+beats. It does not change Tomás's diction, and it cannot make him confess.
+
+**It needs no guard of its own**, which is a nice property of having put the checks after
+the words rather than in front of them. A note asking the narrator to hand over a secret
+produces narration that `invents_a_fact` drops deterministically — there is a test for that
+too. The note is kept with the story, like the character and like open-ended play, so
+picking it back up does not quietly lose it.
+
 ### Play as somebody of your own
 
 Everything in a world is authored, which is right for the parts a story turns on and
