@@ -530,6 +530,35 @@ produces narration that `invents_a_fact` drops deterministically — there is a 
 too. The note is kept with the story, like the character and like open-ended play, so
 picking it back up does not quietly lose it.
 
+### Asterisk actions
+
+Models in this category write `*she looks away*`, because every other application in it
+renders that as an action. We were showing the asterisks. Now `*text*` and `_text_` become
+emphasis, and narration — which is already italic — flips the other way so emphasis inside
+it still reads as emphasis.
+
+**It is deliberately not a markdown parser.** Every line the client shows is model output:
+a character's words, the narrator's prose, a name the narrator invented mid-scene. So the
+page sets `textContent` and never `innerHTML`, and `emphasised()` returns a fragment built
+from text nodes and `<em>` elements — the only string that ever reaches the DOM does so as
+`textContent`, so there is no path by which markup could come out.
+
+Probed in a real browser rather than argued about:
+
+| given | rendered |
+|---|---|
+| `She sets the cup down. *He does not look up.*` | second sentence emphasised |
+| `_Quietly_, then: I know.` | first word emphasised |
+| `The file is called report_final_v2.txt` | untouched — an underscore inside a word is a word |
+| `A lone * asterisk, and 2 * 3 = 6.` | untouched |
+| `<script>window.PWNED=1</script>` | literal text; no element created, nothing runs |
+| `*<b>bold html inside emphasis</b>*` | an `<em>` containing the literal angle brackets |
+
+A structural test asserts the page contains no `.innerHTML`, no `insertAdjacentHTML` and no
+`document.write`, and that `emphasised` creates exactly one kind of element. That is the
+sort of rule that survives right up until somebody adds a feature needing "just a little"
+markup.
+
 ### Play as somebody of your own
 
 Everything in a world is authored, which is right for the parts a story turns on and

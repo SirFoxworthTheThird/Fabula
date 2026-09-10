@@ -169,6 +169,36 @@ def test_the_client_is_one_file_with_no_build_step():
         assert outside not in page, f"the client must not fetch {outside}"
 
 
+def test_the_client_never_turns_model_output_into_markup():
+    """Every line the client shows is model output — a character's words,
+    the narrator's prose, a name the narrator invented mid-scene. So the
+    page sets `textContent` and never `innerHTML`, and the one thing that
+    builds elements from a story string (`emphasised`) makes text nodes
+    and `<em>` and nothing else.
+
+    Checked structurally because it is the sort of rule that survives
+    right up until somebody adds a feature that needs "just a little"
+    markup. Probed for real in a browser too — `*<b>x</b>*` renders as an
+    `<em>` containing the literal angle brackets, and an `<img onerror>`
+    creates no element.
+    """
+    page = (Path(__file__).parent.parent / "fabula" / "web" / "index.html").read_text(
+        encoding="utf-8"
+    )
+
+    # The usage form, not the bare word: the file explains at length why
+    # it never touches this, and the explanation should not fail its own
+    # test.
+    assert ".innerHTML" not in page
+    assert "insertAdjacentHTML" not in page
+    assert "document.write" not in page
+    # The renderer's only element is <em>; everything else it emits is a
+    # text node.
+    body = page.split("function emphasised(")[1].split("\nfunction ")[0]
+    assert body.count("createElement(") == 1
+    assert 'createElement("em")' in body
+
+
 def test_the_client_never_reads_the_world_log():
     """It renders one character's projection. The endpoints that would
     hand it anything else are not endpoints it calls."""

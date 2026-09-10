@@ -488,6 +488,10 @@
     margin-bottom: 1px;
   }
   .line .said { display: block; }
+  /* Narration and half-heard lines are already italic, so emphasis inside
+     them has to go the other way to be emphasis at all. */
+  .line em { font-style: italic; }
+  .line.prose em, .line.degraded em, .line.opening em { font-style: normal; }
   .line.you .speaker { color: var(--you); }
   .line.provisional { opacity: .55; }
 
@@ -1040,7 +1044,7 @@ function provisionally(text) {
   who.textContent = state.character_name || "";
   const said = document.createElement("span");
   said.className = "said";
-  said.textContent = text;
+  said.append(emphasised(text));
   const body = document.createElement("span");
   body.className = "body";
   body.append(who, said);
@@ -1053,6 +1057,43 @@ function provisionally(text) {
 
 function clearProvisional() {
   for (const node of [...el("scroll").querySelectorAll(".provisional")]) node.remove();
+}
+
+// Models in this category write *she looks away*, because every other
+// application in it renders that as an action. We were showing the
+// asterisks.
+//
+// This is deliberately not a markdown parser. The client sets
+// textContent everywhere and never innerHTML, because model output must
+// never become markup — a name the narrator invented is model output,
+// and so is every line a character says. So this returns a fragment
+// built from text nodes and <em> elements, and there is no path through
+// it by which anything else could come out: the only string that ever
+// reaches the DOM does so as textContent.
+const EMPHASIS = /\*(?!\s)([^*\n]+?)\*|_(?!\s)([^_\n]+?)_/g;
+
+function emphasised(text) {
+  const out = document.createDocumentFragment();
+  let at = 0;
+  let found;
+  EMPHASIS.lastIndex = 0;
+  while ((found = EMPHASIS.exec(text)) !== null) {
+    const inner = found[1] !== undefined ? found[1] : found[2];
+    const underscored = found[2] !== undefined;
+    const before = text[found.index - 1] || "";
+    const after = text[found.index + found[0].length] || "";
+    // An underscore inside a word is a word: file_name, snake_case, a
+    // url. Asterisks have no such ambiguity in prose.
+    if (underscored && (/\w/.test(before) || /\w/.test(after))) continue;
+    if (/\s$/.test(inner)) continue;
+    out.append(document.createTextNode(text.slice(at, found.index)));
+    const em = document.createElement("em");
+    em.textContent = inner;
+    out.appendChild(em);
+    at = found.index + found[0].length;
+  }
+  out.append(document.createTextNode(text.slice(at)));
+  return out;
 }
 
 function render(event) {
@@ -1069,7 +1110,7 @@ function render(event) {
     // room, and not anybody's line. Set apart so it does not read as
     // one.
     line.classList.add("opening");
-    line.textContent = event.content;
+    line.append(emphasised(event.content));
   } else if (event.kind === "time_skip") {
     line.classList.add("skip");
     line.textContent = event.content;
@@ -1080,7 +1121,7 @@ function render(event) {
     const tag = document.createElement("span");
     tag.className = "tag";
     tag.textContent = "unclear";
-    line.append(tag, document.createTextNode(event.content));
+    line.append(tag, emphasised(event.content));
   } else if (event.kind === "utterance") {
     if (event.speaker === state.character) line.classList.add("you");
     line.classList.add("spoken");
@@ -1089,7 +1130,7 @@ function render(event) {
     who.textContent = event.speaker_name || "";
     const said = document.createElement("span");
     said.className = "said";
-    said.textContent = event.content;
+    said.append(emphasised(event.content));
     const body = document.createElement("span");
     body.className = "body";
     body.append(who, said);
@@ -1099,7 +1140,7 @@ function render(event) {
     line.appendChild(body);
   } else {
     line.classList.add("prose");
-    line.textContent = event.content;
+    line.append(emphasised(event.content));
   }
 
   // Not on the scene's opening: there is nothing before it to go back
