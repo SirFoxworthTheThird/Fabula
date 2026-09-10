@@ -202,6 +202,12 @@ class Say(BaseModel):
     text: str
 
 
+class Rewind(BaseModel):
+    """Take the scene back to just after this event."""
+
+    seq: int
+
+
 class Move(BaseModel):
     room: str
 
@@ -734,6 +740,19 @@ def create_app(
         """The scene so far, as this character experienced it."""
         entry = get_live(session_id)
         return to_stream_events(entry.session, entry.session.perceived_so_far())
+
+    @app.post("/sessions/{session_id}/rewind", response_model=list[StreamEvent])
+    def rewind(session_id: str, body: Rewind) -> list[StreamEvent]:
+        """Take the scene back, and hand back what is left of it.
+
+        No model call and nothing to fail upstream, so this is not an
+        `act`: it is bookkeeping that happens to be the most useful
+        control in the app. The whole history comes back rather than a
+        delta, because the client's job here is to redraw rather than to
+        append.
+        """
+        entry = get_live(session_id)
+        return to_stream_events(entry.session, entry.session.rewind_to(body.seq))
 
     @app.post("/sessions/{session_id}/say", response_model=list[StreamEvent])
     async def say(session_id: str, body: Say) -> list[StreamEvent]:

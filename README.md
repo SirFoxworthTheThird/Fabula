@@ -363,6 +363,43 @@ How a story is played is stored with the story, not with the world — the same 
 one you finish or one you stay in — so resuming it cannot silently change it, and a story
 saved before this existed comes back with its scenes and endings intact.
 
+### Taking it back
+
+Every app on this shelf has some version of it — swipe for another answer, edit the line,
+delete back to a point — because it is how you survive a model having a bad turn. This one
+had `/again`, which throws away the last take and nothing else. Three transcripts against a
+local 3B produced a character announcing the same intention eight times, another handing
+over the secret he is keeping on the first line, and a third repeating somebody else's line
+word for word. Deterministic guards catch some of that and will never catch all of it.
+
+So: **take back to here** on any line in the browser, or `/back` (`/back 3`) in the
+terminal. The scene resumes from the moment before it, and you play on.
+
+What makes it more than a delete is that a scene is not only its log. Three kinds of state,
+and only one of them is a delete:
+
+* **The log is append-only and stays that way.** `events` has two triggers that abort any
+  update or delete, and that is the foundation the rest of the engine reads to decide what
+  is true. So a rewind marks events *withdrawn* rather than removing them — the record of
+  what was played is intact on disk, and `get_events` stops returning them. Filtering at
+  that one funnel is what makes "never happened" true for the projection, the bidding, the
+  pressures, the endings and the reveal at the same time.
+* **What was made of them is deleted outright** — beliefs, rehearsals, the private
+  readings. A belief is not the record of a moment, it is somebody's impression of one, and
+  the impression of a moment that has been taken back is nothing.
+* **What they moved has to be replayed.** Trust drifts toward a floor each time somebody is
+  seen refusing to answer; interactions count up; goals close when their subject is finally
+  heard. None of that is a row a delete can reach. It is reset to the authored values and
+  played forward again over what is left of the log, using the same deterministic rules
+  that moved it — and costing nothing, because the expensive half of taking an event in is
+  the private reading, and the readings that survive are already written down.
+
+The visible proof is the header. Rewind past the beat where Maria walks into the kitchen
+and the room says *with Tomás* again: her arrival is undone, not just her line.
+
+The next take occupies the sequence numbers the withdrawn one had, so nothing downstream
+sees a gap.
+
 ### Play as somebody of your own
 
 Everything in a world is authored, which is right for the parts a story turns on and

@@ -136,6 +136,34 @@ and only ever the one shape of story — a secret, and the morning after it came
 premise gets that shape, which is the same mistake as the shipped worlds all being quiet
 literary drama, arrived at from the other direction.
 
+## What the rest of the shelf has
+
+Measured against the category rather than against the spec, three things were missing and
+one is now built.
+
+**A way to fix what the model just wrote.** Swipe, edit, delete-back: it is the first
+control anybody reaches for, and this app had only `/again`. Now any line can be taken
+back, in the browser or with `/back`. The design constraint worth remembering: the event
+log is append-only and defended by SQLite triggers, so a rewind *withdraws* events rather
+than deleting them, and `get_events` filters at the single funnel every other subsystem
+reads through. What was derived (beliefs, readings) is deleted; what was *moved* (trust,
+interaction counts, closed goals) is reset and replayed from the authored values, because
+an increment is not something a delete can undo.
+
+**Nothing streams.** `litellm.completion` blocks and the SSE channel carries finished
+events, so a turn is thirty to ninety seconds of a spinner. Every competitor streams
+tokens. Probably the best effort-to-payoff ratio left in the app.
+
+**Nobody can share anything.** The category runs on character cards — the PNG-embedded v2
+spec that SillyTavern, Chub, Risu and the rest all read. A world here is YAML only this app
+understands: no import, no export, no format anyone else speaks.
+
+And the thing worth remembering when picking what to do next: the more interesting list is
+not what they have that we lack, but what this design makes possible that one model
+puppeting a cast cannot do — somebody doing something in another room while you are not
+there, and you finding out later from how they behave. The machinery exists (intentions,
+off-screen resolution, `/wait`) and the interface barely mentions it.
+
 ## Not a game
 
 Scenes, end conditions and an onward button are game furniture. Some stories are better

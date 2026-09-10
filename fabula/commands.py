@@ -28,6 +28,9 @@ class Outcome:
     # This replaces the previous take rather than following it, so a
     # client showing a transcript has to drop the tail before rendering.
     replaced: bool = False
+    # The scene was taken back and is shorter than the client's copy of
+    # it: everything on screen is now wrong, not just the tail.
+    redraw: bool = False
 
 
 def run_command(
@@ -71,6 +74,26 @@ def _dispatch(
             went_on=following,
             message=say("now_playing", scene=following.scene.id.replace("_", " ")),
         )
+
+    if line.startswith("/back"):
+        # How far back, in things the player said: "/back" is the last
+        # one, "/back 3" is three ago. Counted in their own lines because
+        # that is what a person remembers doing, rather than in log
+        # positions, which is what the engine happens to count in.
+        rest = line[len("/back"):].strip()
+        try:
+            how_many = max(1, int(rest)) if rest else 1
+        except ValueError:
+            return Outcome(message=say("back_how_many"))
+        mine = [
+            event.seq
+            for event in session.store.get_events(session.scene.id)
+            if event.actor_id == session.user_character.id and event.kind == "utterance"
+        ]
+        if len(mine) < how_many:
+            return Outcome(message=say("nothing_to_take_back"))
+        session.rewind_to(mine[-how_many] - 1)
+        return Outcome(message=say("taken_back", lines=how_many), redraw=True)
 
     if line in ("/again", "/retry"):
         # A director calling "again", not an undo of the story: the take

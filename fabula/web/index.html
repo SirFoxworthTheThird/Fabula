@@ -438,7 +438,31 @@
     margin-top: auto;
   }
 
-  .line { margin: 0 0 18px; animation: settle .35s ease-out; }
+  .line { margin: 0 0 18px; animation: settle .35s ease-out; position: relative; }
+
+  /* Take the story back to before this line. Every other app on this
+     shelf has some version of it, and until now the only recourse for a
+     turn that went wrong was to keep typing into a scene that was
+     already spoiled. Hidden until the line is under the cursor: it is a
+     way out, not part of the reading. */
+  .line .undo {
+    position: absolute;
+    top: -2px;
+    right: -6px;
+    font-family: var(--sans);
+    font-size: 11px;
+    letter-spacing: .06em;
+    background: var(--ground-lift);
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    color: var(--ink-faint);
+    padding: 2px 9px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .12s, color .12s, border-color .12s;
+  }
+  .line:hover .undo, .line .undo:focus { opacity: 1; }
+  .line .undo:hover { color: var(--ink); border-color: var(--accent-dim); }
   @keyframes settle {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: none; }
@@ -843,6 +867,7 @@ const api = {
   state: id => ask(`/sessions/${id}`),
   post: (id, what, body) => send(`/sessions/${id}/${what}`, body),
   reveal: id => send(`/sessions/${id}/reveal`),
+  rewind: (id, seq) => send(`/sessions/${id}/rewind`, {seq}),
 };
 
 let sessionId = null;
@@ -980,9 +1005,48 @@ function render(event) {
     line.textContent = event.content;
   }
 
+  // Not on the scene's opening: there is nothing before it to go back
+  // to, and it is the author's words rather than a turn that was played.
+  if (!event.opening) line.appendChild(undoTo(event.seq));
+
   const waiting = el("waiting");
   el("scroll").insertBefore(line, waiting);
   scroll();
+}
+
+function undoTo(seq) {
+  const undo = document.createElement("button");
+  undo.type = "button";
+  undo.className = "undo";
+  undo.textContent = "take back to here";
+  undo.title = "Take the scene back to just before this line and play it differently";
+  undo.onclick = async event => {
+    event.stopPropagation();
+    undo.disabled = true;
+    try {
+      // Everything from this line on goes, so the scene resumes from the
+      // moment before it.
+      const left = await api.rewind(sessionId, seq - 1);
+      redraw(left);
+      await refresh();
+    } catch (failure) {
+      note(failure.message, true);
+      undo.disabled = false;
+    }
+  };
+  return undo;
+}
+
+// The scene is now shorter than what is on screen, so the transcript is
+// rebuilt rather than appended to.
+function redraw(events) {
+  // The "answering" indicator is created on demand and removed again, so
+  // there is nothing to preserve here: clearing the scroll takes it with
+  // it, and `render` appends when it is not there.
+  el("scroll").textContent = "";
+  seen.clear();
+  announcedEnd = false;
+  for (const event of events) render(event);
 }
 
 let state = {};

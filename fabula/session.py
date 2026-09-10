@@ -22,7 +22,7 @@ from fabula.loader import Scene, load_pressures, load_scenario, player_name
 from fabula.player import Player
 from fabula.models import Character, Event, ProjectedEvent
 from fabula.narrator import Narrator
-from fabula.persistence import begin_scene
+from fabula.persistence import begin_scene, close_reached_goals, witnessed_withholding
 from fabula.pressures import has_ended, next_scene, scene_state
 from fabula.discovery import discover
 from fabula.discovery import restore as discovery_restore
@@ -323,6 +323,80 @@ class Session:
 
     def __exit__(self, *_exc) -> None:
         self.close()
+
+    def rewind_to(self, seq: int) -> list[ProjectedEvent]:
+        """Take the scene back to just after `seq`, and put right what
+        the events after it had moved.
+
+        `/again` throws away the last take; this throws away as much as
+        the player wants, which is the thing every other app in this
+        category has and this one did not. A model has a bad turn, or a
+        good one three turns ago went somewhere they did not want, and
+        the only recourse was to keep typing into a scene that was
+        already spoiled.
+
+        Three kinds of state, and only one of them is a delete:
+
+        * **The log** is append-only and stays that way. The events after
+          `seq` are marked withdrawn, so every read of the scene stops
+          returning them and they are still on disk as a record of what
+          was played.
+        * **What was made of them** — beliefs, rehearsals, readings — is
+          deleted outright. It is not the record of what happened, it is
+          somebody's impression of it, and the impression of a moment
+          that has been taken back is nothing.
+        * **What they moved** — trust, interaction counts, closed goals —
+          is neither a row to delete nor a record to keep. It is put back
+          to the authored values and played forward again over what is
+          left of the log, using the same deterministic rules that moved
+          it in the first place. No model call: the expensive half of
+          absorbing an event is the private reading, and the readings
+          that survive are already written down.
+        """
+        self.store.commit_turn()
+        withdrawn = self.store.withdraw_after(self.scene.id, seq)
+        if withdrawn:
+            self._replay_regard()
+        # The take that was discardable belonged to a turn that no longer
+        # exists, so there is nothing left to say "again" to.
+        self._last_take = None
+        self.turns_played = sum(
+            1
+            for event in self.store.get_events(self.scene.id)
+            if event.actor_id == self.user_character.id and event.kind == "utterance"
+        )
+        self.store.touch_story(self.scene.id, self.turns_played)
+        return self.perceived_so_far()
+
+    def _replay_regard(self) -> None:
+        """Rebuild everything the log *moved* rather than wrote.
+
+        Trust drifts toward a floor each time somebody is seen refusing
+        to answer, interactions count up, goals close when their subject
+        is finally heard. All three are pure functions of what each
+        character perceived, so they can be reset and replayed — and they
+        have to be, because a delete cannot undo an increment.
+        """
+        for character in self.characters.values():
+            self.store.forget_relationships(character.id)
+            self.store.reopen_goals(character.id)
+        begin_scene(self.store, self.characters)
+
+        events = self.store.get_events(self.scene.id)
+        for upto in range(1, len(events) + 1):
+            so_far = events[:upto]
+            newest_seq = so_far[-1].seq
+            for character in self.characters.values():
+                projected = self.director.contexts.project(character, so_far)
+                if not projected or projected[-1].event.seq != newest_seq:
+                    continue
+                newest = projected[-1]
+                actor_id = newest.event.actor_id
+                if actor_id and actor_id != character.id:
+                    self.store.bump_interaction(character.id, actor_id)
+                if not character.is_user:
+                    witnessed_withholding(self.store, character.id, newest)
+                close_reached_goals(self.store, character, projected, self.world)
 
     def can_regenerate(self) -> bool:
         return self._last_take is not None

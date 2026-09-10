@@ -143,6 +143,19 @@ CREATE TABLE IF NOT EXISTS story (
     open_ended INTEGER NOT NULL DEFAULT 0
 );
 
+-- What the player took back. The log is append-only and stays that way:
+-- a rewind marks events withdrawn rather than deleting them, so the
+-- record of what was played is intact and every read simply stops
+-- counting them. It is also the only way this could work — half the
+-- engine reads the log to decide what is true, so "never happened" has
+-- to mean "not in what the log returns".
+CREATE TABLE IF NOT EXISTS withdrawn (
+    scene_id TEXT NOT NULL,
+    event_id INTEGER NOT NULL,
+    withdrawn_at TEXT NOT NULL,
+    PRIMARY KEY (scene_id, event_id)
+);
+
 CREATE TABLE IF NOT EXISTS rehearsals (
     character_id TEXT NOT NULL,
     event_id INTEGER NOT NULL,
@@ -208,6 +221,70 @@ class EventStore:
             self.conn.commit()
             return True
 
+    def withdraw_after(self, scene_id: str, seq: int) -> list[int]:
+        """Take back everything after `seq`, and the memories of it.
+
+        The events stay in the table — the log is the fabula and it is
+        never rewritten — but they stop being returned, and the rows that
+        were *derived* from them go for good: the beliefs formed, the
+        rehearsals prompted, the private readings made. Those are not the
+        record of what happened, they are what somebody made of it, and
+        what they made of a moment that has been taken back is nothing.
+
+        What this cannot put right is the state those events *moved* —
+        trust, interaction counts, closed goals — because that is numbers
+        rather than rows. `Session.rewind` replays those from the
+        authored starting values, which is the only honest way, and needs
+        the world to do it.
+        """
+        with self._lock:
+            gone = [
+                row["id"]
+                for row in self.conn.execute(
+                    """SELECT id FROM events
+                       WHERE scene_id = ? AND seq > ?
+                         AND id NOT IN (SELECT event_id FROM withdrawn WHERE scene_id = ?)""",
+                    (scene_id, seq, scene_id),
+                ).fetchall()
+            ]
+            if not gone:
+                return []
+            now = datetime.now().isoformat()
+            self.conn.executemany(
+                "INSERT OR IGNORE INTO withdrawn (scene_id, event_id, withdrawn_at) "
+                "VALUES (?, ?, ?)",
+                [(scene_id, event_id, now) for event_id in gone],
+            )
+            marks = ",".join("?" * len(gone))
+            self.conn.execute(f"DELETE FROM beliefs WHERE source_event_id IN ({marks})", gone)
+            self.conn.execute(f"DELETE FROM rehearsals WHERE event_id IN ({marks})", gone)
+            # Summaries and readings are keyed by a span of the log rather
+            # than by one event, so there is no way to delete exactly the
+            # ones that covered withdrawn ground. They are dropped whole
+            # and made again when they are next wanted: nothing but a
+            # prompt reads them, and a missing one costs a sentence of
+            # context rather than a fact.
+            self.conn.execute("DELETE FROM summaries WHERE scene_id = ?", (scene_id,))
+            self.conn.execute("DELETE FROM interpretations")
+            self._commit()
+            return gone
+
+    def forget_relationships(self, character_id: str) -> None:
+        """Drop what one character had come to feel, so a rewind can put
+        the authored values back and play the log forward again."""
+        with self._lock:
+            self.conn.execute(
+                "DELETE FROM relationships WHERE character_id = ?", (character_id,)
+            )
+            self._commit()
+
+    def reopen_goals(self, character_id: str) -> None:
+        with self._lock:
+            self.conn.execute(
+                "DELETE FROM resolved_goals WHERE character_id = ?", (character_id,)
+            )
+            self._commit()
+
     def _migrate(self) -> None:
         """Bring a database written by an older build up to date.
 
@@ -244,9 +321,15 @@ class EventStore:
             self.conn.close()
 
     def next_seq(self, scene_id: str) -> int:
+        """Where the next event goes — after what still counts, so a take
+        played after a rewind occupies the slot the withdrawn one had
+        rather than being pasted beyond it."""
         with self._lock:
             row = self.conn.execute(
-                "SELECT MAX(seq) FROM events WHERE scene_id = ?", (scene_id,)
+                """SELECT MAX(seq) FROM events
+                   WHERE scene_id = ?
+                     AND id NOT IN (SELECT event_id FROM withdrawn WHERE scene_id = ?)""",
+                (scene_id, scene_id),
             ).fetchone()
             return (row[0] or 0) + 1
 
@@ -278,9 +361,21 @@ class EventStore:
             return event.model_copy(update={"id": cur.lastrowid})
 
     def get_events(self, scene_id: str) -> list[Event]:
+        """The scene as it now stands.
+
+        Withdrawn events are left out here rather than at each of the
+        dozen places that read the log, because this is the funnel: the
+        projection, the bidding, the pressures, the endings and the
+        reveal all come through it, so a moment the player took back
+        stops being true for every one of them at once.
+        """
         with self._lock:
             rows = self.conn.execute(
-                "SELECT * FROM events WHERE scene_id = ? ORDER BY seq ASC", (scene_id,)
+                """SELECT e.* FROM events e
+                   WHERE e.scene_id = ?
+                     AND e.id NOT IN (SELECT event_id FROM withdrawn WHERE scene_id = ?)
+                   ORDER BY e.seq ASC""",
+                (scene_id, scene_id),
             ).fetchall()
             return [_row_to_event(r) for r in rows]
 
