@@ -200,10 +200,12 @@ def test_the_terminal_keeps_playing_after_a_failure(monkeypatch, capsys):
     ], "the line after the failure was played"
 
 
-def test_starting_a_story_when_the_model_is_unreachable_says_so(tmp_path):
-    """A scene opens with a line of its own, which is a model call — so
-    a wrong key now fails on the first click rather than the first line,
-    and that is the click that must not produce a traceback."""
+def test_starting_a_story_when_the_model_is_unreachable_lands_and_then_says_so(tmp_path):
+    """Starting a story asks the model nothing — the curtain goes up
+    afterwards, on the stream — so a wrong key no longer refuses the
+    click. What it must not do is leave half an opening in the log, or
+    let the player sit in front of a room that quietly never describes
+    itself."""
     from fastapi.testclient import TestClient
 
     from fabula.api import create_app
@@ -212,9 +214,20 @@ def test_starting_a_story_when_the_model_is_unreachable_says_so(tmp_path):
         worlds_root=ASHGROVE.parent, llm=FailsAfter(0), library_root=tmp_path / "stories"
     )
     with TestClient(app, raise_server_exceptions=False) as client:
-        refused = client.post("/stories", json={"world": "ashgrove", "scene": "the_dinner"})
+        begun = client.post("/stories", json={"world": "ashgrove", "scene": "the_dinner"})
 
+        assert begun.status_code == 200
+        session_id = begun.json()["session_id"]
+        # The opening was rolled back whole rather than left half-played:
+        # what is in the log is the scene's own authored first words and
+        # nothing the model was asked for.
+        played = client.get(f"/sessions/{session_id}/events").json()
+        assert [event["kind"] for event in played] == ["narration"]
+        # The story is on the shelf, because it is a real story at its
+        # first moment rather than a broken one — resuming it opens the
+        # curtain again, which is the repair once the key is right.
+        assert [story["id"] for story in client.get("/stories").json()] != []
+        # And the player is told the moment they ask for anything.
+        refused = client.post(f"/sessions/{session_id}/say", json={"text": "Hello."})
         assert refused.status_code == 502
         assert "did not answer" in refused.json()["detail"]
-        # And no half-made story was left on the shelf.
-        assert client.get("/stories").json() == []

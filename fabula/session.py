@@ -9,6 +9,7 @@ fixed for both.
 """
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Callable
 
@@ -77,6 +78,22 @@ class Session:
         self.turns_played: int = 0
         self.takes_played: int = 0
         self._turns_before_take: int = 0
+        # The half of the opening that costs model calls, and what it
+        # needs to run: whether this is the story's first moment (so the
+        # player introduces themselves once and never again) and the line
+        # they wrote about themselves. See `raise_curtain`.
+        self._curtain_up: bool = False
+        self._first_moment: bool = False
+        self._look: str = ""
+        # One thing at a time. A scene now opens itself in the background
+        # while the player is already sitting in front of the composer,
+        # so for the first time two pieces of engine work can be asked
+        # for at once — and a turn is a savepoint, so two of them
+        # interleaved would settle each other's half-written work. Held
+        # across a whole take rather than around each write: the store's
+        # own lock makes a row safe, and it is the turn that has to be
+        # indivisible. Re-entrant because a take is free to nest.
+        self._alone = threading.RLock()
 
     @classmethod
     def open(
@@ -91,6 +108,7 @@ class Session:
         player: Player | None = None,
         direct_beats: bool = True,
         open_ended: bool = False,
+        curtain: bool = True,
     ) -> Session:
         world, characters, scene = load_scenario(world_dir, scene_name, player)
         called = None
@@ -179,28 +197,84 @@ class Session:
         # The scene says its first line before the player has to. A story
         # that opens on a bare prompt is a text box: the room has a name
         # and nothing in it until somebody thinks to type /look.
-        began = not store.any_events()
+        session._first_moment = not store.any_events()
+        session._look = player.look.strip() if player else ""
         # The scene's own first words, to the player alone: what they
         # have walked into, before anybody asks them what they say about
-        # it. Authored, so it costs nothing and reads the same every time.
+        # it. Authored, so it costs nothing and reads the same every time
+        # — which is why it stays here, on the near side of the curtain:
+        # opening a story is free and instant, and a caller can put the
+        # player in front of something to read before a model is asked
+        # anything at all.
         session.director.brief(user_character, user_character.location_id)
-        opening = session.director.establish(user_character.location_id)
-        # Who the player said they were, once, at the start of the story
-        # and never again. An ordinary event in their own room, so the
-        # people standing there perceive it and the people elsewhere
-        # never do — which is why it is asked for as what anyone can see.
-        if began and player and player.look.strip():
-            opening = session.director.introduce(
-                user_character.location_id, player.look.strip()
-            ) or opening
-        # And then whoever is standing there gets to speak first if they
-        # want to. Arriving somewhere and having to talk to the air to
-        # find out you are not alone is the wrong way round: a story
-        # should meet you. Only for people actually in the room — this
-        # costs a bid each, once.
-        if opening is not None and session.present():
-            session.director.open_turn(opening)
+        if curtain:
+            session.raise_curtain()
         return session
+
+    def raise_curtain(self) -> list[ProjectedEvent]:
+        """The rest of the opening — the part that costs model calls.
+
+        Split off from `open` because it is the whole wait between
+        clicking a story and being in it: a room to describe, a bid from
+        everybody standing in it, and a line from whoever wanted to
+        speak. Blocking the start on that meant somebody watched a
+        disabled button for as long as their model took to answer eight
+        questions. A caller that can stream — the service — opens the
+        story, hands the player the scene's own first words, and lets the
+        room take its turn where they can watch it happen. A caller that
+        cannot, and the tests, get it inside `open` as before.
+
+        Idempotent, and does nothing on a resumed story: `establish`
+        already declines to re-describe a room somebody is standing in
+        the middle of, and without an opening line there is nothing for
+        the room to answer.
+
+        Run as one unit of work, so a model that dies partway leaves the
+        scene at the brief rather than half-opened. What it appended is
+        rolled back — the caller is told by the exception, and can tell
+        anybody watching to drop those lines.
+        """
+        with self._alone:
+            return self._open_scene()
+
+    def _open_scene(self) -> list[ProjectedEvent]:
+        if self._curtain_up:
+            return []
+        self._curtain_up = True
+        where = self.user_character.location_id
+        appended: list[Event] = []
+        self.store.begin_turn()
+        self.turn_started_at = self.store.next_seq(self.scene.id)
+        try:
+            opening = self.director.establish(where)
+            if opening is not None:
+                appended.append(opening)
+            # Who the player said they were, once, at the start of the
+            # story and never again. An ordinary event in their own room,
+            # so the people standing there perceive it and the people
+            # elsewhere never do — which is why it is asked for as what
+            # anyone can see.
+            if self._first_moment and self._look:
+                said = self.director.introduce(where, self._look)
+                if said is not None:
+                    appended.append(said)
+                    opening = said
+            # And then whoever is standing there gets to speak first if
+            # they want to. Arriving somewhere and having to talk to the
+            # air to find out you are not alone is the wrong way round: a
+            # story should meet you. Only for people actually in the room
+            # — this costs a bid each, once.
+            if opening is not None and self.present():
+                appended.extend(self.director.open_turn(opening))
+        except Exception:
+            self.store.rollback_turn()
+            raise
+        # Settled rather than left open. Nothing can take an opening back
+        # — `/again` plays the last thing the *player* did, and they have
+        # not done anything yet — and a turn left open is a story row the
+        # library cannot see until somebody speaks.
+        self.store.commit_turn()
+        return self.pov(appended)
 
     def here(self) -> str:
         return self.director.current_location(self.user_character)
@@ -257,6 +331,10 @@ class Session:
         this is the same savepoint `/again` uses — the only new part is
         that a failure counts as a reason to use it.
         """
+        with self._alone:
+            return self._take(take)
+
+    def _take(self, take: Callable[[], list[ProjectedEvent]]) -> list[ProjectedEvent]:
         self.store.begin_turn()
         self.turn_started_at = self.store.next_seq(self.scene.id)
         self.ended_at_turn_start = self.ended()
@@ -354,6 +432,10 @@ class Session:
           absorbing an event is the private reading, and the readings
           that survive are already written down.
         """
+        with self._alone:
+            return self._rewind(seq)
+
+    def _rewind(self, seq: int) -> list[ProjectedEvent]:
         self.store.commit_turn()
         withdrawn = self.store.withdraw_after(self.scene.id, seq)
         if withdrawn:

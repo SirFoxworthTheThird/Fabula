@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Body, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 from starlette.concurrency import run_in_threadpool
@@ -247,6 +247,11 @@ class _LiveSession:
         self.subscribers: list[asyncio.Queue[StreamEvent]] = []
         # The loop the queues belong to, learned when somebody subscribes.
         self.loop: asyncio.AbstractEventLoop | None = None
+        # Whether the engine is working on something nobody asked for —
+        # a scene opening itself. Set before the response goes out, so a
+        # client that connects in the gap is told to keep waiting rather
+        # than told the room has finished.
+        self.busy = False
 
     @property
     def story_id(self) -> str | None:
@@ -287,6 +292,31 @@ class Working(BaseModel):
 
     who: str = ""
     name: str = ""
+
+
+class Trouble(BaseModel):
+    """Something went wrong where nobody was waiting on a reply.
+
+    Every other failure in this service answers whoever caused it: a turn
+    that cannot reach the model is a 502 on the line that asked for it.
+    An opening is the exception — it runs after its response has already
+    gone — so without this it would be a room that quietly never says
+    anything, which reads as the engine being slow rather than as the
+    model being unreachable.
+    """
+
+    detail: str
+
+
+class Settled(BaseModel):
+    """Background work has stopped.
+
+    `Working` says who is being asked; nothing ever said when the asking
+    was over, and nothing needed to — every turn was somebody's request
+    and ended when its response did. An opening has no response to end
+    on, so without this the room finishes taking its turn and the client
+    is still showing that it is thinking.
+    """
 
 
 class Retake(BaseModel):
@@ -424,6 +454,58 @@ def create_app(
         session_id, session = _remember(session)
         return state_of(session_id, session)
 
+    def opened(session: Session, background: BackgroundTasks) -> SceneState:
+        """The same, for a story that has just begun: hand it back now
+        and let the room open it afterwards.
+
+        A scene's opening costs a narration, a bid from everybody
+        standing there and a line from whoever wanted to speak — eight
+        model calls in a full room, which is a long time to look at a
+        disabled button. The story is playable the moment it exists, and
+        what is missing arrives on the stream the client opens anyway, so
+        the wait is spent watching the room take its turn instead of
+        waiting to see the room at all.
+        """
+        session_id, session = _remember(session)
+        live[session_id].busy = True
+        background.add_task(curtain_up, session_id)
+        return state_of(session_id, session)
+
+    def curtain_up(session_id: str) -> None:
+        """Open the scene, after the client has been told where it is.
+
+        Runs in a worker thread once the response has gone, so frames hop
+        back to the loop rather than touching the queues where they
+        stand. Nobody may be listening yet — the catch-up every stream
+        begins with is what makes that safe, and the client drops a seq
+        it has already rendered.
+
+        A model that fails here has left the scene at its authored first
+        words rather than half-opened, which is a story somebody can
+        still play. Anyone who caught the rolled-back lines mid-flight is
+        told to drop them, through the same retake frame `/again` uses.
+        """
+        entry = live.get(session_id)
+        if entry is None:
+            return
+        entry.busy = True
+        from_seq = entry.session.store.next_seq(entry.session.scene.id)
+        try:
+            for frame in to_stream_events(entry.session, entry.session.raise_curtain()):
+                entry.publish_soon(frame)
+        except ModelUnavailable as failure:
+            entry.publish_soon(Retake(from_seq=from_seq))
+            entry.publish_soon(Trouble(detail=f"the model did not answer: {failure}"))
+        except Exception as failure:
+            entry.publish_soon(Retake(from_seq=from_seq))
+            entry.publish_soon(Trouble(detail=f"the scene did not open: {failure}"))
+        finally:
+            # Last, and on every way out: a client left showing that the
+            # room is still thinking is worse than one that never saw it
+            # thinking at all.
+            entry.busy = False
+            entry.publish_soon(Settled())
+
     def scene_tokens() -> list[str]:
         if not worlds_root.is_dir():
             return []
@@ -526,7 +608,7 @@ def create_app(
         return [_card(card) for card in library.list()]
 
     @app.post("/stories", response_model=SceneState)
-    def start_story(body: NewStory) -> SceneState:
+    def start_story(body: NewStory, background: BackgroundTasks) -> SceneState:
         player = Player(
             name=(body.character.name if body.character else ""),
             look=(body.character.look if body.character else ""),
@@ -553,21 +635,22 @@ def create_app(
         try:
             session = library.start(
                 body.world, body.scene, title=body.title, player=player,
-                open_ended=body.open_ended, **opening(),
+                open_ended=body.open_ended, curtain=False, **opening(),
             )
             remember_player(settings, settings_file, player.called, player.look.strip())
         except FileNotFoundError as missing:
             raise HTTPException(status_code=404, detail=str(missing))
         except ModelUnavailable as failure:
-            # A scene opens with a line of its own, which is a model call
-            # — so the first click of a run with a wrong key lands here,
-            # and it should say what happened rather than 500. The story
-            # file is already gone: a start that fails leaves no card.
+            # Starting a story asks the model nothing — the curtain goes
+            # up afterwards — so this is a world that could not be loaded
+            # rather than a model that would not answer. Kept because the
+            # story file is already gone if it fires: a start that fails
+            # leaves no card.
             raise HTTPException(status_code=502, detail=f"the model did not answer: {failure}")
-        return remember(session)
+        return opened(session, background)
 
     @app.post("/stories/{story_id}/resume", response_model=SceneState)
-    def resume_story(story_id: str) -> SceneState:
+    def resume_story(story_id: str, background: BackgroundTasks) -> SceneState:
         """Pick a story up where it was left, on the scene it was left on.
 
         A story already open here is handed back rather than opened
@@ -579,12 +662,17 @@ def create_app(
             if entry.story_id == story_id:
                 return state_of(session_id, entry.session)
         try:
-            session = library.resume(story_id, **opening())
+            session = library.resume(story_id, curtain=False, **opening())
         except (FileNotFoundError, ValueError) as missing:
             raise HTTPException(status_code=404, detail=str(missing))
         except ModelUnavailable as failure:
             raise HTTPException(status_code=502, detail=f"the model did not answer: {failure}")
-        return remember(session)
+        # Ordinarily nothing: a scene in progress is not re-described, and
+        # there is no opening line for the room to answer. It matters for
+        # the story whose curtain never went up — a model that was
+        # unreachable at the first click — which opens properly on the
+        # next one rather than staying a room nobody ever described.
+        return opened(session, background)
 
     @app.delete("/stories/{story_id}")
     def delete_story(story_id: str) -> dict:
@@ -737,7 +825,9 @@ def create_app(
         return dict(describe(settings), pinned=pinned)
 
     @app.post("/cards", response_model=SceneState)
-    async def play_a_card(request: Request, name: str = "") -> SceneState:
+    async def play_a_card(
+        request: Request, background: BackgroundTasks, name: str = ""
+    ) -> SceneState:
         """Play a character card from somewhere else.
 
         The file arrives as the raw body rather than as a form, which
@@ -757,8 +847,12 @@ def create_app(
         if complaint:
             shutil.rmtree(world_dir, ignore_errors=True)
             raise HTTPException(status_code=422, detail="; ".join(complaint[:3]))
-        return remember(
-            library.start(world_dir.name, scene, player=Player(name=name), **opening())
+        return opened(
+            library.start(
+                world_dir.name, scene, player=Player(name=name),
+                curtain=False, **opening(),
+            ),
+            background,
         )
 
     @app.get("/worlds/{world}/cards/{character}", include_in_schema=False)
@@ -787,7 +881,7 @@ def create_app(
         )
 
     @app.post("/invent", response_model=SceneState)
-    def invent_world(body: NewWorld) -> SceneState:
+    def invent_world(body: NewWorld, background: BackgroundTasks) -> SceneState:
         """Make a world from a sentence and start a story in it.
 
         The world is written to the same directory the shipped ones live
@@ -816,14 +910,14 @@ def create_app(
         try:
             session = library.start(
                 made.world_dir.name, made.scene, player=player,
-                open_ended=body.open_ended, **chosen,
+                open_ended=body.open_ended, curtain=False, **chosen,
             )
             remember_player(settings, settings_file, player.called, player.look.strip())
         except ModelUnavailable as failure:
             raise HTTPException(
                 status_code=502, detail=f"the model did not answer: {failure}"
             )
-        return remember(session)
+        return opened(session, background)
 
     @app.get("/catalogue")
     def shelf() -> list[dict]:
@@ -976,7 +1070,7 @@ def create_app(
         would rather poll than hold a connection open.
         """
         entry = get_live(session_id)
-        queue: asyncio.Queue[StreamEvent | Retake] = asyncio.Queue()
+        queue: asyncio.Queue[StreamEvent | Retake | Trouble | Settled] = asyncio.Queue()
         if follow:
             entry.loop = asyncio.get_running_loop()
             entry.subscribers.append(queue)
@@ -1000,10 +1094,20 @@ def create_app(
                 for event in to_stream_events(entry.session, entry.session.perceived_so_far()):
                     yield f"data: {event.model_dump_json()}\n\n"
                 yield ": caught up\n\n"
+                # A scene that opened itself before anybody was listening
+                # published its "done" to nobody. Said again here, so a
+                # client that shows the room thinking while it waits is
+                # never left showing it forever.
+                if follow and not entry.busy:
+                    yield f"event: settled\ndata: {Settled().model_dump_json()}\n\n"
                 while follow:
                     event = await queue.get()
                     if isinstance(event, Retake):
                         yield f"event: retake\ndata: {event.model_dump_json()}\n\n"
+                    elif isinstance(event, Settled):
+                        yield f"event: settled\ndata: {event.model_dump_json()}\n\n"
+                    elif isinstance(event, Trouble):
+                        yield f"event: trouble\ndata: {event.model_dump_json()}\n\n"
                     elif isinstance(event, Working):
                         yield f"event: working\ndata: {event.model_dump_json()}\n\n"
                     else:

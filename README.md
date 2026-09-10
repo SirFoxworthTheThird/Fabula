@@ -754,6 +754,28 @@ The win scales with how many characters are in the room with you, which is the c
 was worst. What is left is the part that cannot be parallel: each character has to hear
 the last line before deciding to answer it, so the replies themselves are a queue.
 
+The other wait worth naming is the one before the first turn. A scene's opening is a room
+to describe, a bid from everybody standing in it and a line from whoever wanted to speak
+— up to eight calls, and every one of them used to sit between clicking **Begin** and
+seeing anything at all. Measured in the browser against a model answering in two seconds,
+that click took 6.1s to land.
+
+It is now two halves. Opening a story asks the model *nothing*: it loads the world, writes
+the story file and hands back the scene's own authored first words, which is a paragraph
+saying what you have walked into. The curtain goes up afterwards, on the stream the client
+opens anyway, so the same six seconds are spent watching the room take its turn from
+inside the story rather than watching a disabled button from outside it. The same click,
+measured the same way: **0.14s**.
+
+Three things make that safe rather than merely faster. The opening is one unit of work, so
+a model that dies partway leaves the scene at its authored words rather than half-opened,
+and anybody who caught the rolled-back lines mid-flight is told to drop them through the
+same retake frame `/again` uses. A failure has no response left to travel back on, so it
+travels on the stream instead and lands as the red line under the composer. And a session
+now does one thing at a time: the composer is live the instant you arrive, and a line
+typed over the opening is played *after* it rather than interleaved with it — two turns at
+once would settle each other's half-written savepoint.
+
 `--workers N` sets how many calls a turn may have in flight (default 8; `--workers 1` is
 the old engine exactly, and is what a single-slot local server or a tight rate limit
 wants). Only the model call runs in a worker — every durable write happens afterwards on

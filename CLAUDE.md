@@ -69,6 +69,14 @@ grows with the number of people in the room with you. What is left is the part t
 cannot be parallel: a character has to hear the last line before deciding to answer it,
 so the replies are a queue by nature.
 
+The wait that was worst was not a turn at all: it was the click. A scene's opening costs up
+to eight calls and all of them used to sit between **Begin** and the first thing on screen
+— 6.1s at a two-second model, measured in the browser. It is now split: opening a story
+asks the model nothing and lands on the scene's authored first words, and the room opens
+itself afterwards on the stream. The same click, 0.14s. The rule that generalises: a wait
+the player spends *inside* the story, watching it happen, is not the same wait as one they
+spend in front of a button, even when the clock says it is. Look for the others.
+
 The next thing available here is deferring the readings to the end of a turn instead of
 issuing them after each event — in-scene beliefs are only read back by the reveal and by
 the guard on a reading itself, so a turn's readings could be one batch rather than eight.

@@ -994,28 +994,41 @@ function note(text, bad) {
 // does, and it should be the room rather than a spinner in a corner.
 function setBusy(busy) {
   for (const node of document.querySelectorAll("footer button, #say")) node.disabled = busy;
-  const waiting = el("waiting");
-  if (busy && !waiting) {
-    const line = document.createElement("p");
-    line.className = "thinking";
-    line.id = "waiting";
-    const label = document.createElement("span");
-    label.className = "doing";
-    label.textContent = "the room is answering";
-    line.appendChild(label);
-    line.appendChild(document.createTextNode(" "));
-    for (let i = 0; i < 3; i++) {
-      const dot = document.createElement("i");
-      dot.textContent = "·";
-      line.appendChild(dot);
-    }
-    el("scroll").appendChild(line);
-    scroll();
-  }
-  if (!busy) {
-    if (waiting) waiting.remove();
+  if (busy) thinking();
+  else {
+    settled();
     el("say").focus();
   }
+}
+
+// The dots, and the line they sit on. Split out of `setBusy` because the
+// engine can now be working without the player having asked it anything:
+// a scene opens itself once they are already in it, and the composer
+// stays live through that — a line typed over the opening is played
+// after it rather than refused.
+function thinking() {
+  if (el("waiting")) return el("waiting");
+  const line = document.createElement("p");
+  line.className = "thinking";
+  line.id = "waiting";
+  const label = document.createElement("span");
+  label.className = "doing";
+  label.textContent = "the room is answering";
+  line.appendChild(label);
+  line.appendChild(document.createTextNode(" "));
+  for (let i = 0; i < 3; i++) {
+    const dot = document.createElement("i");
+    dot.textContent = "·";
+    line.appendChild(dot);
+  }
+  el("scroll").appendChild(line);
+  scroll();
+  return line;
+}
+
+function settled() {
+  const waiting = el("waiting");
+  if (waiting) waiting.remove();
 }
 
 // A turn walks the cast — each character in turn, then the narrator —
@@ -1023,7 +1036,7 @@ function setBusy(busy) {
 // truer picture of what this engine is doing than any app with a single
 // model behind it could draw.
 function working(frame) {
-  const label = document.querySelector("#waiting .doing");
+  const label = thinking().querySelector(".doing");
   if (!label) return;
   // A name the narrator invented is model output like any other, so it
   // goes in as text.
@@ -1296,10 +1309,19 @@ function listen() {
   // point, and several of the checks exist to stop particular words
   // reaching the player at all. See `fabula.llm.Watched`.
   stream.addEventListener("working", message => working(JSON.parse(message.data)));
+  // A scene opens after the page does, so a model that will not answer
+  // has no reply left to fail on. Without this it would be a room that
+  // never says anything, which reads as slowness rather than as a key
+  // that is wrong.
+  stream.addEventListener("trouble", message => note(JSON.parse(message.data).detail, true));
+  // And when it stops. A turn the player asked for stops when its
+  // response comes back; an opening has no response to come back, so it
+  // says so on the stream instead.
+  stream.addEventListener("settled", () => settled());
   stream.onerror = () => note("Reconnecting…");
 }
 
-async function enter(opening) {
+async function enter(opening, curtain) {
   let opened;
   try {
     opened = await opening;
@@ -1315,6 +1337,11 @@ async function enter(opening) {
   el("start").classList.add("hidden");
   for (const id of ["hud", "stage", "controls"]) el(id).classList.remove("hidden");
   await refresh();
+  // A story that has just begun is still opening itself: the room has to
+  // be described and whoever is standing in it gets to speak first. Said
+  // straight away rather than when the first frame arrives, because the
+  // first of those calls is under way before there is anybody to tell.
+  if (curtain) thinking();
   listen();
   el("say").focus();
 }
@@ -1650,7 +1677,7 @@ function askWho(holder, button, world, scene) {
     const character = {name: name.value.trim(), look: look.value.trim()};
     try {
       const opened = await api.startStory(world.id, scene.id, character, run.checked);
-      await enter(Promise.resolve(opened));
+      await enter(Promise.resolve(opened), true);
     } catch (failure) {
       // The story was not started, so this is a correction rather than
       // an error: they are still standing where they were.
@@ -1795,7 +1822,7 @@ el("card").onchange = async () => {
   try {
     const opened = await api.playCard(file, el("invent-name").value.trim());
     notice.textContent = "";
-    await enter(Promise.resolve(opened));
+    await enter(Promise.resolve(opened), true);
   } catch (failure) {
     notice.textContent = failure.message;
     notice.classList.add("bad");
@@ -1822,7 +1849,7 @@ el("invent").onsubmit = async event => {
       premise, {name: el("invent-name").value.trim(), look: ""},
       el("invent-open-ended").checked,
     );
-    await enter(Promise.resolve(opened));
+    await enter(Promise.resolve(opened), true);
     notice.textContent = "";
   } catch (failure) {
     notice.textContent = failure.message;
