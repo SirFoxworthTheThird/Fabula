@@ -17,6 +17,17 @@ from fabula.models import Character, Event, Intention
 from fabula.world import DURATION_TEMPLATES, TIME_SKIP_TEMPLATES, Phrasing
 
 LARGE_SKIP_MINUTES = 60  # beyond this, the user is asked before time moves
+# What the log calls an event the engine produced by moving time on its
+# own rather than because the player did something — the skip, the
+# departure that made it worth taking, and what came of it off screen.
+#
+# Two things read it. The quiet measures, so a lull that has already been
+# spent is not spent again. And `scene_state`, which counts `turns_elapsed`
+# in log positions: without this, a house that got busy would burn the
+# author's pressure budget faster than they wrote it for, and an evening
+# with somebody walking about in it would escalate quicker than the same
+# evening without. Time moving is not the scene taking a turn.
+UNASKED = "unasked"
 
 
 def resolved_intention_ids(events: list[Event]) -> set[str]:

@@ -581,9 +581,32 @@ class Session:
                 f"{self.user_character.name} comes in from {self.world.room_name(self.here())}.",
                 audibility="adjacent",
             )
-            return self.pov(self.director.run_turn(arrival))
+            played = self.director.run_turn(arrival)
+            # Walking in is looking. Whatever happened in here while they
+            # were somewhere else is a coarse stub until somebody is
+            # standing in the room to see it, and until now the only
+            # thing that expanded one was the player thinking to press
+            # "look around" — so the payoff of the whole off-screen
+            # machinery was behind a button, in a room they had no
+            # reason to suspect. Arriving is reason enough.
+            return self.pov(played + self._notices())
 
         return self._play(take)
+
+    def _notices(self) -> list[Event]:
+        """Expand the coarse off-screen events waiting where this
+        character is standing.
+
+        One narration each, once — `materialize` marks them so a room is
+        never re-read — and only from inside the room, which is what
+        keeps this a perception rather than a report.
+        """
+        seen = []
+        for summary in self.director.unmaterialized_here(self.user_character):
+            event = self.director.materialize(summary, self.user_character)
+            if event is not None:
+                seen.append(event)
+        return seen
 
     def next_scene(self) -> str | None:
         """The scene this one leads to, given what happened in it.
@@ -714,13 +737,9 @@ class Session:
 
     def look(self) -> list[ProjectedEvent]:
         """Take in the room: coarse off-screen events here expand into
-        what is visible now."""
-        def take() -> list[ProjectedEvent]:
-            revealed = []
-            for summary in self.director.unmaterialized_here(self.user_character):
-                event = self.director.materialize(summary, self.user_character)
-                if event is not None:
-                    revealed.append(event)
-            return self.pov(revealed)
+        what is visible now.
 
-        return self._play(take)
+        Still worth having after `move` does it on arrival — a room can
+        acquire something to notice while somebody is standing in it,
+        and looking again is how they find it."""
+        return self._play(lambda: self.pov(self._notices()))

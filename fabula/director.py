@@ -25,9 +25,11 @@ from fabula.classify import classify
 from fabula.concurrency import DEFAULT_WORKERS, in_parallel
 from fabula.chronology import (
     LARGE_SKIP_MINUTES,
+    UNASKED,
     derive_skip_minutes,
     describe_duration,
     due_intentions,
+    pending_intentions,
 )
 from fabula.db import EventStore
 from fabula.discovery import invents_a_fact
@@ -318,8 +320,18 @@ class Director:
         events_this_turn: list[Event] = []
         consecutive_agent_turns = 0
         answered = False
+        # How little anybody wanted the turn, at its quietest. Read after
+        # the loop by `_meanwhile`, which needs to know whether the room
+        # was going anywhere before it lets half an hour of the evening
+        # go by.
+        quietest = 1.0
 
-        for _ in range(budget if budget is not None else self.scene.turn_budget):
+        # Counted down on beats rather than on iterations. Time moving is
+        # not the room taking a beat — it is the reason the room has
+        # nothing to say — so spending one on it made a quiet turn
+        # quieter, which is backwards.
+        beats = budget if budget is not None else self.scene.turn_budget
+        while beats > 0:
             all_events = self.store.get_events(self.scene.id)
             candidates = prefilter_candidates(last_event, self.characters, all_events, self.world)
 
@@ -356,6 +368,9 @@ class Director:
             )
             narrator_bid = as_bid(beat)
             top_bid = max((b.desire for b in bids), default=0.0)
+            quietest = min(quietest, top_bid)
+
+            beats -= 1
             pressure_choice = (
                 select_pressure(
                     self.pressures,
@@ -524,6 +539,20 @@ class Director:
                 # does not prevent it, because the loop simply had turns
                 # left. The floor is theirs.
                 break
+
+        # And then the house, once the room has finished. After the loop
+        # rather than inside it, which is not a detail: anywhere in the
+        # middle it either costs the room the beat it was about to take
+        # or buys the director an extra round to fire a pressure in, and
+        # both were measured. Out here it changes nothing about the turn
+        # that just happened — it is the next thing the player finds when
+        # they look up.
+        if pressures:
+            # The whole log, not this turn's slice: both halves of the
+            # quiet measure count backwards from the last time this fired.
+            events_this_turn.extend(
+                self._meanwhile(self.store.get_events(self.scene.id), quietest)
+            )
 
         return events_this_turn
 
@@ -735,12 +764,19 @@ class Director:
         self,
         minutes: int | None = None,
         consent: Callable[[int], bool] | None = None,
+        unasked: bool = False,
     ) -> list[Event]:
         """Skip forward to the next moment something is ready, log the
         skip, and resolve what happened off screen while it elapsed.
 
         Returns the events appended, empty if nothing was pending or the
         user declined a large skip.
+
+        `unasked` marks a skip the engine decided on rather than one the
+        player asked for — see `_meanwhile`. It changes nothing about how
+        the skip is resolved or perceived; it is a note in the log, so
+        the drift measure can tell that something happened and the same
+        stretch of quiet does not keep buying the same jump.
         """
         all_events = self.store.get_events(self.scene.id)
         if minutes is None:
@@ -764,11 +800,11 @@ class Director:
             user_location,
             f"{describe_duration(minutes, self.world.phrasing)} pass.",
             audibility="building",
-            metadata={"minutes": minutes},
+            metadata={"minutes": minutes, **({UNASKED: True} if unasked else {})},
             story_time=previous_time + timedelta(minutes=minutes),
         )
         appended = [self.store.append_event(skip)]
-        appended.extend(self._resolve_offscreen(minutes))
+        appended.extend(self._resolve_offscreen(minutes, unasked=unasked))
         self._absorb()
         return appended
 
@@ -864,7 +900,7 @@ class Director:
         last_seq = all_events[-1].seq if all_events else 0
         return location_at_seq(character.id, character.location_id, all_events, last_seq + 1)
 
-    def _resolve_offscreen(self, elapsed_minutes: int) -> list[Event]:
+    def _resolve_offscreen(self, elapsed_minutes: int, unasked: bool = False) -> list[Event]:
         """Off-screen action is resolved coarsely: elapsed time produces a
         few `detail_level: "summary"` events per character. Specifics are
         materialized lazily, when someone is actually there to see them.
@@ -876,28 +912,26 @@ class Director:
         happen. Their intention simply stays pending.
         """
         appended = []
-        user = next((c for c in self.characters.values() if c.is_user), None)
-        user_location = self.current_location(user) if user else None
-
         for character in self.characters.values():
             if character.is_user:
                 continue
-            if user_location is not None and self.current_location(character) == user_location:
-                continue
             events = self.store.get_events(self.scene.id)
             for intention in due_intentions(character, events, elapsed_minutes):
-                if intention.private and self._others_present(
-                    intention.location_id, character.id
-                ):
-                    # He is not going to check the glue seam with his
-                    # sister standing right there. It waits.
+                # One question, asked in one place, so the derivation and
+                # the resolution cannot disagree about what is possible:
+                # are they there, is the player there, and is anybody
+                # watching something they would only do alone.
+                if self.unreachable(character, intention):
                     continue
                 summary = self.build_event(
                     "action",
                     character.id,
                     intention.location_id,
                     f"{character.name} {intention.description}",
-                    metadata={"intention_id": intention.id},
+                    metadata={
+                        "intention_id": intention.id,
+                        **({UNASKED: True} if unasked else {}),
+                    },
                     detail_level="summary",
                 )
                 appended.append(self.store.append_event(summary))
@@ -917,6 +951,7 @@ class Director:
                                     "character_id": character.id,
                                     "state": intention.state,
                                     "intention_id": intention.id,
+                                    **({UNASKED: True} if unasked else {}),
                                 },
                             )
                         )
@@ -926,19 +961,42 @@ class Director:
     def unreachable(self, character: Character, intention: Intention) -> bool:
         """Would resolution refuse this intention as things stand?
 
-        The same two conditions `_resolve_offscreen` applies, so the skip
+        The same conditions `_resolve_offscreen` applies, so the skip
         derivation cannot propose a jump that resolution will decline.
+
+        Three of them, and the first was missing. An intention names the
+        room it happens in, and somebody standing in the kitchen cannot
+        finish the letters in the study — but resolution only ever
+        checked where the *character* was against where the *user* was,
+        so Maria sorted the letters in a room she was not in. Worse, and
+        the way it was found: with the player sitting in the study, it
+        put her doing it in front of them.
         """
-        user = next((c for c in self.characters.values() if c.is_user), None)
-        if user is not None and self.current_location(character) == self.current_location(user):
+        here = self.current_location(character)
+        if here != intention.location_id:
+            # Not there to do it. `_steps_out` is what changes that.
             return True
-        return bool(intention.private and self._others_present(intention.location_id, character.id))
+        user = next((c for c in self.characters.values() if c.is_user), None)
+        if user is not None and here == self.current_location(user):
+            # Watched is not off screen. Resolving it here would hand the
+            # player a coarse summary of something they were standing in
+            # the middle of.
+            return True
+        return bool(intention.private and self._others_present(here, character.id))
 
     def pending_skip(self) -> int | None:
         """How long the next skip would be, counting only what could
         actually come of it."""
         return derive_skip_minutes(
             self.characters, self.store.get_events(self.scene.id), blocked=self.unreachable
+        )
+
+    def _company(self, location_id: str) -> int:
+        """How many people who are not the player are in this room."""
+        return sum(
+            1
+            for character in self.characters.values()
+            if not character.is_user and self.current_location(character) == location_id
         )
 
     def _others_present(self, location_id: str, actor_id: str) -> bool:
@@ -1002,6 +1060,98 @@ class Director:
             for e in all_events
             if e.detail_level == "summary" and e.location_id == location and e.id not in done
         ]
+
+    def _meanwhile(self, all_events: list[Event], top_bid: float) -> list[Event]:
+        """What the people you are not with were going to do anyway.
+
+        Every character can have `intentions` — things they mean to do,
+        somewhere else, once enough time has passed — and resolving them
+        is the one thing this engine can do that a single model puppeting
+        a cast cannot: somebody acts while you are not there, and you
+        find out afterwards from what you walk into. All of that was
+        built, and none of it ever ran, because `advance_time` was
+        reachable from exactly one place: the player pressing "let thirty
+        minutes pass", a button whose consequence they have no reason to
+        expect. Eleven authored intentions across five worlds, waiting
+        for somebody to guess.
+
+        So time moves on its own when the scene has gone quiet — the same
+        measure that decides the engine may invent a complication, and
+        checked *before* that, because an intention the author wrote is
+        worth more than a situation a model made up and there is no
+        reason to make something up while one is still pending.
+
+        Two limits. Only a jump the player would not have been asked
+        about: past that, spec §8 says time is not something they lose
+        without noticing, and an engine that quietly skipped three hours
+        would be taking the scene off them. And only when something
+        actually comes of it — `pending_skip` counts only intentions
+        resolution would accept, so this never buys a silence.
+        """
+        if not situations.lull(all_events, self.protagonist_id(), top_bid):
+            return []
+        # Somebody gets up first. Nothing in this engine ever sent a
+        # character out of the room, so the cast converged on the player
+        # in the first turn and stood there — which made every intention
+        # unreachable for the rest of the scene, because an intention
+        # happens somewhere and they were all here.
+        appended = self._steps_out(all_events)
+        minutes = self.pending_skip()
+        if minutes is None or minutes > LARGE_SKIP_MINUTES:
+            return appended
+        return appended + self.advance_time(minutes, unasked=True)
+
+    def _steps_out(self, all_events: list[Event]) -> list[Event]:
+        """Somebody leaves to go and do the thing they meant to do.
+
+        An `Intention` names the room it happens in, and the author wrote
+        that room precisely because it is not the one the scene opens in
+        — the letters are in the study, the glue seam is in the kitchen
+        after everybody has gone to bed. But there was nothing anywhere
+        that made a character *walk* there, so the room they meant to go
+        to may as well not have been written.
+
+        One person per beat, and never into the room the player is
+        standing in: going somewhere to do a thing in front of them is
+        not going somewhere. An ordinary `arrival`, built the same way
+        the player's own move is, so the rooms that would hear it hear it
+        and the map moves the one way it has ever moved.
+        """
+        user = next((c for c in self.characters.values() if c.is_user), None)
+        user_location = self.current_location(user) if user else None
+        for character in self.characters.values():
+            if character.is_user:
+                continue
+            here = self.current_location(character)
+            if here == user_location and self._company(here) < 2:
+                # The last person in the room with the player does not
+                # get to wander off. A house that empties around somebody
+                # is not a world carrying on without them, it is a scene
+                # being taken away — and a two-hander where the other
+                # one leaves is the story ending rather than continuing
+                # elsewhere.
+                continue
+            for intention in pending_intentions(character, all_events):
+                there = intention.location_id
+                if there in (here, user_location) or there not in self.world.rooms:
+                    continue
+                if intention.private and self._others_present(there, character.id):
+                    # No point going to be alone in a room that is not
+                    # empty. It waits, exactly as it waits here.
+                    continue
+                return [
+                    self.store.append_event(
+                        self.build_event(
+                            "arrival",
+                            character.id,
+                            there,
+                            f"{character.name} comes in from {self.world.room_name(here)}.",
+                            audibility="adjacent",
+                            metadata={UNASKED: True},
+                        )
+                    )
+                ]
+        return []
 
     def _something_happens(
         self, all_events: list[Event], last_event: Event, top_bid: float

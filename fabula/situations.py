@@ -43,6 +43,7 @@ from __future__ import annotations
 import json
 import re
 
+from fabula.chronology import UNASKED
 from fabula.discovery import invents_a_fact
 from fabula.steering import told
 from fabula.llm import LLMClient, ModelUnavailable
@@ -65,6 +66,14 @@ RESPITE = 4
 # pressures use, because it is the same judgement: do not push into a
 # scene that is already going.
 QUIET = 0.4
+# How many things the player can say between two moments the engine
+# moves time on its own. Much shorter than RESPITE, and the difference is
+# the whole point: waiting for the story to go *slack* before anybody may
+# leave the room is the wrong bar for somebody going to do what they
+# already meant to do. Measured at RESPITE, `winterlight` — four agents,
+# nine authored intentions, the world this is for — never moved once in
+# fourteen player lines.
+BETWEEN = 3
 # How much an invented situation wants the turn. Deliberately modest: it
 # competes with the people in the room, and it should lose to somebody
 # who actually has something to say.
@@ -99,13 +108,23 @@ def drifting(events: list[Event], protagonist_id: str | None, top_bid: float) ->
     for several things they said.
 
     "Happened" means an event some pressure put there, authored or
-    invented. Not narration: the atmosphere beats never run out, so a
-    story can produce one every turn for ever while nothing whatsoever
-    changes. That is exactly the state this exists to detect.
+    invented — or time moving on its own, which is the other way the
+    world changes while the player is standing still, and which is how
+    somebody in another room gets round to what they meant to do. Not
+    narration: the atmosphere beats never run out, so a story can produce
+    one every turn for ever while nothing whatsoever changes. That is
+    exactly the state this exists to detect.
     """
     if top_bid >= QUIET:
         return False
-    last = max((e.seq for e in events if e.metadata.get("pressure_id")), default=-1)
+    last = max(
+        (
+            e.seq
+            for e in events
+            if e.metadata.get("pressure_id") or e.metadata.get(UNASKED)
+        ),
+        default=-1,
+    )
     said = sum(
         1
         for e in events
@@ -115,6 +134,36 @@ def drifting(events: list[Event], protagonist_id: str | None, top_bid: float) ->
         and not e.metadata.get("opening")
     )
     return said >= RESPITE
+
+
+def lull(events: list[Event], protagonist_id: str | None, top_bid: float) -> bool:
+    """Is there room for time to move?
+
+    Deliberately weaker than `drifting`. Drift asks whether the author
+    has run out of things that happen, because that answer decides
+    whether to make one up — an expensive, invented thing, so the bar is
+    high. This decides only whether somebody may get up and go and do
+    what the author already said they would, which is not pushing into a
+    scene; it is the house carrying on around one.
+
+    So: nobody in the room has much to say, and a few things have been
+    said since the last time this fired. The second half is a cooldown
+    rather than a measure of slackness — without it a quiet stretch buys
+    a jump every single turn, and an evening would be over by the
+    tenth line.
+    """
+    if top_bid >= QUIET:
+        return False
+    last = max((e.seq for e in events if e.metadata.get(UNASKED)), default=-1)
+    said = sum(
+        1
+        for e in events
+        if e.seq > last
+        and e.kind == "utterance"
+        and e.actor_id == protagonist_id
+        and not e.metadata.get("opening")
+    )
+    return said >= BETWEEN
 
 
 def compose(

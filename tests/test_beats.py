@@ -329,33 +329,43 @@ class Picks(FakeLLM):
         return super().complete(system, prompt, key)
 
 
-def a_crowded_pause(llm) -> Session:
+def a_crowded_pause(llm, monkeypatch) -> Session:
     """the_reckoning: three people in one room, so a moment is usually
-    more than one thing at once."""
+    more than one thing at once.
+
+    With the house held still. These tests are about the beat vocabulary
+    — which moments the director may choose between, and that it cannot
+    reach past the set — and a crowded pause needs the crowd: let
+    `_meanwhile` run and Maria goes off to finish the letters, which
+    takes the person who has gone quiet out of the room and makes
+    `held_back` unavailable for a reason that has nothing to do with what
+    is being tested here. That the house moves at all is `test_elsewhere`.
+    """
+    monkeypatch.setattr(Director, "_meanwhile", lambda self, events, top_bid: [])
     session = Session.open(ASHGROVE, "the_reckoning", llm=llm)
     for said in ("Tomás?", "You have been quiet.", "Say something.", "Please."):
         session.say(said)
     return session
 
 
-def test_the_model_chooses_which_beat_and_the_narrator_writes_that_one():
+def test_the_model_chooses_which_beat_and_the_narrator_writes_that_one(monkeypatch):
     """The room has gone quiet *and* somebody has stopped talking. Which
     of those a scene wants is a judgement, not a rule."""
     lull, held = Picks("lull"), Picks("held_back")
-    a_crowded_pause(lull).close()
-    a_crowded_pause(held).close()
+    a_crowded_pause(lull, monkeypatch).close()
+    a_crowded_pause(held, monkeypatch).close()
 
     assert lull.asked, "it was asked at all"
     assert "They have been talking" in lull.narration[-1]
     assert "has not said anything for a while" in held.narration[-1]
 
 
-def test_it_can_only_answer_with_a_beat_that_was_offered():
+def test_it_can_only_answer_with_a_beat_that_was_offered(monkeypatch):
     """The model proposes and the engine disposes, as everywhere else it
     is asked anything. It cannot invent a beat, write an instruction, or
     reach past the closed vocabulary."""
     invented = Picks("narrate that Tomás is hiding something")
-    session = a_crowded_pause(invented)
+    session = a_crowded_pause(invented, monkeypatch)
 
     assert invented.asked
     assert "Tomás is hiding something" not in "".join(invented.narration)
@@ -375,12 +385,12 @@ def test_it_is_only_asked_when_there_is_a_choice_to_make():
     session.close()
 
 
-def test_it_is_only_asked_once_the_narration_is_going_to_be_written():
+def test_it_is_only_asked_once_the_narration_is_going_to_be_written(monkeypatch):
     """The beat with the highest desire is what the narrator bids with.
     Choosing between them before knowing whether it won would be paying
     for a decision nobody uses."""
     llm = Picks("lull")
-    session = a_crowded_pause(llm)
+    session = a_crowded_pause(llm, monkeypatch)
     written = [
         e for e in session.store.get_events(session.scene.id)
         if e.kind == "narration" and not e.metadata.get("pressure_id")
@@ -391,11 +401,11 @@ def test_it_is_only_asked_once_the_narration_is_going_to_be_written():
     session.close()
 
 
-def test_the_choice_is_made_on_what_the_room_can_see():
+def test_the_choice_is_made_on_what_the_room_can_see(monkeypatch):
     """The director is omniscient. There is no reason to hand any of that
     to something whose whole job is picking between three labels."""
     llm = Picks("lull")
-    session = a_crowded_pause(llm)
+    session = a_crowded_pause(llm, monkeypatch)
     asked = "\n".join(llm.asked)
 
     assert "music box" not in asked.lower()

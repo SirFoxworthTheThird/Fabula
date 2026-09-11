@@ -17,6 +17,7 @@ import operator
 import re
 from dataclasses import dataclass, field
 
+from fabula.chronology import UNASKED
 from fabula.memory import location_at_seq
 from fabula.models import Character, Event, Pressure
 from fabula.world import Fact, World, mentions_fact, resolve_perception
@@ -45,7 +46,13 @@ class SceneState:
 def scene_state(
     events: list[Event], characters: dict[str, Character], world: World | None = None
 ) -> SceneState:
+    # In log positions, which is what every authored `turns_elapsed` was
+    # written against — minus the events the engine produced by moving
+    # time on its own. Those are the house carrying on, not the scene
+    # advancing, and counting them would quietly ramp every pressure in
+    # every world the moment anybody got up and left the room.
     turn_count = events[-1].seq if events else 0
+    turn_count -= sum(1 for event in events if event.metadata.get(UNASKED))
     locations = {
         character_id: location_at_seq(
             character_id, character.location_id, events, turn_count + 1

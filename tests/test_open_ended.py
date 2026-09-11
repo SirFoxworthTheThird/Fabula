@@ -249,15 +249,32 @@ def test_and_played_the_other_way_it_still_does(fake_llm):
 def test_an_arc_does_not_ramp_toward_an_ending_it_will_never_reach(fake_llm):
     """An arc pushes its pressures harder the longer it runs, because it is
     climbing toward something. With nothing to climb toward that is just a
-    scene that gets louder for ever."""
+    scene that gets louder for ever.
+
+    Measured against what the author allowed rather than against a number
+    somebody once observed. The count moved when the engine learned to
+    let people leave the room — `maria_comes_through` triggers on Maria
+    being in the study, which in this scene could never happen before,
+    so a pressure that had been dead became reachable. More of the
+    author's material, which is not the thing this guards against.
+    """
     session = a_story(scene="the_reckoning")
     played(session, 8)
 
+    events = session.store.get_events(session.scene.id)
     fired = [
-        e for e in session.store.get_events(session.scene.id)
+        e for e in events
         if e.metadata.get("pressure_id") and not e.metadata.get("invented")
     ]
-    assert len(fired) <= 4, "equilibrium, not escalation"
+    budget = sum(p.max_fires for p in session.director.pressures if p.max_fires)
+    assert len(fired) <= budget, "no pressure fires more often than it was written to"
+
+    # And the shape of it: an arc that ramps spends more of itself the
+    # longer it runs. This one does not get louder.
+    halfway = events[len(events) // 2].seq
+    early = [e for e in fired if e.seq <= halfway]
+    late = [e for e in fired if e.seq > halfway]
+    assert len(late) <= len(early), "equilibrium, not escalation"
     session.close()
 
 
