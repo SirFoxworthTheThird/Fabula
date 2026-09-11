@@ -171,12 +171,21 @@ cannot tell. `a conspiracy` is the version it can — you are the one nobody is 
 Making it tell the other one would mean audience-aware protection, which is a real feature
 and not a prompt.
 
-~~And no goals.~~ Done, and free: they come back from the complications call that was
-already being made. The one holding it wants to get through the evening without it coming
-up; the one who has noticed wants to know. What a generated world still does not have
-against a hand-written one is **items** — things in a room that carry a fact, which is the
-one remaining way a hand-written world can put a secret somewhere rather than in
-somebody.
+~~And no goals.~~ ~~And no items.~~ Both done, and both free: they come back from the
+complications call that was already being made. A generated world can now put a secret in
+a *room* — a letter, a receipt — as well as in somebody.
+
+An item is the one piece of authored prose that is *supposed* to name a fact, which makes
+it the exception to the rule everything else obeys: the text keeps the keywords and
+`inspect` holds the line instead (it may name the one it reveals and no other). Its
+**name** obeys the ordinary rule, because the room can see what you are holding.
+
+Finding that out also found the thing worth more than the feature: **`/read` existed in
+the terminal and nowhere else.** No endpoint, no button. Every item in every world was
+unreachable from the app most people use, including the one hand-written item in the
+shipped worlds. That is the third time in two days the same shape has turned up — a
+mechanism that works, has tests, and nothing in the ordinary path ever reaches. When you
+finish a feature, open the browser and try to use it as a player would.
 
 ## What the rest of the shelf has
 

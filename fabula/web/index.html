@@ -855,6 +855,13 @@
         <span class="label" id="rooms-label">Go to</span>
         <span id="rooms"></span>
       </span>
+      <!-- Things in this room that can be opened. `/read` existed in the
+           terminal and nowhere else, so every item in every world was
+           unreachable from the app most people use. -->
+      <span class="go" id="things-row" hidden>
+        <span class="label" id="things-label">Read</span>
+        <span id="things"></span>
+      </span>
     </div>
     <!-- Said to the director rather than to the room. It shapes what
          happens and how it is described, and never what anybody says —
@@ -1250,6 +1257,20 @@ async function refresh() {
     button.onclick = () => act("move", {room: room.id});
     rooms.appendChild(button);
   }
+
+  // What is in here to be opened. Names only: what it says is private to
+  // whoever reads it, and the state that draws this button never carries
+  // the text.
+  const things = el("things");
+  things.textContent = "";
+  for (const thing of state.things || []) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = thing.name;
+    button.onclick = () => act("read", {name: thing.name});
+    things.appendChild(button);
+  }
+  el("things-row").hidden = !(state.things || []).length;
 
   // Offered once the scene has reached its end and there is somewhere for
   // the story to go.

@@ -81,6 +81,13 @@ EXTRAS = {
         {"who": "Ruben Ott", "what": "checks his coat pocket without taking anything out",
          "where": "the kitchen", "after_minutes": 20, "alone": True},
     ],
+    "things": [
+        {"name": "the delivery book on the shelf", "where": "the loading bay",
+         "about": "the second key",
+         "says": "Every crate in and out for a month, initialled. Thursday has "
+                 "a line struck through it and, in the margin, a note about a copy "
+                 "of the key being cut."},
+    ],
     "goals": [
         {"who": "Ruben Ott", "wants": "to get to the end of the night without being asked",
          "about": "the second key", "how_much": 0.8},
@@ -1130,3 +1137,94 @@ def test_a_goal_that_names_the_secret_is_rewritten_or_lost(root):
     for character in load_characters(made.world_dir).values():
         for goal in character.goals:
             assert "second key" not in goal.description.lower()
+
+
+# --- Something in a room that carries it ---------------------------------
+#
+# The one remaining way a hand-written world could put a secret somewhere
+# rather than in somebody. An item is a second channel for the same
+# asymmetry: whoever reads it knows, whoever does not, does not, and the
+# room can see you reading without seeing what you read.
+
+
+def test_a_generated_world_can_put_the_secret_in_a_room(root):
+    llm = Scripted(shape="a secret")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    world = load_world(made.world_dir)
+    assert world.items, "nothing in any room to find"
+    for item in world.items.values():
+        assert item.reveals in world.facts
+        assert item.text.strip()
+
+
+def test_it_is_never_in_the_room_the_story_opens_in(root):
+    """The point of a thing is that somebody has to go and find it. In
+    the room you are already standing in it is the furniture answering a
+    question before it has been asked."""
+    llm = Scripted(shape="a secret")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    world = load_world(made.world_dir)
+    player = [c for c in load_characters(made.world_dir).values() if c.is_user][0]
+    for item in world.items.values():
+        assert item.location_id != player.location_id
+
+
+def test_what_it_says_is_allowed_to_say_it(root):
+    """The one piece of authored prose that is *supposed* to name a fact.
+    Running `_clean` over it would leave a letter that reveals nothing,
+    which is a letter nobody needs to find."""
+    llm = Scripted(shape="a secret")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    world = load_world(made.world_dir)
+    carried = [
+        item for item in world.items.values()
+        if any(k.lower() in item.text.lower() for k in world.facts[item.reveals].keywords)
+    ]
+    assert carried, "it gives nothing away, so there is no reason to read it"
+
+
+def test_but_its_name_is_not(root):
+    """Whoever is standing there sees what you are holding. A folder
+    called "the second key" says it out loud before it is opened."""
+    theirs = dict(EXTRAS)
+    theirs["things"] = [
+        {"name": "the second key in the drawer", "where": "the loading bay",
+         "about": "the second key", "says": "A copy of the key, and a date."},
+    ]
+    llm = Scripted(extras=theirs, repair="the small brass thing in the drawer", shape="a secret")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    world = load_world(made.world_dir)
+    for item in world.items.values():
+        assert "second key" not in item.name.lower()
+
+
+def test_a_thing_that_gives_nothing_away_is_scenery(root):
+    """It belongs in the room description, where it costs nothing. An
+    item with no fact is a button that does nothing."""
+    theirs = dict(EXTRAS)
+    theirs["things"] = [
+        {"name": "a mug", "where": "the kitchen", "about": None, "says": "It is a mug."},
+    ]
+    llm = Scripted(extras=theirs, shape="a secret")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    assert load_world(made.world_dir).items == {}
+
+
+def test_and_the_world_it_makes_still_passes_inspection(root):
+    """`inspect` did not look at items at all until this existed, so the
+    rules it now applies to them have to be ones the generator keeps."""
+    llm = Scripted(shape="a secret")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    assert complaints(made.world_dir) == []

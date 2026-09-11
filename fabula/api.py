@@ -22,7 +22,7 @@ from typing import Literal
 
 from fastapi import BackgroundTasks, Body, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
 from fabula.env import load_env
@@ -95,6 +95,11 @@ class SceneState(BaseModel):
     # rest of the cast is.
     present: list[Named]
     rooms: list[Named]
+    # What is in this room to be read. Names only: what an item *says* is
+    # private to whoever opens it, and a client that was handed the text
+    # with the room state would have been handed it before anybody read
+    # anything.
+    things: list[Named] = Field(default_factory=list)
     story_time: datetime
     cast: list[str]
     pending_skip_minutes: int | None
@@ -214,6 +219,14 @@ class NewSession(BaseModel):
 
 class Say(BaseModel):
     text: str
+
+
+class Read(BaseModel):
+    """Which of the things in this room to open. A name, resolved against
+    what is actually here — never a path and never an id from anywhere
+    else, so a client cannot read something in another room."""
+
+    name: str
 
 
 class Steer(BaseModel):
@@ -563,6 +576,7 @@ def create_app(
             location_name=session.world.room_name(here),
             present=[Named(id=c.id, name=c.name) for c in session.present()],
             rooms=[Named(id=r.id, name=r.name) for r in session.world.rooms.values()],
+            things=[Named(id=i.id, name=i.name) for i in session.items_here()],
             story_time=events[-1].story_time if events else session.scene.start_time,
             cast=list(session.scene.cast),
             pending_skip_minutes=session.pending_skip(),
@@ -990,6 +1004,27 @@ def create_app(
         # character's time, so a client has to have asked first. GET
         # /sessions/{id} reports how long the next skip would be.
         return await act(session_id, lambda session: session.wait(lambda _m: body.consent))
+
+    @app.post("/sessions/{session_id}/read", response_model=list[StreamEvent])
+    async def read(session_id: str, body: Read) -> list[StreamEvent]:
+        """Open something in this room and read it.
+
+        `/read` existed in the terminal and nowhere else, so every item
+        in every world was unreachable from the app most people use —
+        ardenhall's grey folder among them. A second channel for the same
+        asymmetry, behind a door only a developer knew was there.
+
+        Two events come back and only one of them is the text: the room
+        sees somebody open it, and what it says is addressed to the
+        reader alone. That is the ordinary perception path, not a special
+        case — which is why reading a file is not the same as saying what
+        is in it, and an arc waiting for somebody to say it out loud is
+        still waiting.
+        """
+        try:
+            return await act(session_id, lambda session: session.read(body.name))
+        except ValueError as nothing:
+            raise HTTPException(status_code=404, detail=str(nothing))
 
     @app.post("/sessions/{session_id}/look", response_model=list[StreamEvent])
     async def look(session_id: str) -> list[StreamEvent]:

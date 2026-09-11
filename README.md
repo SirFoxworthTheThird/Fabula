@@ -236,6 +236,28 @@ means the player is always the one it is being kept from, and "you are on the cr
 shape this engine cannot play. `a conspiracy` is the version it can: you are the one
 nobody is telling, and there are three of them.
 
+**And it can put the secret in a room rather than in somebody.** An item is a letter, a
+receipt, a logbook — something you pick up and read — and it is a second channel for the
+same asymmetry: whoever reads it knows, whoever does not, does not, and the room can see
+you reading without seeing what you read. It follows for free that reading a file is not
+the same as saying what is in it, so an arc waiting for somebody to say it out loud is
+still waiting.
+
+Two rules, and they are opposites for a reason. **What it says is the one piece of
+authored prose that is allowed to name a fact** — that is what reading it is *for*, so it
+is the one thing the keyword-stripping repair is not run over, and `inspect` holds the
+line instead: an item may name the fact it reveals and no other, because one carrying
+somebody else's secret hands it over to whoever opens it. **Its name is not allowed to** —
+whoever is standing there sees what you are holding, and a folder called "the second key"
+says it out loud before it is opened. And it never goes in the room the story opens in:
+the point of a thing is that somebody has to go and find it.
+
+**And they are reachable now.** `/read` existed in the terminal and nowhere else — no
+endpoint, no button — so every item in every world was invisible to anybody playing in a
+browser, ardenhall's grey folder included. The room's state now names what is in it (names
+only; the text is never in the state, or it would have been handed over before anybody
+opened anything), and there is a **Read** row beside **Go to**.
+
 **And the cast wants things.** A generated world used to have no goals at all, which made
 it a cast that only reacts — a goal raises the bid when its subject comes up and closes
 once the subject is out, so it is the difference between somebody *keeping* a secret and

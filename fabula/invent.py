@@ -306,6 +306,11 @@ COMPLICATIONS_SYSTEM = """You add the complications to a story somebody else has
      "about": "the broken music box", "how_much": 0.8},
     {"who": "Maria Rey", "wants": "to find out what her brother is being strange about",
      "about": "the broken music box", "how_much": 0.5}
+  ],
+  "things": [
+    {"name": "the letters in the desk drawer", "where": "the study",
+     "about": "the broken music box",
+     "says": "Nine years of birthdays in your grandmother's hand, and between two of them a receipt from a repairer on Mill Street, dated March, for work on a music box. Somebody paid cash."}
   ]
 }
 
@@ -317,7 +322,10 @@ Rules that matter:
 - Never give the player an intention. They are played by somebody who is here.
 - A goal is a standing want, not a reflex: what somebody is still trying to do about the thing all evening. `about` is the name of a secret, and `wants` must never contain its exact words.
 - Somebody keeping a secret wants it to stay quiet; somebody who has noticed wants to know. Both are goals. Never give the player one.
-- Two or three pressures, one or two intentions, one goal each for the people who have a reason to have one."""
+- A thing is something in a room that can be picked up and read: a letter, a receipt, a logbook, a photograph. `says` is what reading it tells you, and it is the one place the secret's exact words are *allowed* — that is what reading it is for. Its `name` is not: the room can see what you are holding.
+- `about` is the name of the secret the thing gives away. A thing that gives nothing away is scenery and belongs in the room description instead.
+- Never put a thing in the room the story opens in. The point of it is that somebody has to go and find it.
+- Two or three pressures, one or two intentions, one goal each for the people who have a reason to have one, and none or one thing."""
 
 
 # Where the story goes once the secret is out. The branch is not asked
@@ -904,6 +912,65 @@ def _goals(built: dict, repaired: list, dropped: list) -> dict[str, list[dict]]:
     return theirs
 
 
+def _things(built: dict, scene_room: str, repaired: list, dropped: list) -> dict[str, dict]:
+    """Things in a room that can be picked up and read.
+
+    The one remaining way a hand-written world could put a secret
+    somewhere rather than in somebody, and the only piece of authored
+    prose that is *supposed* to name a fact — reading it is what it is
+    for. So it is the one thing `_clean` is not run over: the text keeps
+    the words, and `inspect` holds the line instead, which is that an
+    item may name the fact it reveals and no other.
+
+    The name is a different matter. Whoever is standing there sees what
+    you are holding, so a folder called "the second key" says it out loud
+    before you have opened it.
+    """
+    facts, rooms = built["facts"], built["rooms"]
+    by_room = {room["name"].strip().lower(): room_id for room_id, room in rooms.items()}
+    by_fact = {fact_id.replace("_", " "): fact_id for fact_id in facts}
+    for fact_id, fact in facts.items():
+        for keyword in fact["keywords"]:
+            by_fact[keyword.strip().lower()] = fact_id
+
+    written: dict[str, dict] = {}
+    for drafted in (built.get("extras") or {}).get("things") or []:
+        if not isinstance(drafted, dict):
+            continue
+        about = by_fact.get(str(drafted.get("about") or "").strip().lower())
+        says = " ".join(str(drafted.get("says") or "").split())
+        if not about or not says:
+            # A thing that gives nothing away is scenery, and scenery
+            # belongs in a room description. Nothing is lost by dropping
+            # it that the room does not already say.
+            continue
+        where = by_room.get(str(drafted.get("where") or "").strip().lower())
+        if where is None or where == scene_room:
+            # Somewhere the player has to go and find it. In the room the
+            # story opens in it is not a discovery, it is the furniture
+            # answering the question before it is asked.
+            where = next((r for r in rooms if r != scene_room), None)
+        if where is None:
+            continue
+        # The name is read by the room, so it goes through the same
+        # cleaning every other piece of public prose does.
+        name = _clean(
+            " ".join(str(drafted.get("name") or "").split()), facts, built["llm"],
+            "the name of something in a room", repaired,
+        )
+        if not name:
+            dropped.append("something in a room that was named after the secret")
+            continue
+        item_id = _unique(name, set(written), f"thing_{len(written) + 1}")
+        written[item_id] = {
+            "name": name,
+            "location_id": where,
+            "reveals": about,
+            "text": says,
+        }
+    return written
+
+
 def _positions(named: dict | None, built: dict) -> dict[str, str]:
     """Who starts where, by name, resolved to ids that exist.
 
@@ -1099,12 +1166,19 @@ def _write(world_dir: Path, built: dict, scene: dict, premise: str) -> Invented:
             "adjacent": room["adjacent"],
         }
 
+    # Somewhere other than where the player is standing when it opens:
+    # a thing in the room you are already in is furniture answering a
+    # question before it has been asked.
+    things = _things(
+        built, built["cast"][built["player_id"]]["location_id"], repaired, dropped
+    )
     world = {
         "id": world_dir.name,
         "title": built["title"],
         "blurb": built["blurb"],
         "rooms": rooms,
         "facts": {fact_id: {"keywords": fact["keywords"]} for fact_id, fact in facts.items()},
+        **({"items": things} if things else {}),
     }
     _save(world_dir / "world.yaml", world, f"Made from: {premise}")
 

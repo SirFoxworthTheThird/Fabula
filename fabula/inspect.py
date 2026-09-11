@@ -170,8 +170,28 @@ def complaints(world_dir: Path) -> list[str]:
     for scene in scenes.values():
         for fact_id in names(scene.opening):
             found.append(f"scene {scene.id} names {fact_id} in its opening")
+    # An item is the one piece of authored prose that is *supposed* to
+    # name a fact — that is what reading it is for — so the rule is the
+    # same as a persona's: it may name the one it says it reveals, and
+    # nothing else. An item carrying somebody else's secret hands it over
+    # to whoever opens it, which is not what the author wrote it for.
+    for item in world.items.values():
+        for fact_id in names(item.text):
+            if fact_id != item.reveals:
+                found.append(f"item {item.id} reads out {fact_id}, which is not what it reveals")
+        for fact_id in names(item.name):
+            found.append(f"item {item.id} has {fact_id} in its name, where the room can read it")
 
     # --- References that have to resolve -------------------------------
+    for item in world.items.values():
+        if item.location_id not in world.rooms:
+            found.append(f"item {item.id} is in {item.location_id}, which is not a room")
+        if item.reveals is not None and item.reveals not in world.facts:
+            # Nothing would break; it would just never be the thing that
+            # ends an arc, silently, which is the worst kind of wrong.
+            found.append(f"item {item.id} reveals {item.reveals}, which is not a fact")
+        if not item.text.strip():
+            found.append(f"item {item.id} has nothing to read")
     for character in characters.values():
         if character.location_id not in world.rooms:
             found.append(f"{character.id} starts in {character.location_id}, which is not a room")
