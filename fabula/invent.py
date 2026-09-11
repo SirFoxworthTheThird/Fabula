@@ -61,6 +61,83 @@ BEGINS = Scene.model_fields["start_time"].default
 EXEMPLAR = {"ashgrove", "elena rey", "tomas rey", "the broken music box", "the dinner"}
 
 
+# What kind of thing the room is circling, and therefore what story this
+# is. Every generated world used to be the same one — somebody is hiding
+# something, and the morning after it came out — whatever the premise
+# asked for. A heist got it. A love story got it. The shipped worlds
+# being quiet literary drama is the same mistake from the other side.
+#
+# The vocabulary never leaves this module, exactly as the trigger keys
+# never do. A shape the model invents is not a story the engine cannot
+# play, though: it is only a brief, so an unrecognised one falls back to
+# the first rather than raising. Nothing downstream branches on it —
+# every shape compiles to the same YAML, because the difference between
+# a heist and a confession is what people are holding, not what the
+# engine does with it.
+#
+# All four are one-to-many, and that is not a style choice. Withholding
+# is not audience-aware — a character pressed on something they protect
+# deflects whoever asked — so a secret is kept from *the room*, never
+# from one person in it. Which means the player is always the one it is
+# being kept from, and "you are on the crew" is a shape this engine
+# cannot play. `a conspiracy` is the version it can: you are the one
+# nobody is telling.
+DEFAULT_SHAPE = "a secret"
+
+SHAPES: dict[str, dict[str, str]] = {
+    "a secret": {
+        "is": "Somebody did something, or let something happen, and has never said so. "
+              "The thing itself is small and particular — an object, an afternoon, a "
+              "letter — and what it costs is not.",
+        "held": "One character keeps it. Everybody else, the player included, does not "
+                "know it exists.",
+        "after": "the morning after it was finally said",
+    },
+    "a conspiracy": {
+        "is": "Everybody in the room but you has agreed on something, and is being "
+              "careful in front of you. The thing is a plan or an arrangement, already "
+              "made, with a time on it.",
+        "held": "Two or three characters keep the same one thing — all of them protect "
+                "it. The player is the one it is being kept from, and is the only "
+                "person in the room who does not know.",
+        "after": "the morning after you worked it out: the one where they went through "
+                 "with it, and the one where they did not",
+    },
+    "a wanting": {
+        "is": "Somebody has wanted to say something to you for a long time and has not. "
+              "The thing being held back is about the player — how this person feels, "
+              "what they decided, what they have been waiting for.",
+        "held": "One character keeps it, and it is about the player. Nobody else in the "
+                "room is holding anything.",
+        "after": "the morning after they said it: the one where it was heard, and the "
+                 "one where it was not",
+    },
+    "a danger": {
+        "is": "Something is wrong with this place, and one person knows what. The thing "
+              "is a fact about the building, the weather, the water, the road out — "
+              "something that will not wait.",
+        "held": "One character knows and has not said, because saying it starts "
+                "something. Nobody else knows, and the player least of all.",
+        "after": "the morning after it was said out loud: the one where it was in time, "
+                 "and the one where it was not",
+    },
+}
+
+SHAPE_SYSTEM = """You are told a premise for a roleplaying story and you say what kind of story it is. Answer with one JSON object and nothing else:
+
+{"shape": "a secret"}
+
+The only answers allowed are:
+
+- "a secret" — one person did something, or let something happen, and has never said so. Guilt, shame, a thing that came apart. Families, old friends, houses.
+- "a conspiracy" — several people have agreed on something and are being careful in front of one who has not been told. Heists, jobs, cons, mutinies, a room that goes quiet when somebody walks in. A plan going wrong is still a plan: this is the answer for anything with a crew in it.
+- "a wanting" — somebody has wanted to say something to another person for a long time and has not. Love, apology, goodbye, a question they have been carrying.
+- "a danger" — something is wrong with the *place*, and one person knows what. Storms, sickness, a building, the water, a thing in the dark. Not a plan that went wrong: a place that is not safe.
+
+The test is what is being kept quiet and by how many people. One person with a past: "a secret". Several people with a plan: "a conspiracy". One person with a feeling: "a wanting". One person who knows the place is not safe: "a danger"."""
+
+
+
 class CannotInvent(RuntimeError):
     """The model did not return a world that could be made playable."""
 
@@ -73,6 +150,11 @@ class Invented:
     title: str
     scene: str
     opening: str = ""
+    # What kind of story it decided this was. Reported rather than only
+    # acted on: a premise that asked for a heist and got a confession is
+    # a thing somebody should be told, and the shape is the one place
+    # that goes wrong quietly.
+    shape: str = DEFAULT_SHAPE
     repaired: list[str] = field(default_factory=list)
     dropped: list[str] = field(default_factory=list)
 
@@ -132,7 +214,7 @@ That example is the *shape*, from a different story. Design a new world for the 
 Rules that matter:
 - Three or four rooms, joined by `adjacent` so somebody can walk between them. Small places: a scene is people in rooms, not a map.
 - Two to four characters, one of whom is the player. The player protects nothing: they are the one who does not know.
-- One or two secrets, each protected by exactly one character who is NOT the player.
+- One or two secrets. Who keeps them is in the brief you are given; whoever it is, it is never the player. The player is the one it is being kept from.
 - A secret's keywords are the exact phrases somebody would say out loud to name the thing itself. They must be particular to it: never the name of a room, never a single ordinary word like "window" or "money". "the second key" is a keyword; "key" is not.
 - A room description must never contain any of the secrets' keywords. The room is where the story happens, not where it is told.
 - No description or persona may say what the player thinks or feels."""
@@ -152,6 +234,27 @@ Rules that matter:
 - The opening is read by the player and by nobody else, so it may say what only they would know. It must never contain a secret's keywords: they do not know them.
 - The opening must not say what any other character is thinking or hiding.
 - Everybody in the cast gets a position. Put the player in a room with at least one other person."""
+
+
+def _shape(premise: str, llm: LLMClient) -> str:
+    """What kind of story the premise is asking for.
+
+    One extra call, on the writing model rather than the cheap one: it is
+    one word, but it is the word that decides what the whole world is,
+    and a wrong genre is not something `/reveal` shows you a turn later.
+
+    Never fatal. A shape is a brief, and a premise that could not be
+    classified still gets a story — the one every premise used to get.
+    """
+    try:
+        answered = _ask(
+            llm, SHAPE_SYSTEM, f"The story: {premise}\n\nWhat kind is it?",
+            key="invent:shape", tries=2,
+        )
+    except CannotInvent:
+        return DEFAULT_SHAPE
+    said = str(answered.get("shape") or "").strip().lower()
+    return said if said in SHAPES else DEFAULT_SHAPE
 
 
 def _distinctive(keyword: str, rooms: dict) -> bool:
@@ -265,7 +368,14 @@ def invent(
     if not premise:
         raise CannotInvent("say what the story is about")
 
-    asked = f"The story: {premise}\n\nDesign the setting."
+    shape = _shape(premise, llm)
+    circling = SHAPES[shape]
+    asked = (
+        f"The story: {premise}\n\n"
+        f"What the room is circling: {circling['is']}\n"
+        f"Who is holding it: {circling['held']}\n\n"
+        "Design the setting."
+    )
     drafted = _ask(llm, WORLD_SYSTEM, asked, key="invent:world")
     if _is_the_example(drafted):
         drafted = _ask(
@@ -291,6 +401,7 @@ def invent(
         world_dir = Path(worlds_root) / f"{world_id}_{suffix}"
 
     built = _build(drafted, premise, llm, player_name)
+    built["shape"] = shape
 
     rooms = ", ".join(room["name"] for room in built["rooms"].values())
     who = "; ".join(
@@ -306,7 +417,8 @@ def invent(
         f"Rooms: {rooms}\n"
         f"Who is in it: {who}\n"
         f"The player is {built['player_name']}.\n"
-        f"Secrets, which the player does not know: {secrets}\n\n"
+        f"Secrets, which the player does not know: {secrets}\n"
+        f"What the room is circling: {circling['is']}\n\n"
         "Write the opening scene.",
         key="invent:scene",
     )
@@ -348,6 +460,7 @@ def invent(
                 f"The player is {built['player_name']}.\n"
                 f"The scene ends when {ends_on.replace('_', ' ')} is finally said out "
                 f"loud, in {built['rooms'][built['cast'][built['player_id']]['location_id']]['name']}.\n"
+                f"What you are writing is {circling['after']}.\n"
                 f"Whether {seen['name']} was standing there when it came out is what "
                 f"decides which of the two mornings gets played.\n\n"
                 "Write both mornings.",
@@ -997,6 +1110,7 @@ def _write(world_dir: Path, built: dict, scene: dict, premise: str) -> Invented:
         title=built["title"],
         scene=scene_id,
         opening=opening,
+        shape=built.get("shape", DEFAULT_SHAPE),
         repaired=repaired,
         dropped=dropped,
     )

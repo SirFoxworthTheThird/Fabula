@@ -193,6 +193,41 @@ where it satisfies `fact_spoken` before anybody has spoken. Those come back as c
 each gets one rewrite with the forbidden words spelled out, and what still fails is dropped
 rather than shipped. What it had to rewrite or lose is reported, not buried.
 
+**And not every premise is the same story.** Every generated world used to be one: somebody
+is hiding something, and the morning after it came out. A heist got that. A love story got
+that. Which is the same mistake as the five shipped worlds all being quiet literary drama,
+arrived at from the other direction.
+
+So the premise is asked what kind of story it is, from a closed list, and the answer changes
+what the room is circling, who is holding it, and what the two scenes after it are:
+
+| | what is being held | who holds it | and then |
+|---|---|---|---|
+| **a secret** | something somebody did and never said | one of them | the morning after it was said |
+| **a conspiracy** | a plan, already made, with a time on it | all of them but you | they went through with it, or did not |
+| **a wanting** | something somebody has wanted to say *to you* | one of them | it was heard, or it was not |
+| **a danger** | something wrong with the place, that will not wait | the one who knows | it was in time, or it was not |
+
+Measured on the same Qwen2.5-3B the rest of the generator was measured on: **10 premises
+out of 10** classified as intended, at about two seconds a call. The first eight scored
+7/8, and the one it got wrong is the one worth keeping in the prompt — *a heist that goes
+wrong in a hotel kitchen* came back as `a danger`, because "goes wrong" reads as danger.
+Two lines fixed it: a plan going wrong is still a plan, and a danger is a place that is not
+safe rather than a plan that was not.
+
+The vocabulary never leaves `invent.py`, exactly as the trigger keys never do — but unlike
+a trigger key, a shape the model invents is not fatal. It is a brief and nothing branches
+on it: every shape compiles to the same YAML, so an unrecognised one falls back to the
+first rather than losing the world. Which shape it chose is reported, because a heist that
+came out a confession is the failure nothing else reports.
+
+**All four are one-to-many, and that is the engine's grain rather than a preference.**
+Withholding is not audience-aware: somebody pressed on a fact they protect deflects
+*whoever asked*. So a secret is kept from the room, never from one person in it — which
+means the player is always the one it is being kept from, and "you are on the crew" is a
+shape this engine cannot play. `a conspiracy` is the version it can: you are the one
+nobody is telling, and there are three of them.
+
 It also writes the parts that make a scene **escalate rather than converse**: pressures,
 which are the room having its own opinion about how long this can go on, and intentions,
 which are what somebody does while nobody is watching. Both are asked for in plain words —

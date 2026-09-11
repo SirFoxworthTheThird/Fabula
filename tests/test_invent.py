@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from fabula.inspect import complaints
-from fabula.invent import CannotInvent, invent
+from fabula.invent import DEFAULT_SHAPE, SHAPES, CannotInvent, invent
 from fabula.llm import FakeLLM
 from fabula.loader import (
     catalogue,
@@ -111,15 +111,25 @@ class Scripted(FakeLLM):
     engine asks, with something readable."""
 
     def __init__(self, world=None, scene=None, repair="A room, and nothing in it to say.",
-                 extras=None, after=None):
+                 extras=None, after=None, shape=None):
         super().__init__()
         self.world = WORLD if world is None else world
         self.scene = SCENE if scene is None else scene
         self.extras = EXTRAS if extras is None else extras
         self.after = AFTER if after is None else after
         self.repair = repair
+        self.shape = shape
+        # Every brief it was handed, so a test can ask what the shape
+        # actually changed about the questions.
+        self.briefs: dict[str, str] = {}
 
     def complete(self, system: str, prompt: str, key: str | None = None) -> str:
+        if key:
+            self.briefs[key] = prompt
+        if key == "invent:shape":
+            if self.shape is None:
+                return "I would say this is a story about people."
+            return json.dumps({"shape": self.shape})
         if key == "invent:world":
             return "```json\n" + json.dumps(self.world) + "\n```"
         if key == "invent:scene":
@@ -889,3 +899,114 @@ def test_the_mornings_are_chapters_rather_than_starting_points(root):
 
     assert opens == [made.scene], "one way in, and it is the beginning"
     assert len(listed) == 3
+
+
+# --- More than one shape of story ----------------------------------------
+#
+# Every generated world was the same story: somebody is hiding something,
+# and the morning after it came out. A heist got it. A love story got it.
+# Which is the same mistake as the five shipped worlds all being quiet
+# literary drama, arrived at from the other direction.
+
+
+def test_the_premise_is_asked_what_kind_of_story_it_is(root):
+    llm = Scripted(shape="a conspiracy")
+
+    made = invent("a heist that goes wrong in a hotel kitchen", llm, worlds_root=root)
+
+    assert "invent:shape" in llm.briefs
+    assert made.shape == "a conspiracy"
+
+
+def test_the_shape_changes_what_the_world_is_asked_for(root):
+    """It is a brief, not a branch: the same code writes the same YAML
+    either way, and what differs is what the room is told it is
+    circling."""
+    con = Scripted(shape="a conspiracy")
+    want = Scripted(shape="a wanting")
+
+    invent("a heist in a hotel kitchen", con, worlds_root=root)
+    invent("a heist in a hotel kitchen", want, worlds_root=root)
+
+    assert con.briefs["invent:world"] != want.briefs["invent:world"]
+    assert SHAPES["a conspiracy"]["is"] in con.briefs["invent:world"]
+    assert SHAPES["a wanting"]["held"] in want.briefs["invent:world"]
+
+
+def test_the_shape_reaches_the_scene_and_the_morning_after(root):
+    llm = Scripted(shape="a danger")
+
+    invent("the water is wrong at the station", llm, worlds_root=root)
+
+    assert SHAPES["a danger"]["is"] in llm.briefs["invent:scene"]
+    assert SHAPES["a danger"]["after"] in llm.briefs["invent:aftermath"]
+
+
+def test_a_shape_it_made_up_is_not_a_shape(root):
+    """The same discipline as the trigger vocabulary: the list never
+    leaves this module. Unlike a trigger key, a bad one is not fatal —
+    a shape is a brief, so it falls back rather than losing the world."""
+    llm = Scripted(shape="a rollicking caper")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    assert made.shape == DEFAULT_SHAPE
+    assert (made.world_dir / "world.yaml").is_file()
+
+
+def test_a_premise_it_cannot_classify_still_gets_a_story(root):
+    """Scripted answers the shape question with prose when it is not
+    given one, which is what a small model does."""
+    llm = Scripted()
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    assert made.shape == DEFAULT_SHAPE
+    assert made.scene
+
+
+def test_every_shape_says_what_it_is_who_holds_it_and_what_follows():
+    """Three briefs each, because those are the three places the story
+    is decided: the world, the scene, and where it goes."""
+    for name, shape in SHAPES.items():
+        assert set(shape) == {"is", "held", "after"}, name
+        assert all(value.strip() for value in shape.values()), name
+    assert DEFAULT_SHAPE in SHAPES
+
+
+def test_a_conspiracy_leaves_the_player_the_only_one_not_holding_it(root):
+    """The shape that has everybody but one in on it, played through the
+    part that decides who you are. It is not a special case anywhere —
+    the player is whoever protects nothing, which in this shape is the
+    one person being kept in the dark."""
+    everybody_but_one = dict(WORLD)
+    everybody_but_one["characters"] = [
+        {"name": "Dessa Vane", "persona": "Dessa organises things and is calm about it.",
+         "room": "the kitchen", "protects": ["the second key"]},
+        {"name": "Ruben Ott", "persona": "Ruben deflects with jokes and does not sit down.",
+         "room": "the kitchen", "protects": ["the second key"], "reticence": 0.8},
+        {"name": "Inês Cardoso", "persona": "Inês drove, and wants to leave.",
+         "room": "the loading bay", "protects": []},
+    ]
+    everybody_but_one.pop("player", None)
+    llm = Scripted(world=everybody_but_one, shape="a conspiracy")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    cast = load_characters(made.world_dir)
+    player = [c for c in cast.values() if c.is_user]
+    assert len(player) == 1
+    assert player[0].name == "Inês Cardoso", "the one nobody is telling"
+    holding = [c.name for c in cast.values() if c.protects]
+    assert sorted(holding) == ["Dessa Vane", "Ruben Ott"], "and both of them still hold it"
+
+
+def test_the_player_is_the_one_it_is_kept_from_in_every_shape():
+    """Withholding is not audience-aware — somebody pressed on what they
+    protect deflects whoever asked — so a secret is kept from the room
+    rather than from a person, and "you are on the crew" is not a shape
+    this engine can play. Every brief has to be one-to-many."""
+    for name, shape in SHAPES.items():
+        held = shape["held"].lower()
+        assert "player" in held, name
+        assert "the player keeps" not in held, name

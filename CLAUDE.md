@@ -147,10 +147,27 @@ there for it. That branch is built in `invent.py` and never asked for — the mo
 the two situations in words and writes the prose — which is the one place the asymmetry
 pays a *story* back rather than only a projection.
 
-What a generated world still does not have against a hand-written one: no goals, no items,
-and only ever the one shape of story — a secret, and the morning after it came out. Every
-premise gets that shape, which is the same mistake as the shipped worlds all being quiet
-literary drama, arrived at from the other direction.
+~~And only ever the one shape of story.~~ The premise is now asked what kind it is, from a
+closed list — **a secret**, **a conspiracy**, **a wanting**, **a danger** — and the answer
+changes what the room is circling, who is holding it, and what the two scenes after it are.
+It is a brief and nothing branches on it: every shape compiles to the same YAML, which is
+why an unrecognised one falls back rather than losing the world. Measured on the 3B: 10 of
+10 premises classified as intended, two seconds a call. The one that missed first time —
+"a heist that goes wrong" read as a danger — is the reason the prompt now says that a plan
+going wrong is still a plan.
+
+The constraint that shaped the list is worth carrying: **withholding is not
+audience-aware.** Somebody pressed on a fact they protect deflects whoever asked, so a
+secret is kept from *the room*, never from one person in it. Which means the player is
+always the one it is being kept from, and "you are on the crew" is a story this engine
+cannot tell. `a conspiracy` is the version it can — you are the one nobody is telling.
+Making it tell the other one would mean audience-aware protection, which is a real feature
+and not a prompt.
+
+What a generated world still does not have against a hand-written one: no goals and no
+items. Goals are the cheaper of the two and the one that would show: they raise a bid when
+their subject comes up and close when it is out, so a cast with none is a cast that only
+reacts.
 
 ## What the rest of the shelf has
 

@@ -420,6 +420,10 @@ def _invent(args, llm, parser) -> tuple[str, str]:
     except CannotInvent as refused:
         parser.error(f"could not make that into a world: {refused}")
     print(f"  {made.title} — {made.world_dir}")
+    # What it decided the premise was asking for. Worth one line: a
+    # heist that came out a confession is the failure nothing else
+    # reports, because every shape produces a world that plays.
+    print(f"  shaped as: {made.shape}")
     # Said out loud rather than buried: a description that had to be
     # rewritten, or lost, is the difference between the story you asked
     # for and the one that is playable.
