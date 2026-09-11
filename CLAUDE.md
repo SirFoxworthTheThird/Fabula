@@ -164,10 +164,12 @@ cannot tell. `a conspiracy` is the version it can — you are the one nobody is 
 Making it tell the other one would mean audience-aware protection, which is a real feature
 and not a prompt.
 
-What a generated world still does not have against a hand-written one: no goals and no
-items. Goals are the cheaper of the two and the one that would show: they raise a bid when
-their subject comes up and close when it is out, so a cast with none is a cast that only
-reacts.
+~~And no goals.~~ Done, and free: they come back from the complications call that was
+already being made. The one holding it wants to get through the evening without it coming
+up; the one who has noticed wants to know. What a generated world still does not have
+against a hand-written one is **items** — things in a room that carry a fact, which is the
+one remaining way a hand-written world can put a secret somewhere rather than in
+somebody.
 
 ## What the rest of the shelf has
 

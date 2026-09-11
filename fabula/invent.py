@@ -299,6 +299,12 @@ COMPLICATIONS_SYSTEM = """You add the complications to a story somebody else has
   "intentions": [
     {"who": "Tomas Rey", "what": "checks the seam where he glued it, and puts it back",
      "where": "the kitchen", "after_minutes": 20, "alone": true}
+  ],
+  "goals": [
+    {"who": "Tomas Rey", "wants": "to get through the evening without it coming up",
+     "about": "the broken music box", "how_much": 0.8},
+    {"who": "Maria Rey", "wants": "to find out what her brother is being strange about",
+     "about": "the broken music box", "how_much": 0.5}
   ]
 }
 
@@ -308,7 +314,9 @@ Rules that matter:
 - `while_unsaid` is the name of a secret, or null: the pressure only fires while nobody has said it out loud.
 - An intention is something one person does when nobody is watching, in one room, at a set time. `alone: true` means it waits for the room to empty.
 - Never give the player an intention. They are played by somebody who is here.
-- Two or three pressures, one or two intentions."""
+- A goal is a standing want, not a reflex: what somebody is still trying to do about the thing all evening. `about` is the name of a secret, and `wants` must never contain its exact words.
+- Somebody keeping a secret wants it to stay quiet; somebody who has noticed wants to know. Both are goals. Never give the player one.
+- Two or three pressures, one or two intentions, one goal each for the people who have a reason to have one."""
 
 
 # Where the story goes once the secret is out. The branch is not asked
@@ -833,6 +841,54 @@ def _intentions(built: dict, repaired: list, dropped: list) -> dict[str, list[di
     return theirs
 
 
+def _goals(built: dict, repaired: list, dropped: list) -> dict[str, list[dict]]:
+    """What somebody is still trying to do about it, per character.
+
+    A generated cast used to have none, which made it a cast that only
+    reacts: a goal raises the bid when its subject comes up and closes
+    once the subject is out, so it is the difference between somebody
+    who is keeping a secret and somebody who merely happens to hold one.
+
+    Free, in calls — it comes back with the pressures and the intentions,
+    from the one question that was already being asked.
+    """
+    facts, cast = built["facts"], built["cast"]
+    by_name = {person["name"].strip().lower(): pid for pid, person in cast.items()}
+    by_fact = {fact_id.replace("_", " "): fact_id for fact_id in facts}
+    for fact_id, fact in facts.items():
+        for keyword in fact["keywords"]:
+            by_fact[keyword.strip().lower()] = fact_id
+    theirs: dict[str, list[dict]] = {}
+
+    for drafted in (built.get("extras") or {}).get("goals") or []:
+        if not isinstance(drafted, dict):
+            continue
+        person_id = by_name.get(str(drafted.get("who") or "").strip().lower())
+        # Never the player's. A want the engine raises bids on belongs to
+        # somebody the engine is playing.
+        if person_id is None or person_id == built["player_id"]:
+            continue
+        # A goal about a fact that does not exist stays open forever and
+        # raises nobody's bid, silently — `inspect` refuses the world for
+        # it, so it is resolved here rather than shipped.
+        about = by_fact.get(str(drafted.get("about") or "").strip().lower())
+        wants = _clean(
+            str(drafted.get("wants") or ""), facts, built["llm"],
+            f"{person_id}'s goal", repaired,
+        )
+        if not wants:
+            dropped.append(f"something {cast[person_id]['name']} wanted")
+            continue
+        mine = theirs.setdefault(person_id, [])
+        mine.append({
+            "id": f"goal_{len(mine) + 1}",
+            "description": wants,
+            "priority": _clamp(drafted.get("how_much"), 0.1, 1.0, 0.5),
+            **({"about": about} if about else {}),
+        })
+    return theirs
+
+
 def _positions(named: dict | None, built: dict) -> dict[str, str]:
     """Who starts where, by name, resolved to ids that exist.
 
@@ -1041,6 +1097,7 @@ def _write(world_dir: Path, built: dict, scene: dict, premise: str) -> Invented:
     if pressures:
         _save(world_dir / "pressures.yaml", pressures)
     intentions = _intentions(built, repaired, dropped)
+    goals = _goals(built, repaired, dropped)
 
     for person_id, person in built["cast"].items():
         persona = person["persona"]
@@ -1060,6 +1117,7 @@ def _write(world_dir: Path, built: dict, scene: dict, premise: str) -> Invented:
                 "persona": persona,
                 "traits": person["traits"],
                 "protects": person["protects"],
+                "goals": goals.get(person_id, []),
                 "intentions": intentions.get(person_id, []),
                 "relationships": person["relationships"],
                 "location_id": person["location_id"],

@@ -228,6 +228,15 @@ means the player is always the one it is being kept from, and "you are on the cr
 shape this engine cannot play. `a conspiracy` is the version it can: you are the one
 nobody is telling, and there are three of them.
 
+**And the cast wants things.** A generated world used to have no goals at all, which made
+it a cast that only reacts — a goal raises the bid when its subject comes up and closes
+once the subject is out, so it is the difference between somebody *keeping* a secret and
+somebody who merely happens to hold one. They come back from the question that was already
+being asked, so they cost nothing: the person holding it wants to get through the evening
+without it coming up, and the person who has noticed wants to know. A goal naming a fact
+this world does not have is resolved to nothing rather than shipped, because one that
+points at a missing fact stays open for ever and raises nobody's bid, silently.
+
 It also writes the parts that make a scene **escalate rather than converse**: pressures,
 which are the room having its own opinion about how long this can go on, and intentions,
 which are what somebody does while nobody is watching. Both are asked for in plain words —

@@ -81,6 +81,14 @@ EXTRAS = {
         {"who": "Ruben Ott", "what": "checks his coat pocket without taking anything out",
          "where": "the kitchen", "after_minutes": 20, "alone": True},
     ],
+    "goals": [
+        {"who": "Ruben Ott", "wants": "to get to the end of the night without being asked",
+         "about": "the second key", "how_much": 0.8},
+        {"who": "Inês Cardoso", "wants": "to find out why the van is not where it was left",
+         "about": "the second key", "how_much": 0.5},
+        # Prose-only, and not the player's: Dessa is who you play.
+        {"who": "Inês Cardoso", "wants": "to be told what is going on", "about": None},
+    ],
 }
 
 
@@ -1010,3 +1018,83 @@ def test_the_player_is_the_one_it_is_kept_from_in_every_shape():
         held = shape["held"].lower()
         assert "player" in held, name
         assert "the player keeps" not in held, name
+
+
+# --- What a generated cast is still trying to do -------------------------
+#
+# A generated world had no goals, which made it a cast that only reacts:
+# a goal raises the bid when its subject comes up and closes once the
+# subject is out, so it is the difference between somebody keeping a
+# secret and somebody who merely happens to hold one.
+
+
+def test_a_generated_cast_has_something_it_wants(root):
+    llm = Scripted(shape="a secret")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    cast = load_characters(made.world_dir)
+    wanting = {c.name: [g.description for g in c.goals] for c in cast.values() if c.goals}
+    assert wanting, "nobody in it wants anything"
+
+
+def test_a_goal_names_a_fact_the_world_actually_has(root):
+    """`about` is what makes a goal mechanical rather than only prose. A
+    goal about a fact this world does not have stays open for ever and
+    raises nobody's bid, silently — and `inspect` refuses the world for
+    it, so it is resolved here rather than shipped."""
+    llm = Scripted(shape="a secret")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    world = load_world(made.world_dir)
+    for character in load_characters(made.world_dir).values():
+        for goal in character.goals:
+            assert goal.about is None or goal.about in world.facts, goal
+
+
+def test_a_goal_about_nothing_in_particular_is_still_a_goal(root):
+    """Dessa's `about` is None in the fixture. Prose-only goals do not
+    close on their own and do not raise a bid, but they are still what
+    somebody is trying to do, and dropping them would lose it."""
+    llm = Scripted(shape="a secret")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    described = [
+        goal.description
+        for character in load_characters(made.world_dir).values()
+        for goal in character.goals
+    ]
+    assert any("told what is going on" in d for d in described)
+
+
+def test_the_player_is_never_given_one(root):
+    """A want the engine raises bids on belongs to somebody the engine
+    is playing."""
+    theirs = dict(EXTRAS)
+    theirs["goals"] = list(EXTRAS["goals"]) + [
+        {"who": "Dessa Vane", "wants": "to get out of the building", "about": None},
+    ]
+    llm = Scripted(extras=theirs, shape="a secret")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    player = [c for c in load_characters(made.world_dir).values() if c.is_user]
+    assert player and player[0].goals == []
+
+
+def test_a_goal_that_names_the_secret_is_rewritten_or_lost(root):
+    """The same rule as every other piece of authored prose: a goal that
+    says the words hands the secret to whoever reads the context."""
+    theirs = dict(EXTRAS)
+    theirs["goals"] = [
+        {"who": "Ruben Ott", "wants": "to keep quiet about the second key", "about": None},
+    ]
+    llm = Scripted(extras=theirs, repair="to keep quiet about what he did", shape="a secret")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    for character in load_characters(made.world_dir).values():
+        for goal in character.goals:
+            assert "second key" not in goal.description.lower()
