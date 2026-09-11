@@ -195,11 +195,27 @@ what people say; do not "improve" it by threading it into `generate_utterance`. 
 guard of its own, because the narration it influences is still checked by `invents_a_fact`
 afterwards.
 
-And the thing worth remembering when picking what to do next: the more interesting list is
-not what they have that we lack, but what this design makes possible that one model
-puppeting a cast cannot do — somebody doing something in another room while you are not
-there, and you finding out later from how they behave. The machinery exists (intentions,
-off-screen resolution, `/wait`) and the interface barely mentions it.
+~~**And nothing ever happens anywhere else.**~~ The thing this design makes possible that
+one model puppeting a cast cannot do — somebody acting in another room while you are not
+there — was built to the last piece and never ran once. Measured across fourteen player
+lines in two worlds: zero time skips, zero off-screen actions, eleven authored intentions
+waiting. `advance_time` was reachable only from a button the player had no reason to
+press, and nothing anywhere sent a character out of the room, so the cast converged on the
+player in the first turn and every intention became unreachable — an intention happens
+*somewhere*, and they were all here.
+
+Two rules came out of it that are worth more than the feature:
+
+**A mechanism with no trigger is not a feature, it is a fixture.** Every piece worked in
+isolation and had tests. What nothing tested was whether the ordinary path through the
+engine ever reached them. Before building the next deep thing, play fourteen lines and
+count how many times it fired.
+
+**The cast converging on the player is the engine's default and it is wrong.** Pressures
+fetch people *to* you; nothing sends anybody away. That shows up as rooms that empty of
+meaning, maps nobody uses, and a world that is really one room with a backdrop. Anything
+that gives characters somewhere else to be is worth more than another mechanic in the room
+you are already in.
 
 ## Not a game
 

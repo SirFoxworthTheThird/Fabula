@@ -82,7 +82,16 @@ def test_a_second_model_is_optional_and_absent_by_default(pair):
 def test_most_of_a_turn_goes_to_the_model_nobody_reads(pair):
     """The measurement the split exists for. If this ever inverts, the
     feature has stopped paying for itself and should be reconsidered
-    rather than kept out of habit."""
+    rather than kept out of habit.
+
+    *Most*, not any particular multiple. A reading is per character who
+    perceived the line, so the ratio is really a measure of how many
+    people are in earshot: 1.7 filed per written on `ashgrove` over eight
+    lines, 1.2 on `winterlight` with four people in one room, and 3.4 on
+    `ashgrove` back when the cast converged on the player and never left
+    the room again. Asserting one of those numbers was asserting that
+    nobody ever walks out.
+    """
     writes, files = pair
     session = Session.open(
         ASHGROVE, "the_dinner", llm=Routed(writes, files),
@@ -91,7 +100,7 @@ def test_most_of_a_turn_goes_to_the_model_nobody_reads(pair):
     for _ in range(3):
         session.say("Say something into the room.")
 
-    assert len(files.keys) > len(writes.keys) * 2, (
+    assert len(files.keys) > len(writes.keys), (
         f"{len(files.keys)} filed against {len(writes.keys)} written"
     )
     assert all(is_filing(k) for k in files.keys)

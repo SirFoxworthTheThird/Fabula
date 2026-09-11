@@ -387,6 +387,62 @@ How a story is played is stored with the story, not with the world — the same 
 one you finish or one you stay in — so resuming it cannot silently change it, and a story
 saved before this existed comes back with its scenes and endings intact.
 
+### The house carries on while you are in another room
+
+This is the one thing a cast of separate agents can do that one model puppeting all of
+them cannot. Somebody acts while you are not there, and you find out afterwards from what
+you walk into.
+
+Every piece of it was built — `intentions` say what a character means to do and where,
+`advance_time` resolves what came of them off screen, `materialize` turns a coarse stub
+into what is visible now — and none of it ever ran. Measured across fourteen player lines
+in `ashgrove/the_dinner` and `winterlight/the_manifest`: **zero** time skips and **zero**
+off-screen actions. Eleven authored intentions across five worlds, waiting for somebody to
+guess.
+
+Two reasons, and the second was the real one:
+
+* **Nothing moved time.** `advance_time` was reachable from one place — the player
+  pressing *let thirty minutes pass*, a button whose consequence they have no reason to
+  expect. Now the engine moves it when the room has gone quiet. That is a weaker test than
+  the one that decides whether to *invent* a complication, and deliberately: waiting for
+  the story to go slack before anybody may leave the room is the wrong bar for somebody
+  going to do what the author already said they would. At the stricter bar, `winterlight`
+  — four agents, nine intentions, the world this is for — never moved once.
+* **Nothing sent anybody out of the room.** The cast converged on the player in the first
+  turn and stood there, which made every intention unreachable, because an intention
+  happens *somewhere* and they were all here. Now one person per lull goes where the thing
+  they meant to do is — never into the room the player is standing in, and never the last
+  person in the room with them.
+
+Four rules hold it in place, three of them found by playing it:
+
+* **Time the engine takes is never time the player would have been asked about.** Past
+  `LARGE_SKIP_MINUTES` a skip stays something they request. Spec §8: time is not
+  something they lose without noticing.
+* **An intention resolves only where its character actually is.** Resolution used to
+  compare where the *character* was against where the *player* was and never against where
+  the *intention* was — so Maria sorted the letters in a room she was not in, and with the
+  player sitting in the study, in front of them. One question now, asked in one place.
+* **The house moves after the turn, not inside it.** Both other placements were measured
+  and both were wrong: in the middle of the turn loop it either takes the beat the room was
+  about to get — the narrator lost the held-back beat it exists for — or buys the director
+  an extra round to fire a pressure in.
+* **It does not spend the author's pressures faster.** `turns_elapsed` is counted in log
+  positions, so anything that appends events quietly ramps every pressure in every world.
+  Everything the house appends is marked and discounted: time moving is not the scene
+  taking a turn.
+
+And then you walk in, and the room tells you. Arriving somewhere now expands whatever
+coarse stubs are waiting in it — that used to be behind the *look around* button, in a
+room you had no reason to suspect anything about, which is most of why this read as
+missing even when it worked.
+
+Cost: **no model calls of its own.** The departure, the skip and the resolution are all
+templated. What it changes is cheaper still — with the cast dispersed, fewer people
+perceive each line, so fewer memories are filed. On `ashgrove` over fourteen player lines
+that is 152 filing calls before and 69 after, for the same number of written lines.
+
 ### Taking it back
 
 Every app on this shelf has some version of it — swipe for another answer, edit the line,
@@ -869,6 +925,15 @@ on", stored as a belief and surfaced only by `/reveal` — plus the summaries th
 context, the classifications whose every referent is checked afterwards, and the
 director's beat, which is one id out of a list the engine handed it and refuses anything
 else from. The 11 are the product.
+
+The ratio is not a constant, and what moves it is **how many people are in earshot**: a
+reading is per character who perceived the line, so the same turn in a fuller room files
+more. Measured over eight player lines — `ashgrove`, two agents, 1.7 filed per written;
+`winterlight`, four agents in one room, 1.2. And it moved again when the engine learned to
+let people leave the room: with the cast dispersed across the house, fewer people perceive
+each line, which took `ashgrove` over fourteen lines from 3.4 to 1.5. Filing is still the
+larger half of every turn, which is what the split rests on — but "most of a turn" is the
+claim, not any particular multiple.
 
 So `--fast-model` names a cheaper model for the first group, and `--fast-api-base` says
 where it lives when that is somewhere else — a hosted model writing, a local one filing:
