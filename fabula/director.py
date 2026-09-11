@@ -1075,11 +1075,14 @@ class Director:
         expect. Eleven authored intentions across five worlds, waiting
         for somebody to guess.
 
-        So time moves on its own when the scene has gone quiet — the same
-        measure that decides the engine may invent a complication, and
-        checked *before* that, because an intention the author wrote is
-        worth more than a situation a model made up and there is no
-        reason to make something up while one is still pending.
+        So time moves on its own when the room has gone quiet. Its own
+        measure rather than the one that decides whether to *invent* a
+        complication: that bar is high because inventing is expensive and
+        unauthored, and waiting for the story to go slack before anybody
+        may leave the room turned out to be the wrong bar for somebody
+        going to do what the author already said they would. Measured at
+        the stricter one, `winterlight` — four agents, nine intentions,
+        the world this is for — never moved once in fourteen lines.
 
         Two limits. Only a jump the player would not have been asked
         about: past that, spec §8 says time is not something they lose
@@ -1111,7 +1114,7 @@ class Director:
         that made a character *walk* there, so the room they meant to go
         to may as well not have been written.
 
-        One person per beat, and never into the room the player is
+        One person per turn, and never into the room the player is
         standing in: going somewhere to do a thing in front of them is
         not going somewhere. An ordinary `arrival`, built the same way
         the player's own move is, so the rooms that would hear it hear it
