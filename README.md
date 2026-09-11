@@ -215,6 +215,14 @@ wrong in a hotel kitchen* came back as `a danger`, because "goes wrong" reads as
 Two lines fixed it: a plan going wrong is still a plan, and a danger is a place that is not
 safe rather than a plan that was not.
 
+Then playing the whole thing through found the other half. Asked end to end for that heist,
+the 3B chose `a conspiracy` correctly, wrote a playable hotel in 321 seconds — and gave the
+secret to **one** person, which is the shape it had just been told not to write. So the
+topology is not asked for any more. A shape that says everybody is in on it has the engine
+hand the fact to every character who is not the player, because *who holds it* is the whole
+difference between a conspiracy and a confession, and that is the kind of claim this
+generator makes true rather than hopes for.
+
 The vocabulary never leaves `invent.py`, exactly as the trigger keys never do — but unlike
 a trigger key, a shape the model invents is not fatal. It is a brief and nothing branches
 on it: every shape compiles to the same YAML, so an unrecognised one falls back to the

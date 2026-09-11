@@ -975,11 +975,43 @@ def test_a_premise_it_cannot_classify_still_gets_a_story(root):
 
 def test_every_shape_says_what_it_is_who_holds_it_and_what_follows():
     """Three briefs each, because those are the three places the story
-    is decided: the world, the scene, and where it goes."""
+    is decided: the world, the scene, and where it goes. `holders` is the
+    fourth and is not a brief — it is the one part of a shape the engine
+    makes true rather than asks for."""
     for name, shape in SHAPES.items():
-        assert set(shape) == {"is", "held", "after"}, name
+        assert {"is", "held", "after"} <= set(shape), name
+        assert set(shape) <= {"is", "held", "after", "holders"}, name
         assert all(value.strip() for value in shape.values()), name
     assert DEFAULT_SHAPE in SHAPES
+
+
+def test_a_conspiracy_is_made_true_rather_than_asked_for(root):
+    """Measured on the 3B: told in plain words that two or three of them
+    keep the same one thing, it designed a hotel heist and gave the
+    secret to one person — the shape it had just been told not to write.
+    The topology is the whole difference between a conspiracy and a
+    confession, so the engine disposes."""
+    one_holder = dict(WORLD)  # Ruben alone protects the second key
+    llm = Scripted(world=one_holder, shape="a conspiracy")
+
+    made = invent("a heist in a hotel kitchen", llm, worlds_root=root)
+
+    cast = load_characters(made.world_dir)
+    others = [c for c in cast.values() if not c.is_user]
+    assert len(others) > 1
+    assert all(c.protects for c in others), "somebody in the room is not in on it"
+
+
+def test_and_only_that_shape_does_it(root):
+    """A secret is one person's. Handing it to the whole cast would make
+    every story the same one from the other direction."""
+    llm = Scripted(shape="a secret")
+
+    made = invent("a family dinner nobody mentions March at", llm, worlds_root=root)
+
+    cast = load_characters(made.world_dir)
+    holding = [c for c in cast.values() if c.protects]
+    assert len(holding) == 1
 
 
 def test_a_conspiracy_leaves_the_player_the_only_one_not_holding_it(root):

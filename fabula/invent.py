@@ -100,6 +100,7 @@ SHAPES: dict[str, dict[str, str]] = {
         "held": "Two or three characters keep the same one thing — all of them protect "
                 "it. The player is the one it is being kept from, and is the only "
                 "person in the room who does not know.",
+        "holders": "everybody",
         "after": "the morning after you worked it out: the one where they went through "
                  "with it, and the one where they did not",
     },
@@ -408,7 +409,7 @@ def invent(
             break
         world_dir = Path(worlds_root) / f"{world_id}_{suffix}"
 
-    built = _build(drafted, premise, llm, player_name)
+    built = _build(drafted, premise, llm, player_name, shape)
     built["shape"] = shape
 
     rooms = ", ".join(room["name"] for room in built["rooms"].values())
@@ -548,7 +549,10 @@ def _unique(name: str, taken: set[str], fallback: str) -> str:
     return made
 
 
-def _build(drafted: dict, premise: str, llm: LLMClient, player_name: str) -> dict:
+def _build(
+    drafted: dict, premise: str, llm: LLMClient, player_name: str,
+    shape: str = DEFAULT_SHAPE,
+) -> dict:
     """Turn what the model proposed into ids and references that resolve.
 
     Nothing here trusts a name to be an id, a room to exist, or the model
@@ -668,6 +672,17 @@ def _build(drafted: dict, premise: str, llm: LLMClient, player_name: str) -> dic
     for fact_id in facts:
         if not any(fact_id in cast[cid]["protects"] for cid in others):
             cast[others[0]]["protects"].append(fact_id)
+
+    # A shape that says everybody is in on it gets everybody in on it.
+    # Measured on the 3B: told in plain words that two or three of them
+    # keep the same one thing, it designed a hotel heist and gave the
+    # secret to one person, which is the shape it was told not to write.
+    # The topology is the whole difference between a conspiracy and a
+    # confession, so it is made true here rather than asked for — the
+    # model proposes, and this is one of the things the engine disposes.
+    if SHAPES.get(shape, {}).get("holders") == "everybody":
+        for cid in others:
+            cast[cid]["protects"] = list(facts)
 
     # Everybody knows of everybody: relationships are what regard moves
     # on, and a cast of strangers with no entries never moves at all.

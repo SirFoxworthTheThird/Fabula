@@ -156,6 +156,13 @@ why an unrecognised one falls back rather than losing the world. Measured on the
 "a heist that goes wrong" read as a danger — is the reason the prompt now says that a plan
 going wrong is still a plan.
 
+The half that only showed up end to end: the 3B **chose** the conspiracy correctly and then
+**built** a confession, giving the secret to one person after being told in plain words to
+give it to three. Which is the rule again, and it keeps needing relearning — *a structural
+claim gets a structural guarantee.* If a shape says everybody is in on it, hand them the
+fact in code. Anything you can only ask a prompt for, a small model will eventually not
+do.
+
 The constraint that shaped the list is worth carrying: **withholding is not
 audience-aware.** Somebody pressed on a fact they protect deflects whoever asked, so a
 secret is kept from *the room*, never from one person in it. Which means the player is
