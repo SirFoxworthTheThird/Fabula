@@ -443,6 +443,38 @@ templated. What it changes is cheaper still — with the cast dispersed, fewer p
 perceive each line, so fewer memories are filed. On `ashgrove` over fourteen player lines
 that is 152 filing calls before and 69 after, for the same number of written lines.
 
+**And it pays back in behaviour**, which is the part that was only ever a claim. Played
+against a local Qwen2.5-3B, `ashgrove/the_dinner`, three lines of the player pressing
+Tomás while Maria sat there:
+
+```
+[14] arrival   Maria  study   | a door somewhere near the study      <- all you perceive
+[15] time_skip        kitchen | (30 minutes pass, and you feel every one of them)
+[16] action    Maria  study   | Maria works through the last of the letters   <- not yours
+
+    you go to the study
+
+[18] narration        study   | Colder than the rest of the house, unused for years.
+[21] utterance Maria  study   | I gathered most of the letters.
+[22] narration        study   | Maria's stack of letters, arranged in chronological
+                                order, occupies the corner of the study desk.
+
+    you: What have you been doing?
+
+[26] utterance Maria  study   | I've been sorting through them.
+```
+
+Three things in that, and the first is the one worth having. **You do not see her go —
+you hear a door.** The arrival is an ordinary event at `audibility: adjacent`, so from the
+kitchen it degrades to "a door somewhere near the study", through the same projection
+every other line goes through and with no special case for it. Then the room tells you
+what she did before she does. Then she does, unprompted, and again when asked.
+
+The small model is sloppy around it — a line about the kitchen being a mess that answers
+nothing, an "as you suggested" nobody suggested — but that is the 3B, not the mechanism.
+What was being tested is whether an off-screen action becomes something a character
+carries, and it does: it is in her beliefs before you walk in, and in her mouth after.
+
 ### Taking it back
 
 Every app on this shelf has some version of it — swipe for another answer, edit the line,

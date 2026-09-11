@@ -217,6 +217,12 @@ meaning, maps nobody uses, and a world that is really one room with a backdrop. 
 that gives characters somewhere else to be is worth more than another mechanic in the room
 you are already in.
 
+Measured on a 3B once it ran, and the payoff is real: Maria leaves, you perceive it only as
+"a door somewhere near the study", she finishes the letters where you are not, and when you
+walk into the study the room shows you the stack before she mentions it — and then she
+mentions it unprompted. The perception grading that was built for secrets turns out to be
+what makes *this* good: you are not told she left, you hear a door.
+
 ## Not a game
 
 Scenes, end conditions and an onward button are game furniture. Some stories are better
