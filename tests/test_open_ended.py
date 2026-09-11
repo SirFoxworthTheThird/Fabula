@@ -271,9 +271,19 @@ def test_an_arc_does_not_ramp_toward_an_ending_it_will_never_reach(fake_llm):
 
     # And the shape of it: an arc that ramps spends more of itself the
     # longer it runs. This one does not get louder.
-    halfway = events[len(events) // 2].seq
-    early = [e for e in fired if e.seq <= halfway]
-    late = [e for e in fired if e.seq > halfway]
+    #
+    # Split on the player's own lines rather than on log positions. The
+    # story is paced in the things they say — it is the unit every
+    # measurement in this project is in — and a boundary counted in
+    # events moves whenever the engine learns to append a new kind of
+    # one, which says nothing at all about whether the arc ramped.
+    mine = [
+        e.seq for e in events
+        if e.kind == "utterance" and e.actor_id == session.user_character.id
+    ]
+    halfway = mine[len(mine) // 2]
+    early = [e for e in fired if e.seq < halfway]
+    late = [e for e in fired if e.seq >= halfway]
     assert len(late) <= len(early), "equilibrium, not escalation"
     session.close()
 

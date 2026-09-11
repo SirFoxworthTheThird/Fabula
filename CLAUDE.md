@@ -183,9 +183,46 @@ it the exception to the rule everything else obeys: the text keeps the keywords 
 Finding that out also found the thing worth more than the feature: **`/read` existed in
 the terminal and nowhere else.** No endpoint, no button. Every item in every world was
 unreachable from the app most people use, including the one hand-written item in the
-shipped worlds. That is the third time in two days the same shape has turned up — a
-mechanism that works, has tests, and nothing in the ordinary path ever reaches. When you
-finish a feature, open the browser and try to use it as a player would.
+shipped worlds.
+
+## Mechanisms nothing reaches
+
+Three times in two days the same failure: machinery that works, has tests, and that no
+route through the app arrives at. So it was audited rather than waited for — instrument
+every distinctive mechanism, play every shipped scene both ways, and count.
+
+The method has one trap worth keeping. **"Reached" and "produced something" are different
+questions.** A fake model answers a request for a beat id with prose and a request for a
+world with a paragraph, so eight mechanisms that the engine calls hundreds of times
+produced nothing at all — indistinguishable, in a naive counter, from machinery nothing
+calls. Count both or the report is noise.
+
+What it found:
+
+* **`departure` was an event kind nothing could produce.** A beat, a narrator instruction
+  and a degraded template — "footsteps fading from {location}" — for a kind no code path
+  ever built. Which made moving *half an event*: the room you walked into saw you arrive,
+  the room you walked out of perceived nothing, so somebody sitting at the table did not
+  see you stand up and go. Fixed; it is a perception hole, not a missing nicety.
+* **Three of the ten beats are unreachable by construction** — `arrival`, `departure`,
+  `time_skip`. They can only be offered when such an event is the loop's anchor, and the
+  only ones that exist come from pressures (deliberately excluded, since a pressure's
+  effect is already prose) or from `_meanwhile`, which runs after the loop. Reaching them
+  costs an arbitration round per move, which was measured and rejected earlier the same
+  day. Left alone, deliberately, and written down here so the next person does not
+  rediscover it as a bug.
+* **Room discovery is terminal-only.** `discover_rooms: true` ships in `ardenhall`, and the
+  browser draws buttons for rooms the author wrote — so a player there can never walk
+  somewhere that is not on the map. The same shape as `/read`, still open.
+* Four dead imports, one of them `choose_beat`, which is what an abandoned path looks like
+  from outside: the route that replaced it went somewhere else.
+
+Two guards now run on every test run, because they are the forms of the question cheap
+enough to ask every time: **every event kind is one something builds**, and **every verb
+the terminal understands has a way in from the browser**. Both would have caught two of
+the three. The third — is it reachable *in play* — is what `scratchpad/coverage3.py`
+shape of instrumentation is for, and is worth re-running after anything that changes the
+turn loop.
 
 ## What the rest of the shelf has
 

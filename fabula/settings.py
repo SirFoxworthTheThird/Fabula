@@ -30,7 +30,6 @@ from fabula.env import DEFAULT_ENV_FILE
 from fabula.library import DEFAULT_ROOT
 from fabula.llm import (
     _KEY_ENV_VARS,
-    FakeLLM,
     LiteLLMClient,
     LLMClient,
     Routed,

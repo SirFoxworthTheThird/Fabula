@@ -14,7 +14,6 @@ from typing import Callable
 from fabula.chronology import describe_duration
 from fabula.commands import run_command
 from fabula.api import serve
-from fabula.concurrency import DEFAULT_WORKERS
 from fabula.library import DEFAULT_ROOT, Library
 from fabula.player import Player
 from fabula.settings import DEFAULT_SETTINGS, Settings, remember_player

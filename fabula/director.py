@@ -50,7 +50,6 @@ from fabula.persistence import (
 from fabula.models import Belief, Bid, Character, Event, Intention, Pressure, ProjectedEvent
 from fabula.beats import NOBODY_SPEAKS, Beat
 from fabula.beats import available as available_beats
-from fabula.beats import choose as choose_beat
 from fabula.narrator import NARRATOR_ID, Narrator, as_bid
 from fabula import situations
 from fabula.pressures import scene_state, select_pressure
@@ -1104,6 +1103,38 @@ class Director:
             return appended
         return appended + self.advance_time(minutes, unasked=True)
 
+    def leaves(
+        self, character: Character, from_room: str, to_room: str, unasked: bool = False
+    ) -> Event:
+        """Somebody getting up and going, where they are going *from*.
+
+        `departure` has been one of the engine's event kinds since the
+        beginning, with a beat, a narrator instruction and a degraded
+        template — "footsteps fading from {location}" — and nothing
+        anywhere ever built one. So moving was half an event: the room
+        you walked into saw you arrive, and the room you walked out of
+        perceived nothing at all. Somebody sitting at the table with you
+        did not see you stand up and leave, which is not a perception
+        rule, it is a hole in one.
+
+        `audibility: adjacent`, so the room you left sees it and the room
+        you are going to hears the footsteps. Nothing positional depends
+        on it — `location_at_seq` replays arrivals — so this is purely
+        what the room perceived.
+        """
+        event = self.store.append_event(
+            self.build_event(
+                "departure",
+                character.id,
+                from_room,
+                f"{character.name} goes through to {self.world.room_name(to_room)}.",
+                audibility="adjacent",
+                metadata={UNASKED: True} if unasked else {},
+            )
+        )
+        self._absorb()
+        return event
+
     def _steps_out(self, all_events: list[Event]) -> list[Event]:
         """Somebody leaves to go and do the thing they meant to do.
 
@@ -1142,7 +1173,12 @@ class Director:
                     # No point going to be alone in a room that is not
                     # empty. It waits, exactly as it waits here.
                     continue
+                # Marked like everything else the house does, or the
+                # departure would quietly count as the scene taking a
+                # turn and ramp every pressure in the world.
+                going = self.leaves(character, here, there, unasked=True)
                 return [
+                    going,
                     self.store.append_event(
                         self.build_event(
                             "arrival",
@@ -1152,7 +1188,7 @@ class Director:
                             audibility="adjacent",
                             metadata={UNASKED: True},
                         )
-                    )
+                    ),
                 ]
         return []
 

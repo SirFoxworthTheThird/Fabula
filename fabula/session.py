@@ -13,7 +13,6 @@ import threading
 from pathlib import Path
 from typing import Callable
 
-from fabula.chronology import derive_skip_minutes
 from fabula.concurrency import DEFAULT_WORKERS
 from fabula.db import EventStore
 from fabula.director import Director
@@ -574,6 +573,11 @@ class Session:
         if room_id == here:
             return []
         def take() -> list[ProjectedEvent]:
+            # The room you are walking out of, first. Without it, moving
+            # was half an event: the people you left behind perceived
+            # nothing, so somebody sitting at the table with you did not
+            # see you stand up and go.
+            self.director.leaves(self.user_character, here, room_id)
             arrival = self.director.build_event(
                 "arrival",
                 self.user_character.id,
